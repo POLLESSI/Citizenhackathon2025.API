@@ -1,0 +1,26 @@
+﻿using Microsoft.AspNetCore.SignalR;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Hub = Microsoft.AspNetCore.SignalR.Hub;
+using Microsoft.AspNetCore.Authorization;
+
+namespace Citizenhackathon2025.Hubs.Hubs
+{
+    [Authorize]
+    public class GPTHub : Hub
+    {
+#nullable disable
+        private readonly ILogger<GPTHub> _logger;
+        public GPTHub(ILogger<GPTHub> logger)
+        {
+            _logger = logger;
+        }
+        public async Task RefreshGPT(string message)
+        {
+            _logger.LogInformation("RefreshGPT called");
+            await Clients.All.SendAsync("notifynewGPT", message);
+        }
+    }
+}

@@ -1,0 +1,78 @@
+﻿using Citizenhackathon2025.Application.Interfaces;
+using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Interfaces;
+using Citizenhackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Application.Interfaces;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using System.Numerics;
+
+namespace CitizenHackathon2025.API.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class TrafficConditionController : ControllerBase
+    {
+        private readonly ITrafficConditionRepository _trafficConditionRepository;
+        private readonly ITrafficApiService _trafficApiService;
+        private readonly IHubContext<TrafficHub> _hubContext;
+
+        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext)
+        {
+            _trafficConditionRepository = trafficConditionRepository;
+            _trafficApiService = trafficApiService;
+            _hubContext = hubContext;
+        }
+        // 1) Endpoint to retrieve the latest in the database
+        [HttpGet("latest")]
+        public async Task<IActionResult> GetLatestTrafficCondition()
+        {
+            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(); // 👈 correct call
+            return Ok(trafficConditions);
+        }
+        // 2) Endpoint for live fetch from Waze
+        [HttpGet("current")]
+        public async Task<IActionResult> GetCurrent(double lat, double lon)
+        {
+            var dto = await _trafficApiService.GetCurrentTrafficAsync(lat, lon);
+            if (dto == null) return NotFound();
+
+            // Mapper DTO → Entity
+            var entity = new TrafficCondition
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dto.DateCondition,
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType
+            };
+            // Sauvegarde en base et diffusion
+            var saved = await _trafficConditionRepository.SaveTrafficConditionAsync(entity);
+            await _hubContext.Clients.All.SendAsync("NewTrafficCondition", saved);
+            return Ok(saved);
+        }
+        [HttpGet("test-di")]
+        public IActionResult TestDi()
+        {
+            return Ok(_trafficApiService.GetType().Name); // Must display "TrafficApiService"
+        }
+        [HttpPost]
+        public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficCondition @trafficCondition)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var savedTrafficCondition = await _trafficConditionRepository.SaveTrafficConditionAsync(@trafficCondition); // 👈 parameter correction
+
+            if (savedTrafficCondition == null)
+                return StatusCode(500, "Error while saving");
+
+            // ✅ Real-time broadcasting
+            await _hubContext.Clients.All.SendAsync("NewPlace", savedTrafficCondition);
+
+            return Ok(savedTrafficCondition);
+        }
+    }
+}
+

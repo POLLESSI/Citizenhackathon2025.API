@@ -1,0 +1,14 @@
+﻿using System.Security.Cryptography;
+using System.Text;
+
+namespace CitizenHackathon2025.Application.Services
+{
+    public static class Hasher
+    {
+        public static byte[] ComputeHash(string password)
+        {
+            using var sha512 = SHA512.Create();
+            return sha512.ComputeHash(Encoding.UTF8.GetBytes(password));
+        }
+    }
+}
