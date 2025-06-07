@@ -20,5 +20,6 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<bool> LoginAsync(LoginDTO loginDto);
         Task DeactivateUserAsync(int id);
         void SetRole(int id, string? role);
+        User? UpdateUser(User user);
     }
 }

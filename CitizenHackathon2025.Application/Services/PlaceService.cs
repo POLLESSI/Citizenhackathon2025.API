@@ -29,5 +29,27 @@ namespace Citizenhackathon2025.Application.Services
         {
             return await _placeRepository.SavePlaceAsync(place);
         }
+
+        public Place UpdatePlace(Place place)
+        {
+            try
+            {
+                var UpdatePlace = _placeRepository.UpdatePlace(place);
+                if (UpdatePlace == null)
+                {
+                    throw new KeyNotFoundException("Place not found for update.");
+                }
+                return UpdatePlace;
+            }
+            catch (System.ComponentModel.DataAnnotations.ValidationException ex)
+            {
+                Console.WriteLine($"Validation error : {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating place : {ex}");
+            }
+            return null; 
+        }
     }
 }

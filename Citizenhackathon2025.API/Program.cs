@@ -132,6 +132,7 @@ builder.Services.AddControllers()
 
 // SignalR
 builder.Services.AddSignalR();
+builder.Services.AddHostedService<EventArchiverService>();
 builder.Services.AddHostedService<WeatherService>();
 
 // Add Hubs

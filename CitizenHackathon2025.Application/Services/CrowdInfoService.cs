@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+﻿using Citizenhackathon2025.Application;
 using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Application;
+using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Application.Services
 {
@@ -23,19 +24,54 @@ namespace Citizenhackathon2025.Application.Services
             throw new NotImplementedException();
         }
 
-        public Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
+        public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
         {
+            //var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync;
+            //return crowdInfos;
             throw new NotImplementedException();
         }
 
         public Task<CrowdInfo> GetCrowdInfoByIdAsync(int id)
         {
-            throw new NotImplementedException();
+            if (id <= 0)
+            {
+                throw new ArgumentException("The crowd info ID must be greater than zero.", nameof(id));
+            }
+            var crowdInfo = _crowdInfoRepository.GetCrowdInfoByIdAsync(id);
+            if (crowdInfo == null)
+            {
+                return null;
+            }
+
+            return crowdInfo;
         }
 
-        public Task<CrowdInfo> SaveCrowdInfoAsync(CrowdInfo crowdInfo)
+        public async Task<CrowdInfo> SaveCrowdInfoAsync(CrowdInfo crowdInfo)
         {
-            throw new NotImplementedException();
+            return await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
+        }
+
+        public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)
+        {
+            try
+            {
+                var UpdateCrowdInfo = _crowdInfoRepository.UpdateCrowdInfo(crowdInfo);
+                if (UpdateCrowdInfo == null)
+                {
+                    throw new ArgumentException("The event to update cannot be null.", nameof(crowdInfo));
+                }
+                return UpdateCrowdInfo;
+            }
+            catch (System.ComponentModel.DataAnnotations.ValidationException ex)
+            {
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating Crowd Info : {ex}");
+            }
+            return null;
         }
     }
 }

@@ -12,5 +12,6 @@ namespace Citizenhackathon2025.Domain.Interfaces
     {
         Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
         Task<Suggestion> SaveSuggestionAsync(Suggestion @suggestion);
+        Suggestion? UpdateSuggestion(Suggestion @suggestion);
     }
 }

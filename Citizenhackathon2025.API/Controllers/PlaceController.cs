@@ -55,5 +55,11 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(savedPlace);
         }
+        [HttpPut("update")]
+        public IActionResult UpdatePlace([FromBody] Place place)
+        {
+            var result = _placeRepository.UpdatePlace(place);
+            return result != null ? Ok(result) : NotFound();
+        }
     }
 }

@@ -13,5 +13,6 @@ namespace Citizenhackathon2025.Application.Interfaces
 #nullable disable
         Task<IEnumerable<TrafficCondition?>> GetLatestTrafficConditionAsync();
         Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition @trafficCondition);
+        TrafficCondition? UpdateTrafficCondition(TrafficCondition @trafficCondition);
     }
 }

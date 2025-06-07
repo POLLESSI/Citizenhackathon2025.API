@@ -77,17 +77,24 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(user);
         }
-        [HttpPatch("role/{id}")]
-        public IActionResult SetUserRole(int id, [FromQuery] string role)
-        {
-            _userService.SetRole(id, role);
-            return Ok("User role updated.");
-        }
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeactivateUser(int id)
         {
             await _userService.DeactivateUserAsync(id);
             return Ok("User deactivated.");
         }
+        [HttpPut("update")]
+        public IActionResult UpdateUser([FromBody] User user)
+        {
+            var result = _userService.UpdateUser(user);
+            return result != null ? Ok(result) : NotFound();
+        }
+        [HttpPatch("role/{id}")]
+        public IActionResult SetUserRole(int id, [FromQuery] string role)
+        {
+            _userService.SetRole(id, role);
+            return Ok("User role updated.");
+        }
+        
     }
 }

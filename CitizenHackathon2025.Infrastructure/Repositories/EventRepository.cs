@@ -154,5 +154,60 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
+
+        public Event UpdateEvent(Event @event)
+        {
+            if (@event == null || @event.Id <= 0)
+            {
+                _logger.LogWarning("Invalid event data provided for update.");
+                throw new ArgumentException("Invalid event object", nameof(@event));
+            }
+            try
+            {
+                string sql = "UPDATE Event SET Name = @Name, Latitude = CAST(@Latitude AS DECIMAL(8, 2)), Longitude = CAST(@Longitude AS DECIMAL(9, 3)), DateEvent = @DateEvent, ExpectecCrowd = @ExpectedCrowd, IsOutdoor = @IsOutdoor WHERE Id = @Id AND Active = 1";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", @event.Id, DbType.Int32);
+                parameters.Add("@Name", @event.Name, DbType.String);
+                parameters.Add("@Latitude", @event.Latitude, DbType.String);
+                parameters.Add("@Longitude", @event.Longitude, DbType.String);
+                parameters.Add("@DateEvent", @event.DateEvent, DbType.DateTime);
+                parameters.Add("@ExpectedCrowd", @event.ExpectedCrowd, DbType.String);
+                parameters.Add("@IsOutdoor", @event.IsOutdoor, DbType.String);
+
+                var affectedRows = _connection.Execute(sql, parameters);
+
+                if (affectedRows == 0)
+                {
+                    _logger.LogWarning($"No event found to update with Id {@event.Id}");
+                    return null;
+                }
+
+                _logger.LogInformation($"Event with Id {@event.Id} successfully updated.");
+                return @event;
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogError(ex, $"An error occurred while updating the event with Id {@event.Id}");
+                throw;
+            }
+        }
+        public async Task<int> ArchivePastEventsAsync() 
+        {
+            string sql = "UPDATE Event SET Active = 0 WHERE Active = 1 AND DateEvent < DATEADD(DAY, -2, CAST(GETDATE() AS DATE))";
+
+            try
+            {
+                var affectedRows = await _connection.ExecuteAsync(sql);
+                _logger.LogInformation($"{affectedRows} event(s) archived.");
+                return affectedRows;
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogError(ex, "Error archiving past events.");
+                return 0;
+            }
+        }
     }
 }

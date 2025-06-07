@@ -85,5 +85,33 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             }
 
         }
+
+        public Suggestion UpdateSuggestion(Suggestion suggestion)
+        {
+            if (suggestion == null || suggestion.Id <= 0)
+            {
+                throw new ArgumentException("Invalid suggestion to update.", nameof(suggestion));
+            }
+            try
+            {
+                string sql = "UPDATE Suggestion SET User_Id = @UserId, DateSuggestion = @DateSuggestion, OriginalPlace = @OriginalPlace, SuggestedAlternatives = @SuggestedAlternatives, Reason = @Reason WHERE Id = @Id AND Active = 1";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", suggestion.Id);
+                parameters.Add("@UserId", suggestion.UserId);
+                parameters.Add("@DateSuggestion", suggestion.DateSuggestion);
+                parameters.Add("@OriginalPlace", suggestion.OriginalPlace);
+                parameters.Add("@SuggestedAlternatives", suggestion.SuggestedAlternatives);
+                parameters.Add("@Reason", suggestion.Reason);
+
+                var affectedRows = _connection.Execute(sql, parameters);
+
+                return affectedRows > 0 ? suggestion : null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating suggestion: {ex.Message}");
+            }
+            return null;
+        }
     }
 }

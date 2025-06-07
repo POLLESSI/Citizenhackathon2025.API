@@ -56,5 +56,35 @@ namespace Citizenhackathon2025.Application.Services
 
             return await _eventRepository.CreateEventAsync(newEvent);
         }
+
+        public Event UpdateEvent(Event @event)
+        {
+            try
+            {
+                var UpdateEvent = _eventRepository.UpdateEvent(@event);
+                if (UpdateEvent == null)
+                {
+                    throw new ArgumentException("The event to update cannot be null.", nameof(@event));
+                }
+                return UpdateEvent;
+            }
+            catch (System.ComponentModel.DataAnnotations.ValidationException ex)
+            {
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating event : {ex}");
+            }
+            return null;
+        }
+
+        public async Task<int> ArchivePastEventsAsync()
+        {
+            string sql = "UPDATE Event SET Active = 0 WHERE DateEvent < @Threshold AND Active = 1";
+            var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
+            return await _eventRepository.ArchivePastEventsAsync();
+        }
     }
 }

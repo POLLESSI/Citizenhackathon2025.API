@@ -13,5 +13,6 @@ namespace Citizenhackathon2025.Application.Interfaces
 #nullable disable
         Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
         Task<Suggestion> SaveSuggestionAsync(Suggestion @suggestion);
+        Suggestion? UpdateSuggestion(Suggestion @suggestion);
     }
 }

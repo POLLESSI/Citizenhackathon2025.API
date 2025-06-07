@@ -87,5 +87,36 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             }
 
         }
+
+        public Place UpdatePlace(Place place)
+        {
+            if (place == null || place.Id <= 0)
+            {
+                throw new ArgumentException("Invalid place to update.", nameof(place));
+            }
+            try
+            {
+                string sql = "UPDATE Place SET Name = @Name, Type = @Type, Indoor = IIF(@Indoor = 'true', 1, 0), Latitude = CAST(@Latitude AS DECIMAL(8, 6)), Longitude = CAST(@Longitude AS DECIMAL(9, 6)), Capacity = @Capacity, Tag = @Tag WHERE ID = @Id AND Active = 1";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", place.Id, DbType.Int64);
+                parameters.Add("@Name", place.Name, DbType.String);
+                parameters.Add("@Type", place.Type, DbType.String);
+                parameters.Add("@Indoor", place.Indoor, DbType.String);
+                parameters.Add("@Latitude", place.Latitude, DbType.String);
+                parameters.Add("@Longitude", place.Longitude, DbType.String);
+                parameters.Add("@Capacity", place.Capacity, DbType.String);
+                parameters.Add("@Tag", place.Tag, DbType.String);
+
+                var affectedRows = _connection.Execute(sql, parameters);
+                return affectedRows > 0 ? place : null;
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine($"Error updating place: {ex.Message}");
+                
+            }
+            return null;
+        }
     }
 }

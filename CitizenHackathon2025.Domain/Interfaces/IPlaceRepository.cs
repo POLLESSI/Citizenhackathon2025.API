@@ -12,5 +12,6 @@ namespace Citizenhackathon2025.Domain.Interfaces
     {
         Task<IEnumerable<Place?>> GetLatestPlaceAsync();
         Task<Place> SavePlaceAsync(Place @place);
+        Place? UpdatePlace(Place @place);
     }
 }

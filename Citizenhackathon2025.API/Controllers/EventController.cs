@@ -3,6 +3,7 @@ using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Hubs.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -62,6 +63,19 @@ namespace CitizenHackathon2025.API.Controllers
 
             var created = await _eventRepository.CreateEventAsync(newEvent);
             return CreatedAtAction(nameof(GetOutdoorEvents), new { id = created.Id }, created);
+        }
+        [HttpPost("archive-expired")]
+        [Authorize(Policy = "Admin")]
+        public async Task<IActionResult> ArchiveExpiredEvents()
+        {
+            var archived = await _eventRepository.ArchivePastEventsAsync();
+            return Ok(new { ArchivedCount = archived });
+        }
+        [HttpPut("update")]
+        public IActionResult UpdateEvent([FromBody] Event @event)
+        {
+            var result = _eventRepository.UpdateEvent(@event);
+            return result != null ? Ok(result) : NotFound();
         }
     }
 }

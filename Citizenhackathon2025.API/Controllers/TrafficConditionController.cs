@@ -73,6 +73,12 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(savedTrafficCondition);
         }
+        [HttpPut("update")]
+        public IActionResult UpdateTrafficCondition([FromBody] TrafficCondition trafficCondition)
+        {
+            var result = _trafficConditionRepository.UpdateTrafficCondition(trafficCondition);
+            return result != null ? Ok(result) : NotFound();
+        }
     }
 }
 

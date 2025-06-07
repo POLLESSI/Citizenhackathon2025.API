@@ -87,5 +87,39 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             }
 
         }
+
+        public TrafficCondition UpdateTrafficCondition(TrafficCondition trafficCondition)
+        {
+            if (trafficCondition == null || trafficCondition.Id <= 0)
+            {
+                throw new ArgumentException("Invalid traffic condition to update.", nameof(trafficCondition));
+            }
+            try
+            {
+                const string sql = @"
+                UPDATE TrafficCondition
+                SET Latitude = @Latitude,
+                    Longitude = @Longitude,
+                    DateCondition = @DateCondition,
+                    CongestionLevel = @CongestionLevel,
+                    IncidentType = @IncidentType
+                WHERE Id = @Id";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", trafficCondition.Id);
+                parameters.Add("@Latitude", trafficCondition.Latitude);
+                parameters.Add("@Longitude", trafficCondition.Longitude);
+                parameters.Add("@DateCondition", trafficCondition.DateCondition);
+                parameters.Add("@CongestionLevel", trafficCondition.CongestionLevel);
+                parameters.Add("@IncidentType", trafficCondition.IncidentType);
+
+                var affectedRows = _connection.Execute(sql, parameters);
+                return affectedRows > 0 ? trafficCondition : null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating Traffic Condition: {ex}");
+            }
+            return null;
+        }
     }
 }

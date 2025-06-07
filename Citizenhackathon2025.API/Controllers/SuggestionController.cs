@@ -1,4 +1,5 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
+using Citizenhackathon2025.Application.Services;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
@@ -140,6 +141,12 @@ namespace CitizenHackathon2025.API.Controllers
             {
                 return StatusCode(500, $"GPT error while translating : {ex.Message}");
             }
+        }
+        [HttpPut("update")]
+        public IActionResult UpdateSuggestion([FromBody] Suggestion suggestion)
+        {
+            var result = _suggestionRepository.UpdateSuggestion(suggestion);
+            return result != null ? Ok(result) : NotFound();
         }
     }
 }

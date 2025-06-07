@@ -28,5 +28,28 @@ namespace Citizenhackathon2025.Application.Services
         {
             return await _suggestionRepository.SaveSuggestionAsync(suggestion);
         }
+
+        public Suggestion? UpdateSuggestion(Suggestion suggestion)
+        {
+            try
+            {
+                var updatedSuggestion = _suggestionRepository.UpdateSuggestion(suggestion);
+                if (updatedSuggestion == null)
+                {
+                    throw new KeyNotFoundException("Suggestion not found for update.");
+                }
+                return updatedSuggestion;
+            }
+            catch (System.ComponentModel.DataAnnotations.ValidationException ex)
+            {
+
+                Console.WriteLine($"Validation error : {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating suggestion : {ex}");
+            }
+            return null;
+        }
     }
 }

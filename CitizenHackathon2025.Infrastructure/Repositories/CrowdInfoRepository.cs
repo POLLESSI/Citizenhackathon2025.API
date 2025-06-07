@@ -48,6 +48,41 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             crowdInfo.Id = id;
             return crowdInfo;
         }
-        // Implement other methods as needed
+
+        public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)
+        {
+            if (crowdInfo == null || crowdInfo.Id <= 0)
+            {
+                throw new ArgumentException("Invalid crowd info provided for update.", nameof(crowdInfo));
+            }
+
+            
+
+            try
+            {
+                string sql = "UPDATE CrowdInfo SET LocationName = @LocationName, Latitude = CAST(@Latitude AS DECIMAL(8, 6)), Longitude = CAST(@Longitude AS DECIMAL(9, 6)), CrowdLevel = @CrowdLevel, Timestamp = @Timestamp WHERE Id = @Id AND Active = 1";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", crowdInfo.Id);
+                parameters.Add("@LocationName", crowdInfo.LocationName);
+                parameters.Add("@Latitude", crowdInfo.Latitude);
+                parameters.Add("@Longitude", crowdInfo.Longitude);
+                parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel);
+                parameters.Add("@Timestamp", crowdInfo.Timestamp);
+
+                var affectedRows = _dbConnection.Execute(sql, parameters);
+
+                if (affectedRows == 0)
+                {
+                    return null;
+                }
+                return crowdInfo;
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine($"Error updating CrowdInfo: {ex.Message}");
+            }
+            return null;
+        }
     }
 }

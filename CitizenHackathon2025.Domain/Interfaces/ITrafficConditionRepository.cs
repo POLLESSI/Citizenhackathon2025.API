@@ -12,5 +12,6 @@ namespace Citizenhackathon2025.Domain.Interfaces
     {
         Task<IEnumerable<TrafficCondition?>> GetLatestTrafficConditionAsync();
         Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition @trafficCondition);
+        TrafficCondition? UpdateTrafficCondition(TrafficCondition @trafficCondition);
     }
 }

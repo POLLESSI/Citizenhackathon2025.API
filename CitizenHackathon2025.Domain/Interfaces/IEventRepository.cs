@@ -16,5 +16,7 @@ namespace Citizenhackathon2025.Domain.Interfaces
         Task<Event> CreateEventAsync(Event newEvent);
         Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync();
         Task<Event?> GetByIdAsync(int id);
+        Task<int> ArchivePastEventsAsync();
+        Event UpdateEvent(Event @event);
     }
 }

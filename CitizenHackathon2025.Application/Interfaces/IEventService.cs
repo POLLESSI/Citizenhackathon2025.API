@@ -16,5 +16,7 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync();
         Task<Event> CreateEventAsync(Event newEvent);
         Task<Event?> GetByIdAsync(int id);
+        Task<int> ArchivePastEventsAsync();
+        Event UpdateEvent(Event @event);
     }
 }

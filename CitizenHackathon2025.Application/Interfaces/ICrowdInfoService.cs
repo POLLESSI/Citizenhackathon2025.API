@@ -8,5 +8,6 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync();
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id);
         Task<bool> DeleteCrowdInfoAsync(int id);
+        CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo);
     }
 }

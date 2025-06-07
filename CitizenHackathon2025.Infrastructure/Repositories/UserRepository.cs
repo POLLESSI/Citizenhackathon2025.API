@@ -126,5 +126,30 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 Console.WriteLine($"Error changing rôle : {ex.ToString}");
             }
         }
+
+        public User UpdateUser(User user)
+        {
+            if (user == null || user.Id <= 0)
+            {
+                throw new ArgumentException("Invalid user for update.", nameof(user));
+            }
+            try
+            {
+                string sql = "UPDATE [User] SET Email = @Email, Role = @Role WHERE Id = @Id AND Active = 1"; 
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", user.Id);
+                parameters.Add("@Email", user.Email);
+                parameters.Add("@Role", user.Role);
+
+                var affectedRows = _connection.Execute(sql, parameters);
+                return affectedRows > 0 ? user : null;
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogError(ex, "Error updating user with ID {UserId}", user.Id);
+            }
+            return null;
+        }
     }
 }

@@ -127,5 +127,28 @@ namespace Citizenhackathon2025.Application.Services
                 Console.WriteLine($"Error changing rôle: {ex.ToString}");
             }
         }
+
+        public User UpdateUser(User user)
+        {
+            try
+            {
+                var UpdateUser = _userRepository.UpdateUser(user);
+                if (UpdateUser != null)
+                {
+                    throw new KeyNotFoundException("User not found for update.");
+                }
+                return UpdateUser;
+            }
+            catch (System.ComponentModel.DataAnnotations.ValidationException ex)
+            {
+
+                Console.WriteLine($"Validation error : {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating user : {ex}");
+            }
+            return null;
+        }
     }
 }

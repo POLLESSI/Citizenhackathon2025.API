@@ -1,12 +1,13 @@
-﻿using Citizenhackathon2025.Domain.Interfaces;
+﻿using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Application.Interfaces;
-using static Citizenhackathon2025.Application.Extensions.MapperExtensions;
 using CityzenHackathon2025.API.Tools;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using static Citizenhackathon2025.Application.Extensions.MapperExtensions;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -41,6 +42,12 @@ namespace CitizenHackathon2025.API.Controllers
             await _hubContext.Clients.All.SendAsync("NewCrowdInfo", savedCrowdInfo.MapToCrowdInfoDTO());
 
             return Ok(savedCrowdInfo.MapToCrowdInfoDTO());
+        }
+        [HttpPut("update")]
+        public IActionResult UpdateCrowdInfo([FromBody] CrowdInfo crowdInfo)
+        {
+            var result = _crowdInfoRepository.UpdateCrowdInfo(crowdInfo);
+            return result != null ? Ok(result) : NotFound();
         }
     }
 }
