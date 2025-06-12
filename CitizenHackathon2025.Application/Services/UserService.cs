@@ -1,19 +1,22 @@
-﻿using System;
-using System.Text;
-using Microsoft.AspNetCore.SignalR.Client;
+﻿using Citizenhackathon2025.Application;
+using Citizenhackathon2025.Application.Common;
 using Citizenhackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Services;
-using Citizenhackathon2025.Application;
+using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Shared.DTOs;
-using System.Security.Cryptography;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using Microsoft.Extensions.Logging;
-using System.Drawing;
-using Microsoft.AspNetCore.SignalR;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Services;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Drawing;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace Citizenhackathon2025.Application.Services
 {
@@ -93,12 +96,14 @@ namespace Citizenhackathon2025.Application.Services
         {
             return await LoginAsync(loginDto.Email, loginDto.Password);
         }
-
-        public async Task<bool> RegisterUserAsync(string email, string password, string role)
+        public async Task<bool> RegisterUserAsync(string email, string password, Role role)
         {
+            if (!Validators.IsValidEmail(email))
+                throw new ValidationException("Invalid email address.");
             try
             {
-                var passwordHash = Hasher.ComputeHash(password);  
+                // ✅ Hash the password
+                var hashedPassword = Hasher.ComputeHash(password);
 
                 var user = new User
                 {
@@ -106,7 +111,8 @@ namespace Citizenhackathon2025.Application.Services
                     Role = role
                 };
 
-                return await _userRepository.RegisterUserAsync(email, passwordHash, user);
+                // ✅ Transmit the hash
+                return await _userRepository.RegisterUserAsync(email, hashedPassword, user);
             }
             catch (Exception ex)
             {

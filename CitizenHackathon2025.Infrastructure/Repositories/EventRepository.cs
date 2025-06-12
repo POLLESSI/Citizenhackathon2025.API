@@ -88,7 +88,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         {
             try
             {
-                string sql = " SELECT TOP 10 * FROM Event Where Active = 1 ORDER BY DateEvent DESC";
+                string sql = " SELECT TOP 10 * FROM Event WHERE Active = 1 ORDER BY DateEvent DESC";
 
                 var events = await _connection.QueryAsync<Event?>(sql);
                 return [.. events];

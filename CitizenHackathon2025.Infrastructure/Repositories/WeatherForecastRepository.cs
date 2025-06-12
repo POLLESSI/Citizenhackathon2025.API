@@ -103,7 +103,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         {
             try
             {
-                string sql = " SELECT TOP 10 * FROM WeatherForecast Where Active = 1 ORDER BY DateEvent DESC";
+                string sql = " SELECT TOP 10 * FROM WeatherForecast WHERE Active = 1 ORDER BY DateEvent DESC";
 
                 var weatherForecasts = await _connection.QueryAsync<WeatherForecast?>(sql);
                 return [.. weatherForecasts];
@@ -145,7 +145,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Erreur lors de la récupération de l'historique météo : {ex.Message}");
+                Console.WriteLine($"Error retrieving weather history : {ex.Message}");
                 return new List<WeatherForecast>();
             }
         }

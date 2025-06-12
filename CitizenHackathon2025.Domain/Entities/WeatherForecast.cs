@@ -11,4 +11,7 @@
         public int Humidity { get; set; }
         public double WindSpeedKmh { get; set; }
     }
+    // DEPRECATED: Migrer to WeatherForecast DDD
+    //[Obsolete("Use the DDD-based WeatherForecast entity instead.")]
+    //public class LegacyWeatherForecast { ... }
 }

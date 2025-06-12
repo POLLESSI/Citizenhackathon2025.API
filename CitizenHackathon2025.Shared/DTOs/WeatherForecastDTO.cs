@@ -29,6 +29,9 @@ namespace Citizenhackathon2025.Shared.DTOs
         [DisplayName("Wind Speed km/h : ")]
         public string WindSpeedKmh { get; set; }
 
-
+        //public static implicit operator WeatherForecastDTO(WeatherForecastDTO v)
+        //{
+        //    throw new NotImplementedException();
+        //}
     }
 }

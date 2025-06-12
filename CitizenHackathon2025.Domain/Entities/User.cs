@@ -1,11 +1,15 @@
-﻿namespace Citizenhackathon2025.Domain.Entities
+﻿using Citizenhackathon2025.Domain.Enums;
+
+namespace Citizenhackathon2025.Domain.Entities
 {
     public class User
     {
         public int Id { get; private set; }
         public string Email { get; set; } = string.Empty;
         public byte[] PasswordHash { get; set; } = Array.Empty<byte>();
-        public string Role { get; set; } = "User";
+        public Role Role { get; set; } = Role.User; // ✅ enum instead of string
+        public Status Status { get; set; } // Dapper automatically maps the DB int
         public bool Active { get; private set; } = true;
+        
     }
 }

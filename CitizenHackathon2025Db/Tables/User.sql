@@ -5,6 +5,7 @@
 	[PasswordHash] BINARY(64) NOT NULL,
 	[SecurityStamp] UNIQUEIDENTIFIER NOT NULL,
 	[Role] NVARCHAR(16),
+	[Status] INT NOT NULL,
 	[Active] BIT DEFAULT 1
 
 

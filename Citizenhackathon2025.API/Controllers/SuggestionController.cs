@@ -7,6 +7,7 @@ using Citizenhackathon2025.Shared.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.SqlServer.Dac.Model;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -32,7 +33,7 @@ namespace CitizenHackathon2025.API.Controllers
             var suggestions = await _suggestionRepository.GetLatestSuggestionAsync();
             return Ok(suggestions);
         }
-        // ✅ POST classique
+        // ✅ POSTs classics
         [HttpPost]
         public async Task<IActionResult> SaveSuggestion([FromBody] Suggestion suggestion)
         {
@@ -46,6 +47,25 @@ namespace CitizenHackathon2025.API.Controllers
 
             await _hubContext.Clients.All.SendAsync("NewSuggestion", savedSuggestion);
             return Ok(savedSuggestion);
+        }
+
+        [HttpPost("create")]
+        public async Task<IActionResult> Create([FromBody] SuggestionDTO dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var entity = new Suggestion
+            {
+                UserId = dto.UserId,
+                DateSuggestion = dto.DateSuggestion,
+                OriginalPlace = dto.OriginalPlace,
+                SuggestedAlternatives = dto.SuggestedAlternatives,
+                Reason = dto.Reason
+            };
+
+            var saved = await _suggestionRepository.SaveSuggestionAsync(entity);
+            return Ok(saved);
         }
         // ✅ POST AI generation + recording + SignalR
         [HttpPost("generate")]
@@ -92,7 +112,7 @@ namespace CitizenHackathon2025.API.Controllers
             }
         }
         // ✅ POST translation into French
-        [HttpPost("translate")]
+        [HttpPost("translate/french")]
         public async Task<IActionResult> TranslateToFrench([FromBody] string englishText)
         {
             if (string.IsNullOrWhiteSpace(englishText))

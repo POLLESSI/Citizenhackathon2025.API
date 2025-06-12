@@ -1,36 +1,50 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Enums;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 namespace CityzenHackathon2025.API.Tools
 {
     public class TokenGenerator
     {
-#nullable disable
-        public static string secretKey = "µpiçaezjrkuyjfgk:ghmkjghmiugl:hjfvtFSDMOifnZAE MOVjkµ$)'éàipornjfd ù)'$piçhbc";
-        public string GenerateToken(string email, string role)
+    #nullable disable
+        private readonly IConfiguration _configuration;
+        private readonly string _secretKey;
+        private readonly int _tokenDuration;
+
+        public TokenGenerator(IConfiguration configuration)
         {
-            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+            _configuration = configuration;
+            _secretKey = _configuration["JwtSettings:SecretKey"];
+            _tokenDuration = int.TryParse(_configuration["JwtSettings:TokenDurationMinutes"], out int minutes)
+                ? minutes
+                : 30; // fallback if the value is not readable
+        }
+
+        public string GenerateToken(string email, Role role)
+        {
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha512);
-            Claim[] userInfo = new[]
+
+            string roleValue = role.ToString().ToLower(); // "admin", "modo", "user"
+
+            var claims = new[]
             {
-                new Claim(ClaimTypes.Role, role == "admin" ? "admin" : role == "modo" ? "modo" : "user"),
+                new Claim(ClaimTypes.Role, roleValue),
                 new Claim(JwtRegisteredClaimNames.Sub, email),
-                new Claim(ClaimTypes.Sid, role.ToString()),
                 new Claim(ClaimTypes.Email, email),
-                new Claim(ClaimTypes.Role, role)
+                new Claim(ClaimTypes.Name, email)
             };
-            JwtSecurityToken jwt = new JwtSecurityToken(
-                //issuer: "yourdomain.com",
-                //audience: "yourdomain.com",
-                claims: userInfo,
-                signingCredentials: credentials,
-                expires: DateTime.Now.AddMinutes(30)
+
+            var jwt = new JwtSecurityToken(
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(_tokenDuration),
+                signingCredentials: credentials
             );
-            JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
-            return handler.WriteToken(jwt);
+
+            return new JwtSecurityTokenHandler().WriteToken(jwt);
         }
     }
 }

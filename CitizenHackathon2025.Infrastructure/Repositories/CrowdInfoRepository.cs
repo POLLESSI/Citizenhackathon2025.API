@@ -24,7 +24,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
 
         public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
         {
-            var sql = "SELECT * FROM CrowdInfo";
+            var sql = "SELECT Id, LocationName, Latitude, Longitude, CrowdLevel, Timestamp FROM CrowdInfo WHERE Active = 1 ORDER BY LocationName DESC";
             var result = await _dbConnection.QueryAsync<CrowdInfo>(sql);
             return result;
         }

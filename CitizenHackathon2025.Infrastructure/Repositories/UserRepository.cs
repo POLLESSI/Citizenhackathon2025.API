@@ -1,14 +1,15 @@
-﻿using Dapper;
-using System.Data.SqlClient;
+﻿using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
-using System.Data;
+using Citizenhackathon2025.Shared.DTOs;
+using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using System.Data;
+using System.Data.SqlClient;
 using System.Drawing;
+using System.Security.Cryptography;
+using System.Text;
 using static System.Runtime.InteropServices.JavaScript.JSType;
-using Citizenhackathon2025.Shared.DTOs;
-using Citizenhackathon2025.Domain.Interfaces;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {
@@ -31,7 +32,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
 
         public async Task<IEnumerable<User>> GetAllActiveUsersAsync()
         {
-            string sql = "SELECT * FROM [User]";
+            string sql = "SELECT * FROM [User] WHERE Active = 1";
             return _connection.Query<User?>(sql);
         }
 
@@ -69,25 +70,66 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             return null;
         }
 
+        // Login
         public async Task<bool> LoginAsync(string email, string password)
         {
             try
             {
-                string sqlCheckPassword = "SELECT * FROM [User] WHERE Email = @email AND PasswordHash = @passwordHash";
+                // 1. Retrieve the SecurityStamp
+                string stampQuery = "SELECT SecurityStamp FROM [User] WHERE Email = @Email AND Active = 1";
+                var securityStamp = await _connection.ExecuteScalarAsync<Guid?>(stampQuery, new { Email = email });
+
+                if (securityStamp == null)
+                {
+                    Console.WriteLine("❌ SecurityStamp not found.");
+                    return false;
+                }
+                // 2. Hash the password with SecurityStamp (same as in SQL)
+                byte[] hashedPassword = Hasher.ComputeHash(password, securityStamp.Value);
+
+                // 3. Compare with base (in BINARY)
+                string sql = "SELECT Id, Email, Role, Active FROM [User] WHERE Email = @Email AND PasswordHash = @PasswordHash AND Active = 1";
                 DynamicParameters parameters = new DynamicParameters();
-                //parameters.Add("@email", email);
-                //parameters.Add("@pwd", passwordHash, DbType.Binary, size: 64);
-                var user = await _connection.QueryFirstOrDefaultAsync<User>(sqlCheckPassword, parameters);
+                parameters.Add("@Email", email);
+                parameters.Add("@PasswordHash", password, DbType.Binary, size: 64);
+
+                var user = await _connection.QueryFirstOrDefaultAsync<User>(sql, parameters);
+
                 return user != null;
             }
             catch (Exception ex)
             {
 
-                Console.WriteLine($"Login failed : {ex.ToString}");
+                Console.WriteLine($"❌ Login failed : {ex.Message}");
+
+                return false;
             }
-            return false;
+        }
+        public static class Hasher
+        {
+            public static byte[] ComputeHash(string password, Guid securityStamp)
+            {
+                using var sha512 = SHA512.Create();
+                var combined = Encoding.UTF8.GetBytes(password + securityStamp.ToString());
+                return sha512.ComputeHash(combined);
+            }
+        }
+        public async Task<bool> LoginUsingProcedureAsync(string email, string password)
+        {
+            var parameters = new DynamicParameters();
+            parameters.Add("@Email", email);
+            parameters.Add("@Password", password); // La proc SQL s’occupera du hash
+
+            var result = await _connection.QueryFirstOrDefaultAsync<User>(
+                "sqlUserLogin",
+                parameters,
+                commandType: CommandType.StoredProcedure
+            );
+
+            return result != null;
         }
 
+        //Register
         public async Task<bool> RegisterUserAsync(string email, byte[] passwordHash, User user)
         {
             try
@@ -110,6 +152,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             }
         }
 
+        // Patch
         public void SetRole(int id, string role)
         {
             try
@@ -127,6 +170,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             }
         }
 
+        // Update
         public User UpdateUser(User user)
         {
             if (user == null || user.Id <= 0)

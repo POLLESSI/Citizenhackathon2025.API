@@ -1,5 +1,6 @@
 using AutoMapper;
 using Azure.Core.Pipeline;
+using Citizenhackathon2025.API.Security;
 using Citizenhackathon2025.Application.CQRS.Commands.Handlers;
 using Citizenhackathon2025.Application.CQRS.Queries.Handlers;
 using Citizenhackathon2025.Application.Extensions;
@@ -18,12 +19,17 @@ using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CityzenHackathon2025.API.Tools;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Microsoft.SqlServer.Dac.Model;
 using Microsoft.VisualStudio.Services.CircuitBreaker;
 using Polly;
@@ -31,6 +37,7 @@ using Polly.Extensions.Http;
 using Polly.Retry;
 using Polly.Wrap;
 using System.Data;
+using System.Text;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,21 +54,49 @@ builder.Services.AddScoped<System.Data.IDbConnection>(static sp =>
     return new SqlConnection(connectionString);
 });
 
+// Authentications
+
+var secretKey = builder.Configuration["JwtSettings:SecretKey"];
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+        };
+    }); 
+
+builder.Services.AddAuthentication("Cookies")
+    .AddCookie("Cookies", options =>
+    {
+        options.Cookie.Name = "AccessToken";
+        options.LoginPath = "/api/auth/login";
+        options.AccessDeniedPath = "/api/auth/denied";
+    });
+
 // Injections
 
 builder.Services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
 builder.Services.AddScoped<ICrowdInfoService, CrowdInfoService>();
+builder.Services.AddScoped<DatabaseService>();
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IGPTRepository, GPTRepository>();
 builder.Services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IPlaceService, PlaceService>();
 builder.Services.AddScoped<IPlaceRepository, PlaceRepository>();
 builder.Services.AddScoped<ISuggestionRepository, SuggestionRepository>();
 builder.Services.AddScoped<ISuggestionService, SuggestionService>();
+builder.Services.AddSingleton<TokenGenerator>();
 builder.Services.AddScoped<ITrafficConditionService, TrafficConditionService>();
 builder.Services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
-builder.Services.AddScoped<ITrafficApiService, TrafficAPIService>();
+//builder.Services.AddScoped<ITrafficApiService, TrafficAPIService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserHubService, UserHubService>();
@@ -92,6 +127,7 @@ builder.Services.AddSingleton<AsyncPolicyWrap>(sp =>
 
     return Policy.WrapAsync(retryPolicy, circuitBreaker);
 });
+builder.Services.AddSingleton<TokenGenerator>();
 
 builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
 builder.Services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
@@ -107,6 +143,7 @@ builder.Services.AddHttpClient();
 //    .AddPolicyHandler(sp => sp.GetRequiredService<AsyncPolicyWrap<HttpResponseMessage>>());
 builder.Services.AddHttpClient("Default")
     .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
+builder.Services.AddHttpClient<IOpenWeatherService, OpenWeatherService>();
 //builder.Services.AddHttpClient<ITrafficApiService, TrafficAPIService>();
 
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
@@ -128,6 +165,24 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new DateTimeJsonConverter());
+        options.JsonSerializerOptions.PropertyNamingPolicy = null;
+    
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // to return a uniform response on validation errors
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(e => e.Value.Errors.Count > 0)
+                .Select(e => new
+                {
+                    Field = e.Key,
+                    Errors = e.Value.Errors.Select(err => err.ErrorMessage)
+                });
+
+            return new BadRequestObjectResult(new { Message = "Validation failed", Errors = errors });
+        };
     });
 
 // SignalR
@@ -177,7 +232,23 @@ builder.Services.AddAuthorization(o =>
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }},
+            new string[] {}
+        }
+    });
+});
 
 builder.Services.AddHttpClient<ChatGptService>();
 
@@ -195,16 +266,22 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // Swagger désactivé en production par sécurité
+    // Swagger disabled in production for security reasons
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 
-// Commun
+// Common
+
+app.UseAuthentication();
 app.UseHttpsRedirection();
+app.UseMiddleware<Citizenhackathon2025.API.Security.AntiXssMiddleware>();
 app.UseStaticFiles();
+//app.UseMiddleware<Citizenhackathon2025.API.Middlewares.ExceptionMiddleware>();
 
 app.UseRouting();
+app.UseAntiXssMiddleware(); // Protection XSS
+//app.UseCustomExceptionMiddleware();
 
 app.UseCors("AllowAnyOrigin");
 
@@ -216,6 +293,7 @@ app.UseEndpoints(Endpoints =>
     Endpoints.MapControllers();
 
     Endpoints.MapHub<EventHub>("/hubs/eventHub");
+    Endpoints.MapHub<NotificationHub>("/hubs/notifications");
     Endpoints.MapHub<PlaceHub>("/hubs/placeHub");
     Endpoints.MapHub<SuggestionHub>("/hubs/suggestionHub");
     Endpoints.MapHub<TrafficHub>("/hubs/trafficHub");

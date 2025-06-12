@@ -29,7 +29,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         {
             try
             {
-                string sql = " SELECT * FROM Place Where Active = 1";
+                string sql = " SELECT * FROM Place WHERE Active = 1";
 
                 var places = await _connection.QueryAsync<Place?>(sql);
                 return [.. places];

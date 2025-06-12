@@ -33,13 +33,18 @@ namespace CitizenHackathon2025.API.Controllers
             if (userDto == null || string.IsNullOrWhiteSpace(userDto.Email) || string.IsNullOrWhiteSpace(userDto.Pwd))
                 return BadRequest("Email and password are required.");
 
-            var result = await _userService.RegisterUserAsync(userDto.Email, userDto.Pwd, userDto.Role);
+            // ✅ Convertir le string en enum
+            if (!Enum.TryParse<Citizenhackathon2025.Domain.Enums.Role>(userDto.Role, true, out var parsedRole))
+                return BadRequest("Invalid role provided.");
+
+            var result = await _userService.RegisterUserAsync(userDto.Email, userDto.Pwd, parsedRole);
 
             if (!result)
                 return Conflict("Email already exists or registration failed.");
 
             return Ok("User registered successfully.");
         }
+
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO loginDto)
         {

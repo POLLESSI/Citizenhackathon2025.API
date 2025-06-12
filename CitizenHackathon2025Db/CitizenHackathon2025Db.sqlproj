@@ -75,6 +75,7 @@
     <Build Include="Programmability\Functions\fHasher.sql" />
     <Build Include="Programmability\Procedures\spAuth\sqlUserLogin.sql" />
     <Build Include="Programmability\Procedures\spAuth\sqlUserRegister.sql" />
+    <Build Include="Tables\RefreshTokens.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />

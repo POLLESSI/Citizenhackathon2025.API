@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+﻿using Citizenhackathon2025.Application;
+using Citizenhackathon2025.Application.Common;
 using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Application;
-using Citizenhackathon2025.Domain.Interfaces;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Interfaces;
+using Microsoft.AspNetCore.SignalR.Client;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Threading.Tasks;
 
 namespace Citizenhackathon2025.Application.Services
 {
@@ -47,6 +49,9 @@ namespace Citizenhackathon2025.Application.Services
 
         public async Task<Event> SaveEventAsync(Event @event)
         {
+            if (!Validators.IsFutureOrToday(@event.DateEvent))
+                throw new ValidationException("The date must be today or in the future.");
+
             return await _eventRepository.SaveEventAsync(@event);
         }
         public async Task<Event> CreateEventAsync(Event newEvent)

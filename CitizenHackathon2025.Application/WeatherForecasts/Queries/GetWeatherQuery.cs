@@ -1,0 +1,12 @@
+﻿using MediatR;
+using Citizenhackathon2025.Shared.DTOs;
+
+namespace CitizenHackathon2025.Application.WeatherForecasts.Queries
+{
+    public class GetWeatherQuery : IRequest<WeatherForecastDTO?>
+    {
+        // You can add parameters here if needed, for example a date filter or location
+        // public DateTime? Date { get; set; }
+        public string? DateWeather { get; init; } = null;
+    }
+}

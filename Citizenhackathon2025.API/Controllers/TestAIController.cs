@@ -7,11 +7,11 @@ namespace CitizenHackathon2025.API.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Route("api/testai")]
-    public class TestAIontroller : ControllerBase
+    public class TestAIController : ControllerBase
     {
         private readonly IAIService _ai;
 
-        public TestAIontroller(IAIService ai)
+        public TestAIController(IAIService ai)
         {
             _ai = ai;
         }

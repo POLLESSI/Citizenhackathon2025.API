@@ -28,7 +28,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         {
             try
             {
-                string sql = " SELECT * FROM Suggestion Where Active = 1";
+                string sql = " SELECT * FROM Suggestion WHERE Active = 1";
 
                 var suggestions = await _connection.QueryAsync<Suggestion?>(sql);
                 return [.. suggestions];

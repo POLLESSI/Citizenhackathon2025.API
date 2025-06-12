@@ -1,8 +1,11 @@
 ﻿using CitizeHackathon2025.Hubs.Hubs;
+using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Application.WeatherForecast.Queries;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Shared.DTOs;
+using Citizenhackathon2025.Infrastructure.Services;
+using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Services;
 using CityzenHackathon2025.API.Tools;
@@ -24,80 +27,63 @@ namespace Citizenhackathon2025.API.Controllers
         };
         private readonly IWeatherForecastRepository _weatherRepository;
         private readonly IHubContext<WeatherForecastHub> _hubContext;
-        private readonly IOpenWeatherMapService _owmService;
-        private readonly ILogger<WeatherForecastController> _logger;
+        private readonly IOpenWeatherService _owmService;
         private readonly IMediator _mediator;
+        private readonly ILogger<WeatherForecastController> _logger;
 
-        public WeatherForecastController(IWeatherForecastRepository weatherRepository, IHubContext<WeatherForecastHub> hubContext, IOpenWeatherMapService owmService, IMediator mediator)
+        public WeatherForecastController(IWeatherForecastRepository weatherRepository, IHubContext<WeatherForecastHub> hubContext, IOpenWeatherService owmService, IMediator mediator, ILogger<WeatherForecastController> logger)
         {
             _weatherRepository = weatherRepository;
             _hubContext = hubContext;
             _owmService = owmService;
             _mediator = mediator;
+            _logger = logger;
         }
-        //[HttpGet("openweather")]
-        //public async Task<IActionResult> GetForecastFromOpenWeather()
-        //{
-        //    var externalDto = await _owmService.GetForecastAsync("Namur");
-        //    if (externalDto == null)
-        //        return NotFound();
 
-        //    // DTO → Entity → DTO (unification de mapping)
-        //    var entity = externalDto.MapToWeatherForecast();
-        //    var apiDto = entity.MapToWeatherForecastDTO();
 
-        //    await _hubContext.Clients.All.SendAsync("ExternalWeatherUpdate", apiDto);
-        //    return Ok(apiDto);
-        //}
-        [HttpGet("current")]
-        public async Task<ActionResult<WeatherForecast>> GetCurrentWeather()
-        {
-            var forecast = await _weatherRepository.GenerateNewForecastAsync();
-            await _hubContext.Clients.All.SendAsync("ReceiveWeather", forecast);
-            return Ok(forecast);
-        }
+
+        // Example of a Mediator call to retrieve historical forecasts
         [HttpGet("history")]
-        public async Task<ActionResult<List<WeatherForecast>>> GetHistory()
+        public async Task<ActionResult<List<WeatherForecastDTO>>> GetHistory([FromQuery] int limit = 10)
         {
-            return Ok(await _weatherRepository.GetHistoryAsync());
+            var history = await _mediator.Send(new GetWeatherHistoryQuery(limit));
+            if (history == null || !history.Any())
+                return NotFound("No weather history found.");
+
+            return Ok(history);
         }
 
-        [HttpGet(Name = "GetWeatherForecast")]
-        public IEnumerable<Domain.Entities.WeatherForecast> Get()
+        // Get current weather via Mediator
+        [HttpGet("current")]
+        public async Task<ActionResult<WeatherForecastDTO>> GetCurrentWeather()
         {
-            return Enumerable.Range(1, 5).Select(index => new Domain.Entities.WeatherForecast
-            {
-                DateWeather = DateTime.UtcNow,
-                TemperatureC = Random.Shared.Next(-20, 55),
-                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
-            })
-            .ToArray();
+            var currentForecast = await _mediator.Send(new GetCurrentWeatherQuery());
+
+            if (currentForecast == null)
+                return NotFound("Current weather data not found.");
+
+            // SignalR notification
+            await _hubContext.Clients.All.SendAsync("ReceiveWeather", currentForecast);
+
+            return Ok(currentForecast);
         }
-        [HttpGet("latest")]
-        public async Task<IActionResult> GetLatestWeather()
+
+        // Retrieve weather by city, via external service OpenWeatherMap
+        [HttpGet("weather/{city}")]
+        public async Task<ActionResult<WeatherForecastDTO>> GetWeatherByCity(string city)
         {
-            var result = await _mediator.Send(new GetLatestForecastQuery());
-            return result != null ? Ok(result) : NotFound();
+            if (string.IsNullOrWhiteSpace(city))
+                return BadRequest("City name must be provided.");
+
+            var weatherDto = await _owmService.GetForecastAsync(city);
+
+            if (weatherDto == null)
+                return NotFound($"Unable to fetch weather data for city '{city}'.");
+
+            await _hubContext.Clients.All.SendAsync("ExternalWeatherUpdate", weatherDto);
+
+            return Ok(weatherDto);
         }
-        //[HttpPost]
-        //public async Task<IActionResult> SaveWeatherForecast([FromBody] WeatherForecastDTO forecastDto)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest(ModelState);
-
-        //    var forecast = forecastDto.MapToWeatherForecast();
-
-        //    var savedForecast = await _weatherRepository.SaveWeatherForecastAsync(forecast);
-
-        //    if (savedForecast == null)
-        //        return StatusCode(500, "Registration Error");
-
-        //    var forecastDtoToSend = savedForecast.MapToWeatherForecastDTO();
-
-        //    await _hubContext.Clients.All.SendAsync("NewWeatherForecast", forecastDtoToSend);
-
-        //    return Ok(forecastDtoToSend);
-        //}
     }
 }
 

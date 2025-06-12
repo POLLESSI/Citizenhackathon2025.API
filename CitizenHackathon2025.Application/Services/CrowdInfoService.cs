@@ -26,9 +26,8 @@ namespace Citizenhackathon2025.Application.Services
 
         public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
         {
-            //var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync;
-            //return crowdInfos;
-            throw new NotImplementedException();
+            var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync();
+            return crowdInfos;
         }
 
         public Task<CrowdInfo> GetCrowdInfoByIdAsync(int id)
