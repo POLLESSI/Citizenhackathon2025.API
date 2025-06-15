@@ -44,13 +44,11 @@ namespace Citizenhackathon2025.Infrastructure.Services
                 return new WeatherForecastDTO
                 {
                     DateWeather = DateTime.UtcNow,
-                    TemperatureC = root.GetProperty("main").GetProperty("temp").GetRawText(),
+                    TemperatureC = 0,
                     Summary = root.GetProperty("weather")[0].GetProperty("description").GetString(),
-                    Humidity = root.GetProperty("main").GetProperty("humidity").GetRawText(),
-                    RainfallMm = root.TryGetProperty("rain", out var rainProp) && rainProp.TryGetProperty("1h", out var rain1h)
-                        ? rain1h.GetRawText()
-                        : "0",
-                    WindSpeedKmh = root.GetProperty("wind").GetProperty("speed").GetRawText()
+                    Humidity = 0,
+                    RainfallMm = 0,
+                    WindSpeedKmh = 0
                 };
             }
             catch (Exception ex)
@@ -71,20 +69,20 @@ namespace Citizenhackathon2025.Infrastructure.Services
 
             var json = await response.Content.ReadAsStringAsync();
 
-            // Exemple simplifié, il faudra adapter en fonction du DTO et de la réponse API
+            // Simplified example, it will be necessary to adapt according to the DTO and the API response
             var openWeatherResponse = System.Text.Json.JsonSerializer.Deserialize<OpenWeatherApiResponse>(json);
 
-            // Mapper OpenWeatherApiResponse vers WeatherForecastDTO (à définir)
+            // Map OpenWeatherApiResponse to WeatherForecastDTO (TBD)
             var dto = new WeatherForecastDTO
             {
                 DateWeather = DateTime.Now,
-                TemperatureC = openWeatherResponse.Main.Temp.ToString(),
+                TemperatureC = 0,
                 Summary = openWeatherResponse.Weather.FirstOrDefault()?.Description ?? "No description"
             };
 
             return dto;
         }
-        // Exemple de modèle pour désérialisation de l’API
+        // Example template for API deserialization
         public class OpenWeatherApiResponse
         {
         #nullable disable

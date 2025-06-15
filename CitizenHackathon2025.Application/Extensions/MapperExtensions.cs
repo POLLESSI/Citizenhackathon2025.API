@@ -12,11 +12,11 @@ namespace Citizenhackathon2025.Application.Extensions
             return new Citizenhackathon2025.Domain.Entities.WeatherForecast
             {
                 DateWeather = dto.DateWeather,
-                TemperatureC = int.TryParse(dto.TemperatureC, out var tempC) ? tempC : 0,
+                TemperatureC = 0,
                 Summary = dto.Summary,
-                RainfallMm = double.TryParse(dto.RainfallMm, out var rain) ? rain : 0,
-                Humidity = int.TryParse(dto.Humidity, out var humidity) ? humidity : 0,
-                WindSpeedKmh = double.TryParse(dto.WindSpeedKmh, out var wind) ? wind : 0
+                RainfallMm = 0,
+                Humidity = 0,
+                WindSpeedKmh = 0
                 // Id et Active sont gérés par la base
             };
         }
@@ -24,15 +24,16 @@ namespace Citizenhackathon2025.Application.Extensions
         // Entity -> DTO
         public static WeatherForecastDTO MapToWeatherForecastDTO(this Citizenhackathon2025.Domain.Entities.WeatherForecast entity)
         {
+        #nullable disable
             return new WeatherForecastDTO
             {
                 Id = entity.Id, // facultatif si API ne doit pas exposer l'Id
                 DateWeather = entity.DateWeather,
-                TemperatureC = entity.TemperatureC.ToString(),
+                TemperatureC = entity.TemperatureC,
                 Summary = entity.Summary,
-                RainfallMm = entity.RainfallMm.ToString("F1", CultureInfo.InvariantCulture),
-                Humidity = entity.Humidity.ToString(),
-                WindSpeedKmh = entity.WindSpeedKmh.ToString("F1", CultureInfo.InvariantCulture)
+                RainfallMm = entity.RainfallMm,
+                Humidity = entity.Humidity,
+                WindSpeedKmh = entity.WindSpeedKmh
             };
         }
 
@@ -75,6 +76,8 @@ namespace Citizenhackathon2025.Application.Extensions
         }
         public static CrowdInfoDTO MapToCrowdInfoDTO(this CrowdInfo entity)
         {
+            if (entity == null) return null;
+
             return new CrowdInfoDTO
             {
                 LocationName = entity.LocationName,
@@ -84,6 +87,7 @@ namespace Citizenhackathon2025.Application.Extensions
                 Timestamp = entity.Timestamp
             };
         }
+
         // Place → DTOSugges
         public static PlaceDTO MapToPlaceDTO(this Place entity)
         {

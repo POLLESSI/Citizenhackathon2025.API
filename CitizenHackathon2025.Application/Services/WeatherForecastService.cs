@@ -36,11 +36,11 @@ namespace Citizenhackathon2025.Application.Services
             var forecast = new WeatherForecastDTO
             {
                 DateWeather = DateTime.Now,
-                TemperatureC = _rng.Next(-10, 35).ToString(),
+                TemperatureC = _rng.Next(-10, 35),
                 Summary = "Généré",
-                RainfallMm = Math.Round(_rng.NextDouble() * 20, 1).ToString("F1"),
-                Humidity = _rng.Next(30, 100).ToString(),
-                WindSpeedKmh = Math.Round(_rng.NextDouble() * 80, 1).ToString("F1")
+                RainfallMm = Math.Round(_rng.NextDouble() * 20, 1),
+                Humidity = _rng.Next(30, 100),
+                WindSpeedKmh = Math.Round(_rng.NextDouble() * 80, 1)
             };
             var entity = forecast.MapToWeatherForecast();
 

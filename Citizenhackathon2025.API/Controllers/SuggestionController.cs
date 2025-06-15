@@ -48,6 +48,15 @@ namespace CitizenHackathon2025.API.Controllers
             await _hubContext.Clients.All.SendAsync("NewSuggestion", savedSuggestion);
             return Ok(savedSuggestion);
         }
+        [HttpPost("ai")]
+        public async Task<IActionResult> GetSuggestionFromAI([FromBody] SuggestionDTO dto)
+        {
+            var prompt = $"I am currently at {dto.OriginalPlace} the {dto.DateSuggestion:dd/MM/yyyy}. " +
+                         $"The crowd is dense and the weather is uncertain. Offer me a quiet and interesting alternative.";
+
+            var suggestion = await _aiService.GenerateSuggestionAsync(prompt);
+            return Ok(new { suggestion });
+        }
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] SuggestionDTO dto)

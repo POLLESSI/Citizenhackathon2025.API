@@ -10,7 +10,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             if (value is string str && _bannedWords.Any(b => str.Contains(b, StringComparison.OrdinalIgnoreCase)))
             {
-                return new ValidationResult("Le champ contient des mots interdits.");
+                return new ValidationResult("The field contains prohibited words.");
             }
 
             return ValidationResult.Success;

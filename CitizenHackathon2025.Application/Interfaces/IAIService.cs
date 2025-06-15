@@ -13,12 +13,13 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<string> GetSuggestionsAsync(object content);
 
         /// <summary>
-        /// Envoie un prompt structuré à l'IA (OpenAI) et retourne la réponse générée.
+        /// Sends a structured prompt to the AI ​​(OpenAI) and returns the generated response.
         /// </summary>
-        /// <param name="prompt">Le prompt structuré contenant les contraintes touristiques.</param>
-        /// <returns>Réponse textuelle générée par l'IA.</returns>
+        /// <param name="prompt">The structured prompt containing the tourist constraints.</param>
+        /// <returns>AI-generated text response.</returns>
         Task<string> GetTouristicSuggestionsAsync(string prompt);
         Task<string> SummarizeTextAsync(string input);
+        Task<string> GenerateSuggestionAsync(string prompt);
         Task<string> TranslateToFrenchAsync(string englishText);
         Task<string> TranslateToDutchAsync(string englishText);
         Task<string> TranslateToGermanAsync(string englishText);

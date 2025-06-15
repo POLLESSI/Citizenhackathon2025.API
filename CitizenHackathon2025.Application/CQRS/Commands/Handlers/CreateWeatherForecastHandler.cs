@@ -19,11 +19,11 @@ namespace Citizenhackathon2025.Application.CQRS.Commands.Handlers
             var forecast = new WeatherForecastDTO
             {
                 DateWeather = request.DateWeather,
-                TemperatureC = request.TemperatureC.ToString(),
+                TemperatureC = request.TemperatureC,
                 Summary = request.Summary,
-                Humidity = request.Humidity.ToString(),
-                RainfallMm = request.RainfallMm.ToString(),
-                WindSpeedKmh = request.WindSpeedKmh.ToString()
+                Humidity = request.Humidity,
+                RainfallMm = request.RainfallMm,
+                WindSpeedKmh = request.WindSpeedKmh
             };
 
             var entity = forecast.MapToWeatherForecast();

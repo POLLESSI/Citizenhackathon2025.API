@@ -14,7 +14,7 @@ namespace CitizenHackathon2025.Shared.Utils
             byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
             var sb = new StringBuilder();
             foreach (var b in bytes)
-                sb.Append(b.ToString("x2")); // hexadécimal en minuscules
+                sb.Append(b.ToString("x2")); // lowercase hexadecimal
             return sb.ToString();
         }
     }

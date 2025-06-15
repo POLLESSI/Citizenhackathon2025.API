@@ -23,11 +23,11 @@ namespace CitizenHackathon2025.Application.Common.MediaR
             return model?.MapToWeatherForecastDTO() ?? new WeatherForecastDTO
             {
                 DateWeather = DateTime.Now,
-                TemperatureC = "0",
+                TemperatureC = 0,
                 Summary = "No data available",
-                RainfallMm = "0.0",
-                Humidity = "0",
-                WindSpeedKmh = "0.0"
+                RainfallMm = 0.0,
+                Humidity = 0,
+                WindSpeedKmh = 0.0
             };
         }
     }

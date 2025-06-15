@@ -9,9 +9,12 @@ using Citizenhackathon2025.Application.Services;
 using Citizenhackathon2025.Application.WeatherForecast.Commands;
 using Citizenhackathon2025.Application.WeatherForecast.Handlers;
 using Citizenhackathon2025.Application.WeatherForecast.Queries;
+using Citizenhackathon2025.Application.UseCases;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
+using Citizenhackathon2025.Infrastructure.ExternalAPIs;
+using Citizenhackathon2025.Infrastructure.Persistence;
 using Citizenhackathon2025.Infrastructure.Repositories;
 using Citizenhackathon2025.Infrastructure.Repositories.Providers.Hubs;
 using Citizenhackathon2025.Infrastructure.Services;
@@ -81,8 +84,10 @@ builder.Services.AddAuthentication("Cookies")
 
 // Injections
 
+builder.Services.AddScoped<IAIService, AIService>();
 builder.Services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
 builder.Services.AddScoped<ICrowdInfoService, CrowdInfoService>();
+//builder.Services.AddScoped<CitizenHackathon2025>();
 builder.Services.AddScoped<DatabaseService>();
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IEventService, EventService>();
@@ -129,6 +134,7 @@ builder.Services.AddSingleton<AsyncPolicyWrap>(sp =>
 });
 builder.Services.AddSingleton<TokenGenerator>();
 
+builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
 builder.Services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
 //builder.Services.AddSingleton<AsyncPolicyWrap<HttpResponseMessage>>(PollyPolicies.GetResiliencePolicy()); 
@@ -143,7 +149,15 @@ builder.Services.AddHttpClient();
 //    .AddPolicyHandler(sp => sp.GetRequiredService<AsyncPolicyWrap<HttpResponseMessage>>());
 builder.Services.AddHttpClient("Default")
     .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
-builder.Services.AddHttpClient<IOpenWeatherService, OpenWeatherService>();
+builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
+builder.Services.AddHttpClient<IAIService, AIService>();
+builder.Services.AddHttpClient<IOpenWeatherService, Citizenhackathon2025.Infrastructure.Services.OpenWeatherService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<CitizenHackathon2025.Application.Services.OpenWeatherService>();
+builder.Services.AddScoped<MemoryCacheService>();
+builder.Services.AddScoped<OpenAiSuggestionService>();
+builder.Services.AddScoped<WeatherSuggestionOrchestrator>();
+builder.Services.AddHttpClient<OpenWeatherMapClient>();
 //builder.Services.AddHttpClient<ITrafficApiService, TrafficAPIService>();
 
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());

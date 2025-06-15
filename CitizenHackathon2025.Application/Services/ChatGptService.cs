@@ -133,6 +133,11 @@ namespace Citizenhackathon2025.Application.Services
             var prompt = $"Translate this text to German: {englishText}";
             return await SendPromptAsync("You are a professional English-to-German translator.", prompt);
         }
+
+        public Task<string> GenerateSuggestionAsync(string prompt)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 

@@ -1,37 +1,48 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Text.Json.Serialization;
 
 namespace Citizenhackathon2025.Shared.DTOs
 {
     public class WeatherForecastDTO
     {
-    #nullable disable
         public int Id { get; set; }
-        [DisplayName("Weather Date : ")]
         public DateTime DateWeather { get; set; }
-        [JsonIgnore] // On ignore ce champ à l'entrée (POST), il est calculé automatiquement
-        public string DateWeatherFormatted => DateWeather.ToString("dd/MM/yyyy");
-        [JsonIgnore]
-        public string DayOfWeek => DateWeather.ToString("dddd"); // Exemple : "Saturday"
-        [JsonIgnore]
-        public string MonthName => DateWeather.ToString("MMMM"); // Exemple : "April"
+
         [DisplayName("Temperature C : ")]
-        public string TemperatureC { get; set; }
+        public int TemperatureC { get; set; }
+
         [DisplayName("Temperature F : ")]
-        public string TemperatureF => 32 + (string)("TemperatureC / 0.5556");
+        [JsonIgnore]
+        public string TemperatureF
+        {
+            get
+            {
+                var tempF = 32 + (int)(TemperatureC / 0.5556);
+                return tempF.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
         [DisplayName("Summary : ")]
         public string Summary { get; set; } = "";
-        [DisplayName("Rainfall mm : ")]
-        public string RainfallMm { get; set; }
-        [DisplayName("Humidity : ")]
-        public string Humidity { get; set; }
-        [DisplayName("Wind Speed km/h : ")]
-        public string WindSpeedKmh { get; set; }
 
-        //public static implicit operator WeatherForecastDTO(WeatherForecastDTO v)
-        //{
-        //    throw new NotImplementedException();
-        //}
+        [DisplayName("Rainfall mm : ")]
+        public double RainfallMm { get; set; }
+
+        [DisplayName("Humidity : ")]
+        public int Humidity { get; set; }
+
+        [DisplayName("Wind Speed km/h : ")]
+        public double WindSpeedKmh { get; set; }
+
+        [JsonIgnore]
+        public string DateWeatherFormatted => DateWeather.ToString("dd/MM/yyyy");
+
+        [JsonIgnore]
+        public string DayOfWeek => DateWeather.ToString("dddd", CultureInfo.InvariantCulture);
+
+        [JsonIgnore]
+        public string MonthName => DateWeather.ToString("MMMM", CultureInfo.InvariantCulture);
     }
 }
