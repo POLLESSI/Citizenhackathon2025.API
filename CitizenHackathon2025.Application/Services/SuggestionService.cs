@@ -1,11 +1,12 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+﻿using Citizenhackathon2025.Application;
 using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Application;
+using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using Microsoft.Extensions.Logging;
+using Volo.Abp.Domain.Repositories;
 
 namespace Citizenhackathon2025.Application.Services
 {
@@ -27,6 +28,15 @@ namespace Citizenhackathon2025.Application.Services
         public async Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion)
         {
             return await _suggestionRepository.SaveSuggestionAsync(suggestion);
+        }
+        public async Task<IEnumerable<Suggestion>> GetSuggestionsByUserAsync(int userId)
+        {
+            return await _suggestionRepository.GetSuggestionsByUserAsync(userId);
+        }
+
+        public async Task<bool> SoftDeleteSuggestionAsync(int id)
+        {
+            return await _suggestionRepository.SoftDeleteSuggestionAsync(id);
         }
 
         public Suggestion? UpdateSuggestion(Suggestion suggestion)

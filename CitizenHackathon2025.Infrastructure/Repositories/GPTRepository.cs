@@ -92,7 +92,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             {
                 await _connection.ExecuteAsync(sql, new
                 {
-                    suggestion.UserId,
+                    suggestion.User_Id,
                     suggestion.DateSuggestion,
                     suggestion.OriginalPlace,
                     suggestion.SuggestedAlternatives,

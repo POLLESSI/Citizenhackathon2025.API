@@ -7,7 +7,8 @@
 	[OriginalPlace] NVARCHAR(64),
 	[SuggestedAlternatives] NVARCHAR(256),
 	[Reason] NVARCHAR(256),
-	[Active] BIT DEFAULT 1
+	[Active] BIT DEFAULT 1,
+	[DateDeleted] DATETIME NULL,
 
 	CONSTRAINT [PK_Suggestion] PRIMARY KEY ([Id]),
 	CONSTRAINT [FK_Suggestion_User] FOREIGN KEY (User_Id) REFERENCES [User] ([Id])
@@ -20,6 +21,7 @@ CREATE TRIGGER [dbo].[OnDeleteSuggestion]
 	INSTEAD OF DELETE
 	AS
 	BEGIN
-		UPDATE Suggestion SET Active = 0
+		UPDATE Suggestion SET Active = 0,
+		DateDeleted = GETDATE()
 		WHERE Id = (SELECT Id FROM deleted)
 	END

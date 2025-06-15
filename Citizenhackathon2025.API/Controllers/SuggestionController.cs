@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.SqlServer.Dac.Model;
+using MediatR;
+using CitizenHackathon2025.Application.CQRS.Queries;
+using CitizenHackathon2025.Application.CQRS.Commands;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -19,19 +22,45 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly ISuggestionRepository _suggestionRepository;
         private readonly IAIService _aiService;
         private readonly IHubContext<GPTHub> _hubContext;
+        private readonly IMediator _mediator;
 
-        public SuggestionController(ISuggestionRepository suggestionRepository, IAIService aiService, IHubContext<GPTHub> hubContext)
+        public SuggestionController(ISuggestionRepository suggestionRepository, IAIService aiService, IHubContext<GPTHub> hubContext, IMediator mediator)
         {
             _suggestionRepository = suggestionRepository;
             _aiService = aiService;
             _hubContext = hubContext;
+            _mediator = mediator;
         }
-        // ✅ GET Latest
+
+
+        // ✅ GET: /api/Suggestion/latest
         [HttpGet("latest")]
-        public async Task<IActionResult> GetLatestSuggestion()
+        public async Task<IActionResult> GetLatestSuggestions()
         {
             var suggestions = await _suggestionRepository.GetLatestSuggestionAsync();
             return Ok(suggestions);
+        }
+
+        // GET: api/Suggestion/user/5
+        [HttpGet("user/{userId:int}")]
+        public async Task<IActionResult> GetSuggestionsByUser(int userId)
+        {
+            var query = new GetSuggestionsByUserQuery(userId);
+            var result = await _mediator.Send(query);
+            return Ok(result);
+        }
+
+        // DELETE: api/Suggestion/5
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> SoftDelete(int id)
+        {
+            var command = new SoftDeleteSuggestionCommand(id);
+            var result = await _mediator.Send(command);
+
+            if (!result)
+                return NotFound($"Suggestion with ID {id} not found or already disabled.");
+
+            return NoContent();
         }
         // ✅ POSTs classics
         [HttpPost]
@@ -66,7 +95,7 @@ namespace CitizenHackathon2025.API.Controllers
 
             var entity = new Suggestion
             {
-                UserId = dto.UserId,
+                User_Id = dto.UserId,
                 DateSuggestion = dto.DateSuggestion,
                 OriginalPlace = dto.OriginalPlace,
                 SuggestedAlternatives = dto.SuggestedAlternatives,
@@ -90,7 +119,7 @@ namespace CitizenHackathon2025.API.Controllers
 
             var newSuggestion = new Suggestion
             {
-                UserId = 1, // ou via ClaimsPrincipal si auth
+                User_Id = 1, // or via ClaimsPrincipal if auth
                 DateSuggestion = DateTime.UtcNow,
                 OriginalPlace = forecastDto.Location,
                 SuggestedAlternatives = gptResponse,

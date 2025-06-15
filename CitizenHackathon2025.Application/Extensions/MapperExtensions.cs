@@ -108,7 +108,7 @@ namespace Citizenhackathon2025.Application.Extensions
         {
             return new SuggestionDTO
             {
-                UserId = entity.UserId,
+                UserId = entity.User_Id,
                 DateSuggestion = entity.DateSuggestion,
                 OriginalPlace = entity.OriginalPlace,
                 SuggestedAlternatives = entity.SuggestedAlternatives,
