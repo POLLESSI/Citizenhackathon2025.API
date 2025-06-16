@@ -23,6 +23,8 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<string> TranslateToFrenchAsync(string englishText);
         Task<string> TranslateToDutchAsync(string englishText);
         Task<string> TranslateToGermanAsync(string englishText);
+        Task<string> SuggestAlternativeAsync(string prompt);
+        Task<string> SuggestAlternativeWithWeatherAsync(string location);
 
     }
 }

@@ -66,6 +66,16 @@ namespace CitizenHackathon2025.Application.Services
             throw new NotImplementedException();
         }
 
+        public Task<string> SuggestAlternativeAsync(string prompt)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<string> SuggestAlternativeWithWeatherAsync(string location)
+        {
+            throw new NotImplementedException();
+        }
+
         public Task<string> SummarizeTextAsync(string input)
         {
             throw new NotImplementedException();

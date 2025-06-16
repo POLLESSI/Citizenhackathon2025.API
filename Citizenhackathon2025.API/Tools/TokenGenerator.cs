@@ -22,7 +22,10 @@ namespace CityzenHackathon2025.API.Tools
                 ? minutes
                 : 30; // fallback if the value is not readable
         }
-
+        public string GetSecretKey()
+        {
+            return _secretKey;
+        }
         public string GenerateToken(string email, Role role)
         {
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));

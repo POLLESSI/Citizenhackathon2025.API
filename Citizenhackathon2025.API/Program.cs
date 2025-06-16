@@ -1,5 +1,6 @@
 using AutoMapper;
 using Azure.Core.Pipeline;
+using Citizenhackathon2025.API.Hubs;
 using Citizenhackathon2025.API.Security;
 using Citizenhackathon2025.Application.CQRS.Commands.Handlers;
 using Citizenhackathon2025.Application.CQRS.Queries.Handlers;
@@ -27,6 +28,7 @@ using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CityzenHackathon2025.API.Tools;
 using MediatR;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -41,6 +43,7 @@ using Polly.Extensions.Http;
 using Polly.Retry;
 using Polly.Wrap;
 using System.Data;
+using System.Data.SqlClient;
 using System.Text;
 
 
@@ -50,65 +53,99 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 // SQLConnection
-
+builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddScoped<System.Data.IDbConnection>(static sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
     var connectionString = configuration.GetConnectionString("default");
-    return new SqlConnection(connectionString);
+    return new System.Data.SqlClient.SqlConnection(connectionString);
 });
+builder.Services.AddScoped<DatabaseService>();
 
 // Authentications
 
-var secretKey = builder.Configuration["JwtSettings:SecretKey"];
+// Secret key (to be put in appsettings.json or secrets in production)
+var jwtKey = builder.Configuration["JwtSettings:SecretKey"];
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "CitizenHackathon2025API";
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = true;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = false,
-            ValidateAudience = false,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
-        };
-    }); 
+        ValidateIssuer = true,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!))
+    };
+});
 
-builder.Services.AddAuthentication("Cookies")
-    .AddCookie("Cookies", options =>
-    {
-        options.Cookie.Name = "AccessToken";
-        options.LoginPath = "/api/auth/login";
-        options.AccessDeniedPath = "/api/auth/denied";
-    });
+//var secretKey = builder.Configuration["JwtSettings:SecretKey"];
+
+//builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+//    .AddJwtBearer(options =>
+//    {
+//        options.TokenValidationParameters = new TokenValidationParameters
+//        {
+//            ValidateIssuer = false,
+//            ValidateAudience = false,
+//            ValidateLifetime = true,
+//            ValidateIssuerSigningKey = true,
+//            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+//        };
+//    }); 
+
+//builder.Services.AddAuthentication("Cookies")
+//    .AddCookie("Cookies", options =>
+//    {
+//        options.Cookie.Name = "AccessToken";
+//        options.LoginPath = "/api/auth/login";
+//        options.AccessDeniedPath = "/api/auth/denied";
+//    });
 
 // Injections
-
-builder.Services.AddScoped<IAIService, AIService>();
-builder.Services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
+// ========== DOMAIN SERVICES ==========
 builder.Services.AddScoped<ICrowdInfoService, CrowdInfoService>();
 //builder.Services.AddScoped<CitizenHackathon2025>();
 builder.Services.AddScoped<DatabaseService>();
-builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IEventService, EventService>();
-builder.Services.AddScoped<IGPTRepository, GPTRepository>();
-builder.Services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IPlaceService, PlaceService>();
-builder.Services.AddScoped<IPlaceRepository, PlaceRepository>();
-builder.Services.AddScoped<ISuggestionRepository, SuggestionRepository>();
 builder.Services.AddScoped<ISuggestionService, SuggestionService>();
 builder.Services.AddSingleton<TokenGenerator>();
 builder.Services.AddScoped<ITrafficConditionService, TrafficConditionService>();
-builder.Services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
 //builder.Services.AddScoped<ITrafficApiService, TrafficAPIService>();
-builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAIService, AIService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<OpenAiSuggestionService>();
+builder.Services.AddScoped<WeatherSuggestionOrchestrator>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserHubService, UserHubService>();
-builder.Services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
 builder.Services.AddScoped<IWeatherForecastService, WeatherForecastService>();
+// ========== HUBS & NOTIFIERS ==========
 builder.Services.AddScoped<IWeatherHubService, CitizenHackathon2025.Hubs.Services.WeatherHubService>();
+builder.Services.AddScoped<IUserHubService, UserHubService>();
+builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
+// ========== REPOSITORIES ==========
+builder.Services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
+builder.Services.AddScoped<IEventRepository, EventRepository>();
+builder.Services.AddScoped<IGPTRepository, GPTRepository>();
+builder.Services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
+builder.Services.AddScoped<IPlaceRepository, PlaceRepository>();
+builder.Services.AddScoped<ISuggestionRepository, SuggestionRepository>();
+builder.Services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
+
+// ========== POLLY: RETRY + CIRCUIT BREAKER ==========
 builder.Services.AddSingleton<AsyncPolicyWrap>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<WeatherService>>();
@@ -133,29 +170,19 @@ builder.Services.AddSingleton<AsyncPolicyWrap>(sp =>
 
     return Policy.WrapAsync(retryPolicy, circuitBreaker);
 });
+// ========== UTILS ==========
 builder.Services.AddSingleton<TokenGenerator>();
-
 builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
-builder.Services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
-builder.Services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
-//builder.Services.AddSingleton<AsyncPolicyWrap<HttpResponseMessage>>(PollyPolicies.GetResiliencePolicy()); 
 
 builder.Services.AddHttpClient();
-//builder.Services
-//    .AddHttpClient<IAIService, ChatGptService>();
-//    .AddPolicyHandler(sp => sp.GetRequiredService<AsyncPolicyWrap<HttpResponseMessage>>());
-
-//builder.Services
-//    .AddHttpClient<Citizenhackathon2025.Application.Interfaces.IOpenWeatherMapService, OpenWeatherMapService>();
-//    .AddPolicyHandler(sp => sp.GetRequiredService<AsyncPolicyWrap<HttpResponseMessage>>());
 builder.Services.AddHttpClient("Default")
     .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
 builder.Services.AddHttpClient<IAIService, AIService>();
-builder.Services.AddHttpClient<IOpenWeatherService, Citizenhackathon2025.Infrastructure.Services.OpenWeatherService>();
+builder.Services.AddHttpClient<IOpenWeatherService, CitizenHackathon2025.Application.Services.OpenWeatherService>();
+builder.Services.Configure<OpenWeatherOptions>(builder.Configuration.GetSection("OpenWeather"));
 builder.Services.AddMemoryCache();
-builder.Services.AddScoped<CitizenHackathon2025.Application.Services.OpenWeatherService>();
 builder.Services.AddScoped<MemoryCacheService>();
 builder.Services.AddScoped<OpenAiSuggestionService>();
 builder.Services.AddScoped<WeatherSuggestionOrchestrator>();
@@ -163,17 +190,15 @@ builder.Services.AddHttpClient<OpenWeatherMapClient>();
 //builder.Services.AddHttpClient<ITrafficApiService, TrafficAPIService>();
 
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+// ========== MEDIATR ==========
+builder.Services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
+builder.Services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
 
 // Replace the ambiguous line with the following explicit call to resolve the ambiguity:
 //AutoMapper.ServiceCollectionExtensions.AddAutoMapper(builder.Services, config => { }, AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
-//builder.Services.AddScoped<IAIService, AIService>();
-//builder.Services.AddScoped<IAIService>(sp =>
-//{
-//    var config = sp.GetRequiredService<IConfiguration>();
-//    var apiKey = config.GetValue<string>("OpenAI:ApiKey");
-//    return new AIService(apiKey);
-//});
+
+// ========== LOGGING ==========
 builder.Logging.AddConsole();
 
 
@@ -294,7 +319,6 @@ app.UseHttpsRedirection();
 app.UseMiddleware<Citizenhackathon2025.API.Security.AntiXssMiddleware>();
 app.UseStaticFiles();
 //app.UseMiddleware<Citizenhackathon2025.API.Middlewares.ExceptionMiddleware>();
-
 app.UseRouting();
 app.UseAntiXssMiddleware(); // Protection XSS
 //app.UseCustomExceptionMiddleware();
@@ -316,6 +340,7 @@ app.UseEndpoints(Endpoints =>
     Endpoints.MapHub<UpdateHub>("/hubs/updateHub");
     Endpoints.MapHub<UserHub>("/hubs/userHub");
     Endpoints.MapHub<CrowdHub>("/hubs/crowdHub");
+    Endpoints.MapHub<AISuggestionHub>("/aisuggestionhub");
     Endpoints.MapHub<CitizeHackathon2025.Hubs.Hubs.WeatherForecastHub>("/hubs/weatherforecastHub");
 });
 

@@ -7,6 +7,7 @@ namespace Citizenhackathon2025.Application.Interfaces
     public interface IOpenWeatherService
     {
         Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city);
+        Task<string> GetWeatherSummaryAsync(string location);
         Task<WeatherForecastDTO?> GetForecastAsync(string city);
     }
 }

@@ -82,6 +82,12 @@ namespace Citizenhackathon2025.Infrastructure.Services
 
             return dto;
         }
+
+        public Task<string> GetWeatherSummaryAsync(string location)
+        {
+            throw new NotImplementedException();
+        }
+
         // Example template for API deserialization
         public class OpenWeatherApiResponse
         {

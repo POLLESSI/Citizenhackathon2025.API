@@ -8,8 +8,10 @@ using CityzenHackathon2025.API.Tools;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Text;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -165,6 +167,68 @@ namespace CitizenHackathon2025.API.Controllers
 
             _logger.LogInformation("✅ Registration successful for email: {Email}", dto.Email);
             return Ok("Registration successful.");
+        }
+        [HttpPost("verifytoken")]
+        public IActionResult VerifyToken()
+        {
+            var accessToken = Request.Cookies["AccessToken"];
+
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                _logger.LogWarning("🔒 AccessToken manquant dans les cookies.");
+                return Unauthorized(new { message = "Token absent." });
+            }
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var secretKey = _tokenGenerator.GetSecretKey(); // méthode à ajouter dans TokenGenerator pour exposer la clé
+
+            try
+            {
+                var principal = tokenHandler.ValidateToken(accessToken, new TokenValidationParameters
+                {
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+                    ClockSkew = TimeSpan.Zero // éviter la tolérance de 5 min par défaut
+                }, out var validatedToken);
+
+                var jwtToken = validatedToken as JwtSecurityToken;
+                if (jwtToken == null)
+                {
+                    _logger.LogWarning("🔒 Token invalide (pas un JWT).");
+                    return Unauthorized(new { message = "Token non valide." });
+                }
+
+                var email = principal.FindFirst(ClaimTypes.Email)?.Value;
+                var role = principal.FindFirst(ClaimTypes.Role)?.Value;
+
+                if (email == null || role == null)
+                {
+                    _logger.LogWarning("🔒 Claims manquants dans le token.");
+                    return Unauthorized(new { message = "Token incomplet." });
+                }
+
+                _logger.LogInformation("✅ Token valide pour {Email}, rôle {Role}", email, role);
+
+                return Ok(new
+                {
+                    message = "Token valide.",
+                    email,
+                    role
+                });
+            }
+            catch (SecurityTokenExpiredException)
+            {
+                _logger.LogWarning("⌛ Token expiré.");
+                return Unauthorized(new { message = "Token expiré." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("❌ Erreur lors de la validation du token : {Message}", ex.Message);
+                return Unauthorized(new { message = "Token invalide." });
+            }
         }
 #if DEBUG
         [HttpPost("dev-login")]

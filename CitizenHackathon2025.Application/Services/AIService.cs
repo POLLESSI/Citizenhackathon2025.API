@@ -30,19 +30,21 @@ namespace Citizenhackathon2025.Application.Services
         private const string OpenAIImagePromptKey = "prompt";
         private readonly HttpClient _httpClient;
         private readonly OpenAIOptions _options;
+        private readonly IOpenWeatherService _weather;
         private readonly string _apiKey = "sk-xxxxxxx"; // clé OpenAI de préférence, injectée via config
         private readonly string _model;
         private readonly IConfiguration _config;
         private readonly string _endpoint = "https://api.openai.com/v1/chat/completions";
 
-        public AIService(IOptions<OpenAIOptions> options, HttpClient httpClient)
+        public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather)
         {
-        #nullable disable
             _httpClient = httpClient;
             _options = options.Value;
+            _weather = weather;
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
         }
 
+        public string GetModel() => _options.Model;
         private async Task<string> SendChatRequestAsync(string systemPrompt, string userPrompt, double temperature = 0.7)
         {
             var requestBody = new
@@ -157,6 +159,22 @@ namespace Citizenhackathon2025.Application.Services
                 .GetString();
 
             return translation ?? "No translation generated.";
+        }
+
+        public async Task<string> SuggestAlternativeAsync(string prompt)
+        {
+            // Fictitious example — adapt according to your GPT, OpenAI, or other engine.
+            return await Task.FromResult($"Suggestion for : {prompt}");
+        }
+
+        public async Task<string> SuggestAlternativeWithWeatherAsync(string location)
+        {
+            var weatherInfo = await _weather.GetWeatherSummaryAsync(location);
+
+            string prompt = $"Offers a pleasant activity to do at {location} with the following weather : {weatherInfo}";
+
+            // Dummy call to GPT (replace with your call to OpenAI or other)
+            return $"[Suggestion AI] HAS {location}, {weatherInfo}, You could: visit a museum, go to the cinema, or explore a covered gallery.";
         }
     }
 }
