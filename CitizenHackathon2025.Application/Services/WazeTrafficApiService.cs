@@ -20,14 +20,103 @@ namespace Citizenhackathon2025.Application.Services
 
         public async Task<TrafficConditionDTO?> GetCurrentTrafficAsync(double latitude, double longitude)
         {
-            // Exemple d'URL (à adapter selon ton abonnement Waze)
+            // Example URL (to be adapted according to your Waze subscription)
             var url = $"{_wazeEndpoint}/traffic?lat={latitude}&lon={longitude}&token={_authToken}";
 
             var response = await _http.GetAsync(url);
             if (!response.IsSuccessStatusCode) return null;
 
-            // On suppose que l'API renvoie un objet JSON conforme au DTO
+            // It is assumed that the API returns a JSON object conforming to the DTO
             return await response.Content.ReadFromJsonAsync<TrafficConditionDTO>();
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.
