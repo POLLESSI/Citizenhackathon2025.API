@@ -10,16 +10,16 @@ using Citizenhackathon2025.Application.Interfaces;
 
 namespace Citizenhackathon2025.Application.UseCases
 {
-    public class CitizenHackathon2025
+    public class CitizenSuggestionService
     {
         private readonly OpenAiSuggestionService _suggestionService;
         private readonly CrowdInfoService _crowdService;
         private readonly TrafficConditionService _trafficService;
         private readonly IOpenWeatherService _weatherService;
         private readonly GeoService _geoService;
-        private readonly ILogger<CitizenHackathon2025> _logger;
+        private readonly ILogger<CitizenSuggestionService> _logger;
 
-        public CitizenHackathon2025(OpenAiSuggestionService suggestionService, CrowdInfoService crowdService, TrafficConditionService trafficService, IOpenWeatherService weatherService, GeoService geoService, ILogger<CitizenHackathon2025> logger)
+        public CitizenSuggestionService(OpenAiSuggestionService suggestionService, CrowdInfoService crowdService, TrafficConditionService trafficService, IOpenWeatherService weatherService, GeoService geoService, ILogger<CitizenSuggestionService> logger)
         {
             _suggestionService = suggestionService;
             _crowdService = crowdService;

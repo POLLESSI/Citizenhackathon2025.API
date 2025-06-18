@@ -6,7 +6,6 @@ using Citizenhackathon2025.Domain.Entities;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-using Citizenhackathon2025.Domain.Interfaces;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {
