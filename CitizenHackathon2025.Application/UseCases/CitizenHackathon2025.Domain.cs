@@ -1,9 +1,12 @@
 ﻿using Citizenhackathon2025.Application;
+using Citizenhackathon2025.Application.Extensions;
 using Citizenhackathon2025.Application.Services;
 using Citizenhackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Application.DTOs;
 using CitizenHackathon2025.Application.Services;
+using Citizenhackathon2025.Infrastructure.Services;
 using Microsoft.Extensions.Logging;
+using Citizenhackathon2025.Application.Interfaces;
 
 namespace Citizenhackathon2025.Application.UseCases
 {
@@ -12,54 +15,60 @@ namespace Citizenhackathon2025.Application.UseCases
         private readonly OpenAiSuggestionService _suggestionService;
         private readonly CrowdInfoService _crowdService;
         private readonly TrafficConditionService _trafficService;
-        private readonly OpenWeatherService _weatherService;
+        private readonly IOpenWeatherService _weatherService;
+        private readonly GeoService _geoService;
         private readonly ILogger<CitizenHackathon2025> _logger;
 
-        public CitizenHackathon2025(
-            OpenAiSuggestionService suggestionService,
-            CrowdInfoService crowdService,
-            TrafficConditionService trafficService,
-            OpenWeatherService weatherService,
-            ILogger<CitizenHackathon2025> logger)
+        public CitizenHackathon2025(OpenAiSuggestionService suggestionService, CrowdInfoService crowdService, TrafficConditionService trafficService, IOpenWeatherService weatherService, GeoService geoService, ILogger<CitizenHackathon2025> logger)
         {
             _suggestionService = suggestionService;
             _crowdService = crowdService;
             _trafficService = trafficService;
             _weatherService = weatherService;
+            _geoService = geoService;
             _logger = logger;
         }
 
         public async Task<SuggestionResponseDTO> GetPersonalizedSuggestionsAsync(string location, int id)
         {
-        #nullable disable
             try
             {
-                var weather = await _weatherService.GetWeatherAsync(location);
-                var crowd = await _crowdService.GetCrowdInfoByIdAsync(id);
-                //var traffic = await _trafficService.UpdateTrafficCondition(
-                //        new TrafficConditionDTO
-                //        {
-                //            LocationName = location,
-                //            Latitude = crowd.Latitude,
-                //            Longitude = crowd.Longitude
-                //        }
-                //    );
+                // Step 1: Geocode the city
+                var coordinates = await _geoService.GetCoordinatesAsync(location);
+                if (coordinates == null)
+                {
+                    _logger.LogWarning("Unable to geocode city : {Location}", location);
+                    return new SuggestionResponseDTO
+                    {
+                        Location = location,
+                        Error = "The city is not found or invalid."
+                    };
+                }
+                
 
-                // AI suggestion based on all factors
-                var aiSuggestion = await _suggestionService.GetSuggestionsAsync(weather);
+                (double lat, double lon) = coordinates.Value;
+
+                // Step 2: Retrieve weather from coordinates
+                var weather = await _weatherService.GetWeatherAsync(lat, lon);
+
+                // Step 3: Retrieve crowd information by ID
+                var crowd = await _crowdService.GetCrowdInfoByIdAsync(id);
+
+                // Step 4: Call the AI ​​to generate a suggestion
+                var weatherInfo = weather.MapToWeatherInfoDTO("Paris");
+                var aiSuggestion = await _suggestionService.GetSuggestionsAsync(weatherInfo);
 
                 return new SuggestionResponseDTO
                 {
                     Location = location,
-                    Weather = weather,
+                    //Weather = weather,
                     //CrowdInfo = crowd,
-                    //TrafficInfo = traffic,
                     AiSuggestion = aiSuggestion
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in the main scenario.");
+                _logger.LogError(ex, "Error generating personalized suggestion.");
                 return new SuggestionResponseDTO
                 {
                     Location = location,

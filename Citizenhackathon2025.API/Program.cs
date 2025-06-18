@@ -26,11 +26,12 @@ using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
+using CitizenHackathon2025.Infrastructure;
 using CityzenHackathon2025.API.Tools;
 using MediatR;
-using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
@@ -126,6 +127,7 @@ builder.Services.AddScoped<ITrafficConditionService, TrafficConditionService>();
 builder.Services.AddScoped<IAIService, AIService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<OpenAiSuggestionService>();
+builder.Services.AddScoped<OpenWeatherService>();
 builder.Services.AddScoped<WeatherSuggestionOrchestrator>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserHubService, UserHubService>();
@@ -180,14 +182,26 @@ builder.Services.AddHttpClient("Default")
     .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
 builder.Services.AddHttpClient<IAIService, AIService>();
-builder.Services.AddHttpClient<IOpenWeatherService, CitizenHackathon2025.Application.Services.OpenWeatherService>();
+builder.Services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var logger = sp.GetRequiredService<ILogger<OpenWeatherService>>();
+    var apiKey = config["OpenWeather:ApiKey"] ?? throw new InvalidOperationException("API key is not configured.");
+    var baseUrl = config["OpenWeather:BaseUrl"] ?? "https://api.openweathermap.org";
+
+});
+
+builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>();
 builder.Services.Configure<OpenWeatherOptions>(builder.Configuration.GetSection("OpenWeather"));
+builder.Services.AddHttpClient<IOpenWeatherService, OpenWeatherService>();
+
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<MemoryCacheService>();
 builder.Services.AddScoped<OpenAiSuggestionService>();
 builder.Services.AddScoped<WeatherSuggestionOrchestrator>();
 builder.Services.AddHttpClient<OpenWeatherMapClient>();
 //builder.Services.AddHttpClient<ITrafficApiService, TrafficAPIService>();
+builder.Services.AddInfrastructure();
 
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 // ========== MEDIATR ==========
@@ -197,6 +211,10 @@ builder.Services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
 // Replace the ambiguous line with the following explicit call to resolve the ambiguity:
 //AutoMapper.ServiceCollectionExtensions.AddAutoMapper(builder.Services, config => { }, AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
+
+ILogger<Program> logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();
+
+logger.LogInformation("Application DI built successfully.");
 
 // ========== LOGGING ==========
 builder.Logging.AddConsole();
@@ -293,6 +311,7 @@ builder.Services.AddSwaggerGen(c =>
 
 builder.Services.AddHttpClient<ChatGptService>();
 
+System.AggregateException : 'Some services are not able to be constructed (Error while validating the service descriptor 'ServiceType: Citizenhackathon2025.Application.Interfaces.IAIService Lifetime: Scoped ImplementationType: Citizenhackathon2025.Application.Services.AIService': Unable to resolve service for type 'System.String' while attempting to activate 'Citizenhackathon2025.Infrastructure.Services.OpenWeatherService'.) (Error while validating the service descriptor 'ServiceType: Citizenhackathon2025.Infrastructure.Services.OpenWeatherService Lifetime: Scoped ImplementationType: Citizenhackathon2025.Infrastructure.Services.OpenWeatherService': Unable to resolve service for type 'System.String' while attempting to activate 'Citizenhackathon2025.Infrastructure.Services.OpenWeatherService'.) (Error while validating the service descriptor 'ServiceType: CitizenHackathon2025.Application.Services.WeatherSuggestionOrchestrator Lifetime: Scoped ImplementationType: CitizenHackathon2025.Application.Services.WeatherSuggestionOrchestrator': Unable to resolve service for type 'System.String' while attempting to activate 'Citizenhackathon2025.Infrastructure.Services.OpenWeatherService'.) (Error while validating the service descriptor 'ServiceType: Citizenhackathon2025.Application.Interfaces.IOpenWeatherService Lifetime: Scoped ImplementationType: Citizenhackathon2025.Infrastructure.Services.OpenWeatherService': Unable to resolve service for type 'System.String' while attempting to activate 'Citizenhackathon2025.Infrastructure.Services.OpenWeatherService'.) (Error while validating the service descriptor 'ServiceType: CitizenHackathon2025.Application.Services.WeatherSuggestionOrchestrator Lifetime: Scoped ImplementationType: CitizenHackathon2025.Application.Services.WeatherSuggestionOrchestrator': Unable to resolve service for type 'System.String' while attempting to activate 'Citizenhackathon2025.Infrastructure.Services.OpenWeatherService'.) (Error while validating the service descriptor 'ServiceType: Citizenhackathon2025.Application.Interfaces.IOpenWeatherService Lifetime: Scoped ImplementationType: Citizenhackathon2025.Infrastructure.Services.OpenWeatherService': Unable to resolve service for type 'System.String' while attempting to activate 'Citizenhackathon2025.Infrastructure.Services.OpenWeatherService'.)'
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

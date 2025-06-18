@@ -17,7 +17,7 @@ namespace Citizenhackathon2025.Application.Extensions
                 RainfallMm = 0,
                 Humidity = 0,
                 WindSpeedKmh = 0
-                // Id et Active sont gérés par la base
+                // Id and Active are managed by the database
             };
         }
 
@@ -27,7 +27,7 @@ namespace Citizenhackathon2025.Application.Extensions
         #nullable disable
             return new WeatherForecastDTO
             {
-                Id = entity.Id, // facultatif si API ne doit pas exposer l'Id
+                Id = entity.Id, // optional if API should not expose the Id
                 DateWeather = entity.DateWeather,
                 TemperatureC = entity.TemperatureC,
                 Summary = entity.Summary,
@@ -37,7 +37,22 @@ namespace Citizenhackathon2025.Application.Extensions
             };
         }
 
-        // Exemple concret pour un Event
+        public static WeatherInfoDTO MapToWeatherInfoDTO(this WeatherForecastDTO dto, string city)
+        {
+            return new WeatherInfoDTO
+            {
+                Location = city,
+                TemperatureCelsius = dto.TemperatureC,
+                FeelsLikeCelsius = dto.TemperatureC, // Adjust if you have real data
+                WeatherDescription = dto.Summary,
+                WindSpeedKmh = dto.WindSpeedKmh,
+                HumidityPercent = dto.Humidity,
+                RetrievedAt = dto.DateWeather
+                // Sunrise / Sunset : only if available elsewhere
+            };
+        }
+
+        // Concrete example for an Event
         public static EventDTO MapToEventDTO(this Event entity)
         {
             return new EventDTO
@@ -51,7 +66,7 @@ namespace Citizenhackathon2025.Application.Extensions
             };
         }
 
-        // CrowdInfo DTO → avec timestamp
+        // CrowdInfo DTO → with timestamp
         public static CrowdInfoDTO MapToCrowdInfoWithTimestamp(this CrowdInfoDTO dto)
         {
             return new CrowdInfoDTO
@@ -71,7 +86,7 @@ namespace Citizenhackathon2025.Application.Extensions
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,
                 CrowdLevel = dto.CrowdLevel,
-                Timestamp = dto.Timestamp // ou DateTime.UtcNow directement ici
+                Timestamp = dto.Timestamp // ou DateTime.UtcNow directly here
             };
         }
         public static CrowdInfoDTO MapToCrowdInfoDTO(this CrowdInfo entity)

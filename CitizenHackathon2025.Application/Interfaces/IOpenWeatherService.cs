@@ -6,9 +6,11 @@ namespace Citizenhackathon2025.Application.Interfaces
 {
     public interface IOpenWeatherService
     {
+        Task<(double lat, double lon)?> GetCoordinatesAsync(string city);
         Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city);
-        Task<string> GetWeatherSummaryAsync(string location);
         Task<WeatherForecastDTO?> GetForecastAsync(string city);
+        Task<WeatherForecastDTO?> GetWeatherAsync(double lat, double lon);
+        Task<string> GetWeatherSummaryAsync(string location);
     }
 }
 

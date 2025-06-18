@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
+	<!--<ProjectReference Include="..\Citizenhackathon2025.Infrastructure\Citizenhackathon2025.Infrastructure.csproj" />-->       <!--Pose problème-->
 	<ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
 	<ProjectReference Include="..\Citizenhackathon2025.Hubs\Citizenhackathon2025.Hubs.csproj" />
   </ItemGroup>

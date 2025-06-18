@@ -1,12 +1,15 @@
 ﻿
+using Citizenhackathon2025.Application.Extensions;
+using Citizenhackathon2025.Application.Interfaces;
+
 namespace CitizenHackathon2025.Application.Services
 {
     public class WeatherSuggestionOrchestrator
     {
-        private readonly OpenWeatherService _weatherService;
+        private readonly IOpenWeatherService _weatherService;
         private readonly OpenAiSuggestionService _aiService;
 
-        public WeatherSuggestionOrchestrator(OpenWeatherService weatherService, OpenAiSuggestionService aiService)
+        public WeatherSuggestionOrchestrator(IOpenWeatherService weatherService, OpenAiSuggestionService aiService)
         {
             _weatherService = weatherService;
             _aiService = aiService;
@@ -14,10 +17,15 @@ namespace CitizenHackathon2025.Application.Services
 
         public async Task<string?> GetWeatherAndSuggestionsAsync(string city)
         {
-            var weather = await _weatherService.GetWeatherAsync(city);
-            if (weather == null) return "Unable to retrieve weather.";
+            var coords = await _weatherService.GetCoordinatesAsync(city);
+            if (coords == null) return "City not found.";
 
-            var suggestion = await _aiService.GetSuggestionsAsync(weather);
+            var (lat, lon) = coords.Value;
+            var weather = await _weatherService.GetWeatherAsync(lat, lon);
+            if (weather == null) return "Weather data unavailable.";
+
+            var weatherInfo = weather.MapToWeatherInfoDTO(city);
+            var suggestion = await _aiService.GetSuggestionsAsync(weatherInfo);
             return suggestion ?? "No suggestions available.";
         }
     }

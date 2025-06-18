@@ -1,13 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace CitizenHackathon2025.Application.Services
+﻿
+namespace Citizenhackathon2025.Domain.Entities
 {
     public class OpenWeatherOptions
     {
+        public string ApiKey { get; set; } = string.Empty;
+        public string BaseUrl { get; set; } = "https://api.openweathermap.org";
     }
 }
 

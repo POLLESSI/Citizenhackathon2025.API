@@ -1,112 +1,175 @@
-﻿using System.Net.Http;
-using System.Text.Json;
-using System.Threading.Tasks;
+﻿using Citizenhackathon2025.Application.Interfaces;
+using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Shared.DTOs;
+using CitizenHackathon2025.Shared.DTOs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Shared.DTOs;
-using Newtonsoft.Json;
+using Microsoft.Extensions.Options;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace Citizenhackathon2025.Infrastructure.Services
 {
+    /// <summary>
+    /// Weather data retrieval service via the OpenWeather API.
+    /// </summary>
     public class OpenWeatherService : IOpenWeatherService
     {
         private readonly HttpClient _httpClient;
-        private readonly IConfiguration _configuration;
         private readonly ILogger<OpenWeatherService> _logger;
+        private readonly string _apiKey;
+        private readonly string _baseUrl;
 
-        public OpenWeatherService(HttpClient httpClient, IConfiguration configuration, ILogger<OpenWeatherService> logger)
+        private const string GeoPath = "/geo/1.0/direct";
+        private const string CurrentWeatherPath = "/data/2.5/weather";
+        private const string ForecastPath = "/data/2.5/forecast";
+
+        public OpenWeatherService( HttpClient httpClient, ILogger<OpenWeatherService> logger, IOptions<OpenWeatherOptions> options)
         {
             _httpClient = httpClient;
-            _configuration = configuration;
             _logger = logger;
+            _apiKey = options.Value.ApiKey;
+            _baseUrl = options.Value.BaseUrl;
         }
 
-        public async Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city)
+        /// <inheritdoc />
+        public async Task<(double lat, double lon)?> GetCoordinatesAsync(string city)
         {
-            var apiKey = _configuration["OpenWeather:ApiKey"];
-            var baseUrl = _configuration["OpenWeather:BaseUrl"];
-            var url = $"{baseUrl}/weather?q={city}&appid={apiKey}&units=metric";
-
             try
             {
+                var url = $"{_baseUrl}{GeoPath}?q={city}&limit=1&appid={_apiKey}";
+                var response = await _httpClient.GetFromJsonAsync<List<GeoLocationDTO>>(url);
+                var location = response?.FirstOrDefault();
+
+                return location is not null ? (location.Lat, location.Lon) : null;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Error retrieving coordinates for {City}", city);
+                return null;
+            }
+        }
+
+        /// <inheritdoc />
+        public async Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city)
+        {
+            try
+            {
+                var url = $"{_baseUrl}{CurrentWeatherPath}?q={city}&appid={_apiKey}&units=metric&lang=fr";
                 var response = await _httpClient.GetAsync(url);
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("OpenWeather request failed with status code: {StatusCode}", response.StatusCode);
+                    _logger.LogWarning("Current weather call failed for {City} : {Status}", city, response.StatusCode);
                     return null;
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                return new WeatherForecastDTO
-                {
-                    DateWeather = DateTime.UtcNow,
-                    TemperatureC = 0,
-                    Summary = root.GetProperty("weather")[0].GetProperty("description").GetString(),
-                    Humidity = 0,
-                    RainfallMm = 0,
-                    WindSpeedKmh = 0
-                };
+                return ParseWeatherDto(JsonDocument.Parse(json).RootElement);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching weather data from OpenWeather");
+                _logger.LogError(ex, "Exception dans GetCurrentWeatherAsync");
                 return null;
             }
-
         }
 
+        /// <inheritdoc />
         public async Task<WeatherForecastDTO?> GetForecastAsync(string city)
         {
-            var url = $"https://api.openweathermap.org/data/2.5/weather?q={city}&appid=YOUR_API_KEY&units=metric";
-
-            var response = await _httpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode)
-                return null;
-
-            var json = await response.Content.ReadAsStringAsync();
-
-            // Simplified example, it will be necessary to adapt according to the DTO and the API response
-            var openWeatherResponse = System.Text.Json.JsonSerializer.Deserialize<OpenWeatherApiResponse>(json);
-
-            // Map OpenWeatherApiResponse to WeatherForecastDTO (TBD)
-            var dto = new WeatherForecastDTO
+            try
             {
-                DateWeather = DateTime.Now,
-                TemperatureC = 0,
-                Summary = openWeatherResponse.Weather.FirstOrDefault()?.Description ?? "No description"
+                var url = $"{_baseUrl}{ForecastPath}?q={city}&appid={_apiKey}&units=metric&lang=fr";
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Forecast call failed for {City} : {Status}", city, response.StatusCode);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var forecast = JsonDocument.Parse(json).RootElement.GetProperty("list")[0];
+
+                return ParseWeatherDto(forecast, DateTime.UtcNow.AddHours(3));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in GetForecastAsync");
+                return null;
+            }
+        }
+
+        public async Task<string> GetWeatherSummaryAsync(string location)
+        {
+            var weather = await GetCurrentWeatherAsync(location);
+            if (weather == null)
+                return $"Unable to retrieve weather for {location}.";
+
+            return $"He does {weather.TemperatureC}°C with {weather.Summary}, " +
+                   $"wind to {weather.WindSpeedKmh:F1} km/h and humidity of {weather.Humidity}%.";
+        }
+
+        /// <inheritdoc />
+        public async Task<WeatherForecastDTO?> GetWeatherAsync(double lat, double lon)
+        {
+            try
+            {
+                var url = $"{_baseUrl}{CurrentWeatherPath}?lat={lat}&lon={lon}&appid={_apiKey}&units=metric&lang=fr";
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Weather call for coordinates failed {Lat}, {Lon}", lat, lon);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                return ParseWeatherDto(JsonDocument.Parse(json).RootElement);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calling GetWeatherAsync");
+                return null;
+            }
+        }
+        /// <summary>
+        /// Converts a weather JSON element to a DTO.
+        /// </summary>
+        private static WeatherForecastDTO ParseWeatherDto(JsonElement root, DateTime? dateOverride = null)
+        {
+            var date = dateOverride ?? DateTime.UtcNow;
+            var main = root.GetProperty("main");
+            var wind = root.GetProperty("wind");
+            var weatherArray = root.GetProperty("weather");
+            var description = weatherArray[0].GetProperty("description").GetString() ?? "N/A";
+
+            double rainfall = 0;
+            if (root.TryGetProperty("rain", out var rain))
+            {
+                rain.TryGetProperty("1h", out var rain1h);
+                rain1h.TryGetDouble(out rainfall);
+            }
+
+            return new WeatherForecastDTO
+            {
+                DateWeather = date,
+                TemperatureC = (int)main.GetProperty("temp").GetDouble(),
+                Summary = description,
+                Humidity = main.GetProperty("humidity").GetInt32(),
+                RainfallMm = rainfall,
+                WindSpeedKmh = wind.GetProperty("speed").GetDouble() * 3.6 // m/s → km/h
             };
-
-            return dto;
         }
 
-        public Task<string> GetWeatherSummaryAsync(string location)
-        {
-            throw new NotImplementedException();
-        }
-
-        // Example template for API deserialization
-        public class OpenWeatherApiResponse
-        {
-        #nullable disable
-            public MainInfo Main { get; set; }
-            public List<WeatherInfo> Weather { get; set; }
-        }
-        public class MainInfo
-        {
-            public float Temp { get; set; }
-        }
-
-        public class WeatherInfo
-        {
-            public string Description { get; set; }
-        }
+    }
+    // DTO used for geolocation
+    public class GeoLocationDTO
+    {
+        public double Lat { get; set; }
+        public double Lon { get; set; }
     }
 }
-
 
 
 
