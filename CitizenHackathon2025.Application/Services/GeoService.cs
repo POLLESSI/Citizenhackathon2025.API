@@ -1,7 +1,9 @@
 ﻿
+using CitizenHackathon2025.Application.Interfaces;
+
 namespace CitizenHackathon2025.Application.Services
 {
-    public class GeoService
+    public class GeoService : IGeoService
     {
         public async Task<(double Latitude, double Longitude)?> GetCoordinatesAsync(string location)
         {

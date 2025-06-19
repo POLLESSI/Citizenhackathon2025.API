@@ -1,4 +1,7 @@
-﻿namespace Citizenhackathon2025.Domain.Entities
+﻿using CitizenHackathon2025.Domain.LocalBusinessRules.Invariants;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
+namespace Citizenhackathon2025.Domain.Entities
 {
     public class WeatherForecast
     {

@@ -7,6 +7,7 @@ using CitizenHackathon2025.Application.Services;
 using Citizenhackathon2025.Infrastructure.Services;
 using Microsoft.Extensions.Logging;
 using Citizenhackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Interfaces;
 
 namespace Citizenhackathon2025.Application.UseCases
 {
@@ -16,10 +17,10 @@ namespace Citizenhackathon2025.Application.UseCases
         private readonly CrowdInfoService _crowdService;
         private readonly TrafficConditionService _trafficService;
         private readonly IOpenWeatherService _weatherService;
-        private readonly GeoService _geoService;
+        private readonly IGeoService _geoService;
         private readonly ILogger<CitizenSuggestionService> _logger;
 
-        public CitizenSuggestionService(OpenAiSuggestionService suggestionService, CrowdInfoService crowdService, TrafficConditionService trafficService, IOpenWeatherService weatherService, GeoService geoService, ILogger<CitizenSuggestionService> logger)
+        public CitizenSuggestionService(OpenAiSuggestionService suggestionService, CrowdInfoService crowdService, TrafficConditionService trafficService, IOpenWeatherService weatherService, IGeoService geoService, ILogger<CitizenSuggestionService> logger)
         {
             _suggestionService = suggestionService;
             _crowdService = crowdService;

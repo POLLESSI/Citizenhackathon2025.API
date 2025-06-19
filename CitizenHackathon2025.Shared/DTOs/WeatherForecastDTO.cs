@@ -44,6 +44,9 @@ namespace Citizenhackathon2025.Shared.DTOs
 
         [JsonIgnore]
         public string MonthName => DateWeather.ToString("MMMM", CultureInfo.InvariantCulture);
+
+        public string IconUrl { get; set; } = ""; // ex: https://openweathermap.org/img/wn/{icon}.png
+        public string WeatherMain { get; set; } = "";
     }
 }
 

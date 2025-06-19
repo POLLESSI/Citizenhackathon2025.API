@@ -55,14 +55,16 @@ namespace Citizenhackathon2025.API.Controllers
 
         // Get current weather via Mediator
         [HttpGet("current")]
-        public async Task<ActionResult<WeatherForecastDTO>> GetCurrentWeather()
+        public async Task<ActionResult<WeatherForecastDTO>> GetCurrentWeather([FromQuery] string city)
         {
-            var currentForecast = await _mediator.Send(new GetCurrentWeatherQuery());
+            if (string.IsNullOrWhiteSpace(city))
+                return BadRequest("City parameter is required.");
+
+            var currentForecast = await _mediator.Send(new GetCurrentWeatherQuery(city));
 
             if (currentForecast == null)
-                return NotFound("Current weather data not found.");
+                return NotFound($"Current weather data not found for city '{city}'.");
 
-            // SignalR notification
             await _hubContext.Clients.All.SendAsync("ReceiveWeather", currentForecast);
 
             return Ok(currentForecast);

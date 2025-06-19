@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Citizenhackathon2025.API.Middlewares;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Net;
@@ -20,38 +21,39 @@ namespace Citizenhackathon2025.API.Middlewares
             _env = env;
         }
 
-        //public async Task InvokeAsync(HttpContext context)
-        //{
-        //    var correlationId = Guid.NewGuid().ToString();
-        //    context.Items["CorrelationId"] = correlationId;
-        //    try
-        //    {
-        //        // Continue the pipeline
-        //        await _next(context);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        // Log and handle any unhandled exception
-        //        _logger.LogError(ex, "💥 An unhandled exception was caught !");
-        //        await HandleExceptionAsync(context, ex, correlationId);
-        //    }
-        //}
+        public async Task InvokeAsync(HttpContext context)
+        {
+            var correlationId = Guid.NewGuid().ToString();
+            context.Items["CorrelationId"] = correlationId;
 
-        //private static Task HandleExceptionAsync(HttpContext context, Exception ex)
-        //{
-        //    context.Response.ContentType = "application/json";
-        //    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            try
+            {
+                await _next(context);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "💥 Unhandled exception caught (CorrelationId: {CorrelationId})", correlationId);
+                await HandleExceptionAsync(context, ex, correlationId);
+            }
+        }
 
-        //    var response = new
-        //    {
-        //        error = "An unexpected error has occurred.",
-        //        correlationId,
-        //        message = _env.IsDevelopment() ? ex.Message : "An internal error has occurred.",
-        //        details = _env.IsDevelopment() ? ex.StackTrace : null
-        //    };
-        //    return context.Response.WriteAsync(JsonSerializer.Serialize(response));
-        //}
+        private Task HandleExceptionAsync(HttpContext context, Exception ex, string correlationId)
+        {
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+            var response = new
+            {
+                error = "An unexpected error occurred.",
+                correlationId,
+                message = _env.IsDevelopment() ? ex.Message : "An internal error occurred.",
+                details = _env.IsDevelopment() ? ex.StackTrace : null
+            };
+
+            return context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
     }
+
     // Extension to integrate into Program.cs
     public static class ExceptionMiddlewareExtensions
     {

@@ -3,7 +3,7 @@ using MediatR;
 
 namespace CitizenHackathon2025.Application.CQRS.Queries
 {
-    public record GetCurrentWeatherQuery() : IRequest<WeatherForecastDTO?>;
+    public record GetCurrentWeatherQuery(string City) : IRequest<WeatherForecastDTO?>;
 }
 
 

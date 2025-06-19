@@ -1,6 +1,7 @@
 using AutoMapper;
 using Azure.Core.Pipeline;
 using Citizenhackathon2025.API.Hubs;
+using Citizenhackathon2025.API.Middlewares;
 using Citizenhackathon2025.API.Security;
 using Citizenhackathon2025.Application.CQRS.Commands.Handlers;
 using Citizenhackathon2025.Application.CQRS.Queries.Handlers;
@@ -19,6 +20,7 @@ using Citizenhackathon2025.Infrastructure.Persistence;
 using Citizenhackathon2025.Infrastructure.Repositories;
 using Citizenhackathon2025.Infrastructure.Repositories.Providers.Hubs;
 using Citizenhackathon2025.Infrastructure.Services;
+using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
@@ -46,6 +48,13 @@ using Polly.Wrap;
 using System.Data;
 using System.Data.SqlClient;
 using System.Text;
+using Serilog;
+
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .WriteTo.File("Logs/api-log-.txt", rollingInterval: RollingInterval.Day)
+    .Enrich.FromLogContext()
+    .CreateLogger();
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -122,6 +131,7 @@ builder.Services.AddScoped<CrowdInfoService>();
 builder.Services.AddScoped<CitizenSuggestionService>();
 builder.Services.AddScoped<DatabaseService>();
 builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<IGeoService, GeoService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>(); 
 builder.Services.AddScoped<IPlaceService, PlaceService>();
@@ -212,6 +222,9 @@ builder.Services.AddHttpClient<ITrafficApiService, TrafficAPIService>(client =>
     client.BaseAddress = new Uri("https://api.waze.com/...");
     client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
 });
+services.AddHttpClient<OpenWeatherService>()
+    .AddTransientHttpErrorPolicy(p =>
+        p.WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(2)));
 builder.Services.AddInfrastructure();
 
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
@@ -318,6 +331,12 @@ builder.Services.AddSwaggerGen(c =>
             new string[] {}
         }
     });
+    //c.SwaggerDoc("v1", new OpenApiInfo
+    //{
+    //    Title = "CitizenHackathon2025 API",
+    //    Version = "v1",
+    //    Description = "© 2025 POLLESSI / CitizenHackathon2025 — Protected private API. Any attempt at usurpation or unauthorized use will be prosecuted."
+    //});
 });
 
 builder.Services.AddHttpClient<ChatGptService>();
@@ -346,21 +365,33 @@ using (var scope = app.Services.CreateScope())
 {
     var test = scope.ServiceProvider.GetRequiredService<CitizenSuggestionService>();
 }
+//if (app.Environment.IsProduction())
+//{
+//    app.Use(async (context, next) =>
+//    {
+//        context.Response.Headers["X-API-Copyright"] = "© 2025 POLLESSI / CitizenHackathon2025. Reproduction prohibited.";
+//        await next.Invoke();
+//    });
+//}
 
 // Common
 
-app.UseAuthentication();
+
 app.UseHttpsRedirection();
-app.UseMiddleware<Citizenhackathon2025.API.Security.AntiXssMiddleware>();
 app.UseStaticFiles();
-//app.UseMiddleware<Citizenhackathon2025.API.Middlewares.ExceptionMiddleware>();
+app.UseMiddleware<AntiXssMiddleware>();
+app.UseAntiXssMiddleware();
+app.UseUserAgentFiltering();
+app.UseMiddleware<ExceptionMiddleware>();
+app.UseExceptionMiddleware();
 app.UseRouting();
-app.UseAntiXssMiddleware(); // Protection XSS
-//app.UseCustomExceptionMiddleware();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseAuditLogging();
 
 app.UseCors("AllowAnyOrigin");
 
-app.UseAuthorization();
+
 app.MapControllers();
 
 app.UseEndpoints(Endpoints =>
@@ -392,6 +423,11 @@ app.MapGet("/api/weatherforecast", () =>
         WindSpeedKmh = rng.Next(0, 200) * 100
     };
 });
+//app.Use(async (context, next) =>
+//{
+//    context.Response.Headers.Add("X-API-Copyright", "© 2025 POLLESSI / CitizenHackathon2025. All rights reserved.");
+//    await next.Invoke();
+//});
 
 static void UseSecurityHeaders(IApplicationBuilder app)
 {
