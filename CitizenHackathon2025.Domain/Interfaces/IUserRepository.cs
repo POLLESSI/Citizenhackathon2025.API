@@ -11,6 +11,7 @@ namespace Citizenhackathon2025.Domain.Interfaces
         Task<IEnumerable<User>> GetAllActiveUsersAsync();
         Task<bool> RegisterUserAsync(string email, byte[] passwordHash, User user);
         Task<bool> LoginAsync(string email, string password);
+        Task<User?> LoginUsingProcedureAsync(string email, string password);
         Task DeactivateUserAsync(int id);
         void SetRole(int id, string? role);
         User? UpdateUser(User user);

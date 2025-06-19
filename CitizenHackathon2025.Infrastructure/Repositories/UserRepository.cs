@@ -28,15 +28,18 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             _logger = logger;
         }
 
-        public Task DeactivateUserAsync(int id)
+        public async Task DeactivateUserAsync(int id)
         {
-            throw new NotImplementedException();
+            const string sql = "UPDATE [User] SET Active = 0 WHERE Id = @Id";
+            var parameters = new DynamicParameters();
+            parameters.Add("@Id", id);
+            await _connection.ExecuteAsync(sql, parameters);
         }
 
         public async Task<IEnumerable<User>> GetAllActiveUsersAsync()
         {
             string sql = "SELECT * FROM [User] WHERE Active = 1";
-            return _connection.Query<User?>(sql);
+            return await _connection.QueryAsync<User>(sql);
         }
 
         public async Task<User?> GetUserByEmailAsync(string email)
@@ -63,12 +66,12 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 string sql = "SELECT * FROM [User] WHERE Id = @id";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", id);
-                return _connection.QueryFirst<User?>(sql, parameters);
+                return await _connection.QueryFirstOrDefaultAsync<User>(sql, parameters);
             }
             catch (Exception ex)
             {
 
-                Console.WriteLine($"Error geting User : {ex.ToString}");
+                Console.WriteLine($"Error geting User : {ex}");
             }
             return null;
         }
@@ -78,16 +81,16 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         {
             throw new NotImplementedException();
         }
-        public async Task<UserDTO?> LoginAsync(string email, string password)
+        public async Task<User?> LoginAsync(string email, string password)
         {
             try
             {
                 const string sql = @"
-            SELECT Id, Email, Role, Active
-            FROM [User]
-            WHERE Email = @Email
-              AND Active = 1
-              AND PasswordHash = dbo.fHasher(@Password, SecurityStamp);";
+                    SELECT Id, Email, Role, Active
+                    FROM [User]
+                    WHERE Email = @Email
+                    AND Active = 1
+                    AND PasswordHash = dbo.fHasher(@Password, SecurityStamp);";
 
                 var user = await _connection.QueryFirstOrDefaultAsync<User>(
                     sql,
@@ -97,7 +100,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                         Password = password
                     });
 
-                return user != null ? _mapper.Map<UserDTO>(user) : null;
+                return user;
             }
             catch (Exception ex)
             {
@@ -105,20 +108,29 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
-        public async Task<bool> LoginUsingProcedureAsync(string email, string password)
+        public async Task<User?> LoginUsingProcedureAsync(string email, string password)
         {
             var parameters = new DynamicParameters();
             parameters.Add("@Email", email);
-            parameters.Add("@Password", password); // La proc SQL s’occupera du hash
+            parameters.Add("@Password", password);
+            parameters.Add("ReturnValue", dbType: DbType.Int32, direction: ParameterDirection.ReturnValue);
 
-            var result = await _connection.QueryFirstOrDefaultAsync<User>(
+            using var multi = await _connection.QueryMultipleAsync(
                 "sqlUserLogin",
                 parameters,
                 commandType: CommandType.StoredProcedure
             );
 
-            return result != null;
+            var user = await multi.ReadFirstOrDefaultAsync<User>();
+
+            var returnCode = parameters.Get<int>("ReturnValue");
+
+            if (returnCode == 1 && user != null)
+                return user;
+
+            return null;
         }
+
 
         //Register
         public async Task<bool> RegisterUserAsync(string email, byte[] passwordHash, User user)
@@ -157,34 +169,32 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             catch (Exception ex)
             {
 
-                Console.WriteLine($"Error changing rôle : {ex.ToString}");
+                Console.WriteLine($"Error changing rôle : {ex}");
             }
         }
 
         // Update
-        public User UpdateUser(User user)
+        public User? UpdateUser(User user)
         {
             if (user == null || user.Id <= 0)
-            {
                 throw new ArgumentException("Invalid user for update.", nameof(user));
-            }
+
             try
             {
-                string sql = "UPDATE [User] SET Email = @Email, Role = @Role WHERE Id = @Id AND Active = 1"; 
-                DynamicParameters parameters = new DynamicParameters();
+                string sql = "UPDATE [User] SET Email = @Email, Role = @Role WHERE Id = @Id AND Active = 1";
+                var parameters = new DynamicParameters();
                 parameters.Add("@Id", user.Id);
                 parameters.Add("@Email", user.Email);
                 parameters.Add("@Role", user.Role);
 
-                var affectedRows = _connection.Execute(sql, parameters);
-                return affectedRows > 0 ? user : null;
+                int rowsAffected = _connection.Execute(sql, parameters);
+                return rowsAffected > 0 ? user : null;
             }
             catch (Exception ex)
             {
-
                 _logger.LogError(ex, "Error updating user with ID {UserId}", user.Id);
+                return null;
             }
-            return null;
         }
     }
 }

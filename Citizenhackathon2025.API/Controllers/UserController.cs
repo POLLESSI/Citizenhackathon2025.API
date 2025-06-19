@@ -48,15 +48,19 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO loginDto)
         {
-            if (string.IsNullOrWhiteSpace(loginDto.Email) || string.IsNullOrWhiteSpace(loginDto.Password))
-                return BadRequest("Email and password are required.");
 
-            bool result = await _userService.LoginAsync(loginDto.Email, loginDto.Password);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-            if (!result)
+            var user = await _userService.LoginAsync(loginDto.Email, loginDto.Password);
+
+            if (user == false)
+            {
+                _logger.LogWarning("❌ Invalid login for {Email}", loginDto.Email);
                 return Unauthorized("Invalid credentials.");
+            }
 
-            return Ok("Connection successful.");
+            return Ok(user);
         }
         [HttpGet("active")]
         public async Task<IActionResult> GetAllActiveUsers()

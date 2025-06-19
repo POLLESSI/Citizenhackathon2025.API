@@ -10,6 +10,7 @@ using CitizenHackathon2025.Application.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
+using AutoMapper;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -25,6 +26,7 @@ namespace Citizenhackathon2025.Application.Services
 #nullable disable
         private readonly IUserRepository _userRepository;
         private readonly CitizenHackathon2025.Application.Interfaces.IUserHubService _hubService;
+        private readonly IMapper _mapper;
         private readonly ILogger<UserService> _logger;
 
         public UserService(IUserRepository userRepository, IUserHubService hubService, ILogger<UserService> logger)
@@ -81,21 +83,15 @@ namespace Citizenhackathon2025.Application.Services
 
         public async Task<bool> LoginAsync(string email, string password)
         {
-            try
-            {
-                return await _userRepository.LoginAsync(email, password);
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine($"Error loging : {ex.ToString}");
-            }
-            return false;
+            var user = await _userRepository.LoginUsingProcedureAsync(email, password);
+            return user != null;
         }
-        public async Task<bool> LoginAsync(LoginDTO loginDto)
+        public async Task<UserDTO?> LoginUsingProcedureAsync(string email, string password)
         {
-            return await LoginAsync(loginDto.Email, loginDto.Password);
+            var user = await _userRepository.LoginUsingProcedureAsync(email, password);
+            return user != null ? _mapper.Map<UserDTO>(user) : null;
         }
+
         public async Task<bool> RegisterUserAsync(string email, string password, Role role)
         {
             if (!Validators.IsValidEmail(email))
@@ -138,16 +134,15 @@ namespace Citizenhackathon2025.Application.Services
         {
             try
             {
-                var UpdateUser = _userRepository.UpdateUser(user);
-                if (UpdateUser != null)
+                var updatedUser = _userRepository.UpdateUser(user);
+                if (updatedUser != null)
                 {
-                    throw new KeyNotFoundException("User not found for update.");
+                    _hubService.NotifyUserUpdated(updatedUser);
                 }
-                return UpdateUser;
+                return updatedUser;
             }
             catch (System.ComponentModel.DataAnnotations.ValidationException ex)
             {
-
                 Console.WriteLine($"Validation error : {ex.Message}");
             }
             catch (Exception ex)

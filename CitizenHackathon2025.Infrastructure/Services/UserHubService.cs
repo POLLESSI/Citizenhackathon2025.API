@@ -2,6 +2,7 @@
 using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Interfaces;
+using Citizenhackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Application.Services
 {
@@ -17,6 +18,23 @@ namespace CitizenHackathon2025.Application.Services
         public async Task BroadcastUserUpdatedAsync(CancellationToken cancellationToken = default)
         {
             await _hubContext.Clients.All.SendAsync("UserUpdated", cancellationToken);
+        }
+
+        public async Task NotifyUserRegistered(string email)
+        {
+            await _hubContext.Clients.All.SendAsync("UserRegistered", email);
+        }
+
+        public async Task NotifyUserUpdated(User user)
+        {
+            await _hubContext.Clients.All.SendAsync("UserUpdated", new
+            {
+                user.Id,
+                user.Email,
+                user.PasswordHash,
+                user.Role,
+                user.Status
+            });
         }
     } 
 }

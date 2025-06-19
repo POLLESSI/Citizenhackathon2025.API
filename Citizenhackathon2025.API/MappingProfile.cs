@@ -9,6 +9,7 @@ namespace CitizenHackathon2025.API
         public MappingProfile()
         {
             CreateMap<WeatherForecast, WeatherForecastDTO>().ReverseMap();
+            CreateMap<User, UserDTO>().ReverseMap();
         }
     }
 }

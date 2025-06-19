@@ -38,7 +38,7 @@ namespace CitizenHackathon2025.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var success = await _userService.LoginAsync(loginDto);
+            var success = await _userService.LoginAsync(loginDto.Email, loginDto.Password);
             if (!success)
             {
                 _logger.LogWarning("❌ Invalid login attempt for email: {Email}", loginDto.Email);

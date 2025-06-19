@@ -1,4 +1,5 @@
 using AutoMapper;
+//using AutoMapper.Extensions.Microsoft.DependencyInjection;
 using Azure.Core.Pipeline;
 using Citizenhackathon2025.API.Hubs;
 using Citizenhackathon2025.API.Middlewares;
