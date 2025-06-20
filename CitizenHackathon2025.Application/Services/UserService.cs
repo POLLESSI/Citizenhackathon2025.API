@@ -7,13 +7,16 @@ using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Services;
+using Dapper;
+using Mapster;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-using AutoMapper;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Drawing;
 using System.Security.Cryptography;
 using System.Text;
@@ -26,14 +29,15 @@ namespace Citizenhackathon2025.Application.Services
 #nullable disable
         private readonly IUserRepository _userRepository;
         private readonly CitizenHackathon2025.Application.Interfaces.IUserHubService _hubService;
-        private readonly IMapper _mapper;
         private readonly ILogger<UserService> _logger;
+        private readonly IDbConnection _dbConnection;
 
-        public UserService(IUserRepository userRepository, IUserHubService hubService, ILogger<UserService> logger)
+        public UserService(IUserRepository userRepository, IUserHubService hubService, ILogger<UserService> logger, IDbConnection dbConnection)
         {
             _userRepository = userRepository;
             _hubService = hubService;
             _logger = logger;
+            _dbConnection = dbConnection;
         }
 
         public async Task DeactivateUserAsync(int id)
@@ -56,15 +60,13 @@ namespace Citizenhackathon2025.Application.Services
 
         public async Task<User?> GetUserByEmailAsync(string email)
         {
-            try
-            {
-                return await _userRepository.GetUserByEmailAsync(email);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving user by email.");
-                return null;
-            }
+            const string sql = @"
+            SELECT Email, PasswordHash, SecurityStamp, Role, Status
+            FROM [User]
+            WHERE Email = @Email;
+        ";
+
+            return await _dbConnection.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
         }
 
         public Task<User> GetUserByIdAsync(int id)
@@ -89,33 +91,42 @@ namespace Citizenhackathon2025.Application.Services
         public async Task<UserDTO?> LoginUsingProcedureAsync(string email, string password)
         {
             var user = await _userRepository.LoginUsingProcedureAsync(email, password);
-            return user != null ? _mapper.Map<UserDTO>(user) : null;
+            return user != null ? user.Adapt<UserDTO>() : null;
         }
 
-        public async Task<bool> RegisterUserAsync(string email, string password, Role role)
+        public async Task<bool> RegisterUserAsync(User user)
         {
-            if (!Validators.IsValidEmail(email))
-                throw new ValidationException("Invalid email address.");
+            const string sql = @"
+            INSERT INTO [User] (Email, PasswordHash, SecurityStamp, Role, Status)
+            VALUES (@Email, @PasswordHash, @SecurityStamp, @Role, @Status);
+        ";
+
             try
             {
-                // ✅ Hash the password
-                var hashedPassword = Hasher.ComputeHash(password);
-
-                var user = new User
+                var parameters = new
                 {
-                    Email = email,
-                    Role = role
+                    Email = user.Email,
+                    PasswordHash = user.PasswordHash,
+                    SecurityStamp = user.SecurityStamp,
+                    Role = (int)user.Role,
+                    Status = (int)user.Status
                 };
 
-                // ✅ Transmit the hash
-                return await _userRepository.RegisterUserAsync(email, hashedPassword, user);
+                var rowsAffected = await _dbConnection.ExecuteAsync(sql, parameters);
+                return rowsAffected == 1;
+            }
+            catch (SqlException ex) when (ex.Number == 2627) // Unique constraint (ex: Email already exists)
+            {
+                // Logiquement : Violation de clé unique
+                return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error registering new user : {ex}");
-                return false;
+                // Log si besoin
+                throw new ApplicationException("Erreur lors de l'enregistrement de l'utilisateur.", ex);
             }
         }
+
 
         public void SetRole(int id, string? role)
         {

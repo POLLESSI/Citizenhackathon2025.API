@@ -1,6 +1,6 @@
-using AutoMapper;
-//using AutoMapper.Extensions.Microsoft.DependencyInjection;
 using Azure.Core.Pipeline;
+//using Mapster.DependencyInjection;
+//using Citizenhackathon2025.Application.Mapping;
 using Citizenhackathon2025.API.Hubs;
 using Citizenhackathon2025.API.Middlewares;
 using Citizenhackathon2025.API.Security;
@@ -30,7 +30,10 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
+using CitizenHackathon2025.Shared.Interfaces;
+using CitizenHackathon2025.Shared.Services;
 using CityzenHackathon2025.API.Tools;
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
@@ -46,10 +49,10 @@ using Polly;
 using Polly.Extensions.Http;
 using Polly.Retry;
 using Polly.Wrap;
+using Serilog;
 using System.Data;
 using System.Data.SqlClient;
 using System.Text;
-using Serilog;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -136,6 +139,7 @@ builder.Services.AddScoped<IGeoService, GeoService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>(); 
 builder.Services.AddScoped<IPlaceService, PlaceService>();
+builder.Services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
 builder.Services.AddScoped<ISuggestionService, SuggestionService>();
 builder.Services.AddSingleton<TokenGenerator>();
 builder.Services.AddScoped<ITrafficConditionService, TrafficConditionService>();
@@ -227,14 +231,11 @@ services.AddHttpClient<OpenWeatherService>()
     .AddTransientHttpErrorPolicy(p =>
         p.WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(2)));
 builder.Services.AddInfrastructure();
-
-builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+builder.Services.AddMapster();
 // ========== MEDIATR ==========
 builder.Services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
 builder.Services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
 
-// Replace the ambiguous line with the following explicit call to resolve the ambiguity:
-//AutoMapper.ServiceCollectionExtensions.AddAutoMapper(builder.Services, config => { }, AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
 
 ILogger<Program> logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();

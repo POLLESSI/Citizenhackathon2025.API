@@ -5,20 +5,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Folder Include="CitizenHackathon2025.Shared\obj\" />
-  </ItemGroup>
 	
 	<ItemGroup>
 		<ProjectReference Include="..\Citizenhackathon2025.Domain\Citizenhackathon2025.Domain.csproj" />
 	</ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="14.0.0" />
-    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
-	<!--<PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="14.0.0" />-->
     <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Mapster" Version="7.4.0" />
+    <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.16" />
     <PackageReference Include="Microsoft.Data.Tools.Msbuild" Version="16.0.62004.28040" />
@@ -30,7 +25,6 @@
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="Volo.Abp.Ddd.Domain" Version="8.3.4" />
   </ItemGroup>
-
 
 </Project>
 

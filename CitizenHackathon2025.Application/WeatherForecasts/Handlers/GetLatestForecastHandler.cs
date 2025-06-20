@@ -1,8 +1,8 @@
-﻿using AutoMapper;
-using Citizenhackathon2025.Application.WeatherForecast.Queries;
+﻿using Citizenhackathon2025.Application.WeatherForecast.Queries;
 using Citizenhackathon2025.Domain.Interfaces;
 //using CitizenHackathon2025.infrastructure.Repositories;
 using Citizenhackathon2025.Shared.DTOs;
+using Mapster;
 using MediatR;
 
 namespace Citizenhackathon2025.Application.WeatherForecast.Handlers
@@ -10,18 +10,16 @@ namespace Citizenhackathon2025.Application.WeatherForecast.Handlers
     public class GetLatestForecastHandler : IRequestHandler<GetLatestForecastQuery, WeatherForecastDTO>
     {
         private readonly IWeatherForecastRepository _weatherForecastRepository;
-        private readonly IMapper _mapper;
 
-        public GetLatestForecastHandler(IWeatherForecastRepository weatherForecastRepository, IMapper mapper)
+        public GetLatestForecastHandler(IWeatherForecastRepository weatherForecastRepository)
         {
             _weatherForecastRepository = weatherForecastRepository;
-            _mapper = mapper;
         }
 
         public async Task<WeatherForecastDTO> Handle(GetLatestForecastQuery request, CancellationToken cancellationToken)
         {
             var model = await _weatherForecastRepository.GetLatestWeatherForecastAsync();
-            return _mapper.Map<WeatherForecastDTO>(model);
+            return model.Adapt<WeatherForecastDTO>();
         }
     }
 }

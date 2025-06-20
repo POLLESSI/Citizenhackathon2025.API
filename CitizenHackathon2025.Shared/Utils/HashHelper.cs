@@ -5,17 +5,11 @@ namespace CitizenHackathon2025.Shared.Utils
 {
     public static class HashHelper
     {
-        public static string GetSha256Hash(string input)
+        public static byte[] HashPassword(string pwd, string securityStamp)
         {
-            if (string.IsNullOrEmpty(input))
-                return string.Empty;
-
-            using var sha256 = SHA256.Create();
-            byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
-            var sb = new StringBuilder();
-            foreach (var b in bytes)
-                sb.Append(b.ToString("x2")); // lowercase hexadecimal
-            return sb.ToString();
+            using var sha512 = System.Security.Cryptography.SHA512.Create();
+            var combined = System.Text.Encoding.UTF8.GetBytes(pwd + securityStamp);
+            return sha512.ComputeHash(combined);
         }
     }
 }

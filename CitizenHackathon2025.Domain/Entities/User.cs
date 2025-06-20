@@ -6,11 +6,14 @@ namespace Citizenhackathon2025.Domain.Entities
     {
         public int Id { get; private set; }
         public string Email { get; set; } = string.Empty;
+        public string SecurityStamp { get; set; } = string.Empty;
         public byte[] PasswordHash { get; set; } = Array.Empty<byte>();
         public Role Role { get; set; } = Role.User; // ✅ enum instead of string
         public Status Status { get; set; } // Dapper automatically maps the DB int
         public bool Active { get; private set; } = true;
-        
+        public void Activate() => Active = true;
+        public void Deactivate() => Active = false;
+
     }
 }
 

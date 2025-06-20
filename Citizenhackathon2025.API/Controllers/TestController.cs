@@ -1,4 +1,5 @@
 ﻿using Citizenhackathon2025.Application.UseCases;
+using CitizenHackathon2025.Shared.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,10 +10,12 @@ namespace CitizenHackathon2025.API.Controllers
     public class TestController : ControllerBase
     {
         private readonly CitizenSuggestionService _service;
+        private readonly IPasswordHasher _hasher;
 
-        public TestController(CitizenSuggestionService service)
+        public TestController(CitizenSuggestionService service, IPasswordHasher hasher)
         {
             _service = service;
+            _hasher = hasher;
         }
 
         [HttpGet("suggestion")]
@@ -20,6 +23,12 @@ namespace CitizenHackathon2025.API.Controllers
         {
             var result = await _service.GetPersonalizedSuggestionsAsync("Paris", 1);
             return Ok(result);
+        }
+        [HttpGet("test-hash")]
+        public IActionResult GetHash()
+        {
+            var hash = _hasher.HashPassword("Test1234=", Guid.NewGuid().ToString());
+            return Ok(Convert.ToHexString(hash));
         }
     }
 }

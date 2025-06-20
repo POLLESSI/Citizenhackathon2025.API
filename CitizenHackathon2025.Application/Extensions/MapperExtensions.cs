@@ -1,6 +1,9 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Shared.DTOs;
+using Microsoft.SqlServer.Dac.Model;
 using System.Globalization;
+using System.Security;
 
 namespace Citizenhackathon2025.Application.Extensions
 {
@@ -24,7 +27,7 @@ namespace Citizenhackathon2025.Application.Extensions
         // Entity -> DTO
         public static WeatherForecastDTO MapToWeatherForecastDTO(this Citizenhackathon2025.Domain.Entities.WeatherForecast entity)
         {
-        #nullable disable
+#nullable disable
             return new WeatherForecastDTO
             {
                 Id = entity.Id, // optional if API should not expose the Id
@@ -143,7 +146,42 @@ namespace Citizenhackathon2025.Application.Extensions
                 IncidentType = entity.IncidentType
             };
         }
-    }
+        //Mapping vers DTO
+        public static UserDTO UserToDTO(this Domain.Entities.User user)
+        {
+            /// <summary>
+            /// Maps a User entity to a UserDTO (without exposing the PasswordHash).
+            /// </summary>
+            return new UserDTO
+            {
+                Email = user.Email,
+                Role = user.Role.ToString(),
+                Pwd = string.Empty // we never send a password again !
+            };
+        }
+
+        //Mapping depuis DTO
+        /// <summary>
+        /// Maps a UserDTO to a User entity (PasswordHash to be managed separately).
+        /// </summary>
+        public static Domain.Entities.User MapToUserEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
+        {
+            if (!Enum.TryParse<Domain.Enums.Role>(dto.Role, true, out var roleParsed))
+                throw new ArgumentException($"Invalid role '{dto.Role}'", nameof(dto.Role));
+
+            var user = new Domain.Entities.User
+            {
+                Email = dto.Email,
+                PasswordHash = hashPasswordFunc(dto.Pwd, securityStamp),
+                SecurityStamp = securityStamp,
+                Role = roleParsed,
+                Status = Status.Pending
+            };
+
+            user.Activate();
+            return user;
+        }
+    }     
 }
 
 

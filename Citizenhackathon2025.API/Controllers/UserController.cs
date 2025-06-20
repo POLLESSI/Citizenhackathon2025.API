@@ -3,7 +3,8 @@ using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Shared.DTOs;
-using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Shared.Utils;
+using Citizenhackathon2025.Application.Extensions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -26,6 +27,12 @@ namespace CitizenHackathon2025.API.Controllers
             _hubContext = hubContext;
             _logger = logger;
         }
+        private static byte[] HashPassword(string password, string securityStamp)
+        {
+            using var sha = System.Security.Cryptography.SHA512.Create();
+            var salted = $"{password}:{securityStamp}";
+            return sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(salted));
+        }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] UserDTO userDto)
@@ -33,17 +40,29 @@ namespace CitizenHackathon2025.API.Controllers
             if (userDto == null || string.IsNullOrWhiteSpace(userDto.Email) || string.IsNullOrWhiteSpace(userDto.Pwd))
                 return BadRequest("Email and password are required.");
 
-            // ✅ Convertir le string en enum
-            if (!Enum.TryParse<Citizenhackathon2025.Domain.Enums.Role>(userDto.Role, true, out var parsedRole))
-                return BadRequest("Invalid role provided.");
+            // 🔐 Generate a SecurityStamp
+            string securityStamp = Guid.NewGuid().ToString();
 
-            var result = await _userService.RegisterUserAsync(userDto.Email, userDto.Pwd, parsedRole);
+            // 🧭 Mapping from DTO to entity
+            User user;
+            try
+            {
+                user = userDto.MapToUserEntity(HashPassword, securityStamp); // ✅ Extension method
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
+            // 📦 Register user
+            var result = await _userService.RegisterUserAsync(user); // ✅ DAL method
 
             if (!result)
                 return Conflict("Email already exists or registration failed.");
 
             return Ok("User registered successfully.");
         }
+
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO loginDto)

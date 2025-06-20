@@ -1,5 +1,4 @@
-﻿using AutoMapper;
-using Citizenhackathon2025.Domain.Entities;
+﻿using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Shared.DTOs;
 using Dapper;
@@ -18,13 +17,11 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
     {
     #nullable disable
         private readonly System.Data.IDbConnection _connection;
-        private readonly IMapper _mapper;
         private readonly ILogger<UserRepository> _logger;
 
-        public UserRepository(IDbConnection connection, IMapper mapper, ILogger<UserRepository> logger)
+        public UserRepository(IDbConnection connection, ILogger<UserRepository> logger)
         {
             _connection = connection;
-            _mapper = mapper;
             _logger = logger;
         }
 

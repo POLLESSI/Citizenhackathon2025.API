@@ -12,10 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="14.0.0" />
-    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
-	<!--<PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="14.0.0" />-->
     <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Mapster" Version="7.4.0" />
+    <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.16" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.16" />
@@ -34,7 +33,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
-	<!--<ProjectReference Include="..\Citizenhackathon2025.Infrastructure\Citizenhackathon2025.Infrastructure.csproj" />-->       <!--Pose problème-->
 	<ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
 	<ProjectReference Include="..\Citizenhackathon2025.Hubs\Citizenhackathon2025.Hubs.csproj" />
   </ItemGroup>

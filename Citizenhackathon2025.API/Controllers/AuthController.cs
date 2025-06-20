@@ -1,9 +1,11 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
+﻿using Citizenhackathon2025.Application.Extensions;
+using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Infrastructure.Services;
 using Citizenhackathon2025.Shared.DTOs;
-using CitizenHackathon2025.Shared.DTOs;
+using CitizenHackathon2025.Shared.Interfaces;
+using CitizenHackathon2025.Shared.Utils;
 using CityzenHackathon2025.API.Tools;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -23,13 +25,15 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly ILogger<AuthController> _logger;
         private readonly TokenGenerator _tokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
+        private readonly IPasswordHasher _passwordHasher;
 
-        public AuthController(IUserService userService, ILogger<AuthController> logger, TokenGenerator tokenGenerator, IRefreshTokenService refreshTokenService)
+        public AuthController(IUserService userService, ILogger<AuthController> logger, TokenGenerator tokenGenerator, IRefreshTokenService refreshTokenService, IPasswordHasher passwordHasher)
         {
             _userService = userService;
             _logger = logger;
             _tokenGenerator = tokenGenerator;
             _refreshTokenService = refreshTokenService;
+            _passwordHasher = passwordHasher;
         }
 
         [HttpPost("login")]
@@ -146,27 +150,32 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
+        public async Task<IActionResult> Register([FromBody] UserDTO userDto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (userDto == null || string.IsNullOrWhiteSpace(userDto.Email) || string.IsNullOrWhiteSpace(userDto.Pwd))
+                return BadRequest("Email and password are required.");
 
-            var role = dto.Role ?? Role.User;
-            var user = new User
-            {
-                Email = dto.Email,
-                Role = role
-            };
+            // 🔐 Generate a SecurityStamp
+            string securityStamp = Guid.NewGuid().ToString();
 
-            var result = await _userService.RegisterUserAsync(dto.Email, dto.Password, role);
-            if (!result)
+            // 🧭 Map + hash the password
+            User user;
+            try
             {
-                _logger.LogWarning("⚠️ Registration failed for email: {Email}", dto.Email);
-                return Conflict("User already exists.");
+                user = userDto.MapToUserEntity(_passwordHasher.HashPassword, securityStamp);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
             }
 
-            _logger.LogInformation("✅ Registration successful for email: {Email}", dto.Email);
-            return Ok("Registration successful.");
+            // 📦 Registration
+            var result = await _userService.RegisterUserAsync(user);
+
+            if (!result)
+                return Conflict("Email already exists or registration failed.");
+
+            return Ok("User registered successfully.");
         }
         [HttpPost("verifytoken")]
         public IActionResult VerifyToken()
@@ -234,17 +243,31 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("dev-login")]
         public async Task<IActionResult> DevLogin()
         {
-            // ⚠️ Never enable this in production
-            var email = "exemple@exemple.com"; // Fictitious or real email depending on your setup
+            var email = "exemple@exemple.com";
             var role = Role.Admin;
 
-            // Optional: Make sure this user exists
+            // Vérifie si l'utilisateur existe
             var user = await _userService.GetUserByEmailAsync(email);
             if (user == null)
             {
-                await _userService.RegisterUserAsync(email, "Test1234=", role);
+                var securityStamp = Guid.NewGuid().ToString();
+                var passwordHash = _passwordHasher.HashPassword("Test1234=", securityStamp);
+
+                user = new User
+                {
+                    Email = email,
+                    Role = role,
+                    PasswordHash = passwordHash,
+                    SecurityStamp = securityStamp,
+                    Status = Status.Active
+                };
+
+                user.Activate(); // si tu as cette méthode
+
+                await _userService.RegisterUserAsync(user); // ✅ méthode correcte avec 1 seul paramètre
             }
 
+            // Authentifie avec JWT
             var accessToken = _tokenGenerator.GenerateToken(email, role);
             var refreshToken = await _refreshTokenService.GenerateAsync(email);
 
