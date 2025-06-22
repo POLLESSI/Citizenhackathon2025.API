@@ -18,7 +18,7 @@ namespace CitizenHackathon2025.Application.Mapping
             // UserDTO → User (by hand, Pwd → PasswordHash must be treated separately)
             config.NewConfig<UserDTO, User>()
                 .Map(dest => dest.Email, src => src.Email)
-                .Map(dest => dest.Role, src => Enum.Parse<Role>(src.Role, true))
+                .Map(dest => dest.Role, src => Enum.Parse<UserRole>(src.Role ?? "", true))
                 .Ignore(dest => dest.Id)
                 .Ignore(dest => dest.PasswordHash)
                 .Ignore(dest => dest.Status) // to be defined later

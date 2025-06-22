@@ -1,11 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel;
+using Citizenhackathon2025.Domain.Enums;
 
 namespace Citizenhackathon2025.Shared.DTOs
 {
     public class UserDTO
     {
 #nullable disable
+        public int Id { get; set; }
         [Required(ErrorMessage = "Email is required.")]
         [EmailAddress(ErrorMessage = "Invalid email format.")]
         [DisplayName("Email : ")]
@@ -16,6 +18,7 @@ namespace Citizenhackathon2025.Shared.DTOs
         public string Pwd { get; set; }
         [DisplayName("Role : ")]
         public string Role { get; set; }
+        public bool Active { get; set; } = true;
     }
 }
 

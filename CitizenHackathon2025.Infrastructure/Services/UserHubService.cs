@@ -20,6 +20,11 @@ namespace CitizenHackathon2025.Application.Services
             await _hubContext.Clients.All.SendAsync("UserUpdated", cancellationToken);
         }
 
+        public Task NotifyUserDeactivated(int id)
+        {
+            throw new NotImplementedException();
+        }
+
         public async Task NotifyUserRegistered(string email)
         {
             await _hubContext.Clients.All.SendAsync("UserRegistered", email);

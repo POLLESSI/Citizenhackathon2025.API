@@ -14,6 +14,7 @@ using Citizenhackathon2025.Application.WeatherForecast.Commands;
 using Citizenhackathon2025.Application.WeatherForecast.Handlers;
 using Citizenhackathon2025.Application.WeatherForecast.Queries;
 using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Infrastructure.ExternalAPIs;
@@ -30,9 +31,11 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
+using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Services;
 using CityzenHackathon2025.API.Tools;
+using Dapper;
 using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -69,6 +72,10 @@ var configuration = builder.Configuration;
 var services = builder.Services;
 // 2. Add Application + Infrastructure layers
 
+
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 // SQLConnection
 builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddScoped<System.Data.IDbConnection>(static sp =>
@@ -344,6 +351,8 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddHttpClient<ChatGptService>();
 
 var app = builder.Build();
+
+SqlMapper.AddTypeHandler(new RoleTypeHandler());
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

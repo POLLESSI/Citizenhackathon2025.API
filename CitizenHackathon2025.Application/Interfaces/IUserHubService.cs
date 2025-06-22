@@ -7,6 +7,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task BroadcastUserUpdatedAsync(CancellationToken cancellationToken = default);
         Task NotifyUserRegistered(string email); // existante ?
         Task NotifyUserUpdated(User user);
+        Task NotifyUserDeactivated(int id);
     }
 }
 

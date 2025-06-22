@@ -1,9 +1,13 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Shared.DTOs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Shared.Utils;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using System.Collections;
 using System.Data;
 using System.Data.SqlClient;
 using System.Drawing;
@@ -27,171 +31,167 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
 
         public async Task DeactivateUserAsync(int id)
         {
-            const string sql = "UPDATE [User] SET Active = 0 WHERE Id = @Id";
-            var parameters = new DynamicParameters();
-            parameters.Add("@Id", id);
+            var sql = "UPDATE [User] SET Active = 0 WHERE Id = @Id";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("Id", id, DbType.Int32);
             await _connection.ExecuteAsync(sql, parameters);
         }
 
         public async Task<IEnumerable<User>> GetAllActiveUsersAsync()
         {
-            string sql = "SELECT * FROM [User] WHERE Active = 1";
-            return await _connection.QueryAsync<User>(sql);
+            try
+            {
+                var sql = "SELECT * FROM [User] WHERE Active = 1";
+                // No parameters needed for this query
+                return await _connection.QueryAsync<User>(sql);
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
         }
 
-        public async Task<User?> GetUserByEmailAsync(string email)
+        public async Task<User> GetUserByEmailAsync(string email)
         {
             try
             {
-                const string sql = "SELECT * FROM [User] WHERE Email = @Email AND Active = 1";
-                var parameters = new DynamicParameters();
-                parameters.Add("@Email", email);
+                var sql = "SELECT * FROM [User] WHERE Email = @Email AND Active = 1";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("Email", email, DbType.String);
+
+                return await _connection.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine($"Error email unexitant: {ex.Message}");
+            }
+            return null;
+        }
+
+        public async Task<User> GetUserByIdAsync(int id)
+        {
+            try
+            {
+                var sql = "SELECT * FROM [User] WHERE Id = @Id";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("Id", id, DbType.Int32);
 
                 return await _connection.QueryFirstOrDefaultAsync<User>(sql, parameters);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error retrieving user by email: {email}");
-                return null;
-            }
-        }
 
-        public async Task<User?> GetUserByIdAsync(int id)
-        {
-            try
-            {
-                string sql = "SELECT * FROM [User] WHERE Id = @id";
-                DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@Id", id);
-                return await _connection.QueryFirstOrDefaultAsync<User>(sql, parameters);
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine($"Error geting User : {ex}");
+                Console.WriteLine($"Eror Id User unexistant : {ex.Message}");
             }
             return null;
         }
 
-        // Login
-        Task<bool> IUserRepository.LoginAsync(string email, string password)
-        {
-            throw new NotImplementedException();
-        }
-        public async Task<User?> LoginAsync(string email, string password)
+        public async Task<bool> LoginAsync(string email, string password)
         {
             try
             {
-                const string sql = @"
-                    SELECT Id, Email, Role, Active
-                    FROM [User]
-                    WHERE Email = @Email
-                    AND Active = 1
-                    AND PasswordHash = dbo.fHasher(@Password, SecurityStamp);";
+                var user = await GetUserByEmailAsync(email);
+                if (user == null) return false;
 
-                var user = await _connection.QueryFirstOrDefaultAsync<User>(
-                    sql,
-                    new
-                    {
-                        Email = email,
-                        Password = password
-                    });
-
-                return user;
+                var hash = HashHelper.HashPassword(password, user.SecurityStamp.ToString());
+                return StructuralComparisons.StructuralEqualityComparer.Equals(hash, user.PasswordHash);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Login failed: {ex.Message}");
-                return null;
+
+                Console.WriteLine($"Error login user : {ex.Message}");
             }
+            return false;
         }
-        public async Task<User?> LoginUsingProcedureAsync(string email, string password)
+
+        public async Task<User> LoginUsingProcedureAsync(string email, string password)
         {
-            var parameters = new DynamicParameters();
-            parameters.Add("@Email", email);
-            parameters.Add("@Password", password);
-            parameters.Add("ReturnValue", dbType: DbType.Int32, direction: ParameterDirection.ReturnValue);
+            try
+            {
+                var sql = "sqlUserLogin";
+                return await _connection.QueryFirstOrDefaultAsync<User>(sql, new { email, password }, commandType: CommandType.StoredProcedure);
+            }
+            catch (Exception ex)
+            {
 
-            using var multi = await _connection.QueryMultipleAsync(
-                "sqlUserLogin",
-                parameters,
-                commandType: CommandType.StoredProcedure
-            );
-
-            var user = await multi.ReadFirstOrDefaultAsync<User>();
-
-            var returnCode = parameters.Get<int>("ReturnValue");
-
-            if (returnCode == 1 && user != null)
-                return user;
-
+                Console.WriteLine($"Error login with procedure : {ex.Message}");
+            }
             return null;
         }
 
-
-        //Register
-        public async Task<bool> RegisterUserAsync(string email, byte[] passwordHash, User user)
+        public async Task<User> RegisterUserAsync(string email, byte[] passwordHash, User user)
         {
             try
             {
-                string sql = "INSERT INTO [User] (Email, PasswordHash, Role, Active, SecurityStamp) " +
-                "VALUES (@email, @passwordHash, @role, 1, NEWID())";
+                var sql = @"INSERT INTO [User] (Email, PasswordHash, SecurityStamp, Role, Status, Active)
+                        VALUES (@Email, @PasswordHash, @SecurityStamp, @Role, @Status, @Active)";
                 DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@email", email);
-                parameters.Add("@passwordHash", passwordHash, DbType.Binary, size: 64);
-                parameters.Add("@role", user.Role);
+                parameters.Add("Email", user.Email, DbType.String);
+                parameters.Add("PasswordHash", passwordHash, DbType.Binary);
+                parameters.Add("SecurityStamp", user.SecurityStamp, DbType.Guid);
+                parameters.Add("Role", user.Role.ToString(), DbType.String);
+                parameters.Add("Status", (int)user.Status, DbType.Int32);
+                parameters.Add("Active", user.Active, DbType.Boolean);
 
-                // Fix: Use ExecuteAsync instead of Execute for async operations
-                int affectedRows = await _connection.ExecuteAsync(sql, parameters);
-                return affectedRows > 0;
+                await _connection.ExecuteAsync(sql, new
+                {
+                    user.Email,
+                    PasswordHash = passwordHash,
+                    user.SecurityStamp,
+                    Role = user.Role.ToString(),
+                    Status = (int)user.Status,
+                    user.Active
+                });
+                return user;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error Registrating New User : {ex.ToString()}");
-                return false;
+                Console.WriteLine($"Error registering user: {ex.Message}");
             }
+            return null;
         }
 
-        // Patch
         public void SetRole(int id, string role)
         {
             try
             {
-                string sql = "UPDATE [User] SET Role = @role WHERE Id = @id";
+                var sql = "UPDATE [User] SET Role = @Role WHERE Id = @Id";
                 DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@id", id);
-                parameters.Add("@role", role);
+                parameters.Add("Id", id, DbType.Int32);
+                parameters.Add("Role", role, DbType.String);
+
                 _connection.Execute(sql, parameters);
             }
             catch (Exception ex)
             {
 
-                Console.WriteLine($"Error changing rôle : {ex}");
+                Console.WriteLine($"Error changing role: {ex.Message}");
             }
         }
 
-        // Update
-        public User? UpdateUser(User user)
+        public User UpdateUser(User user)
         {
-            if (user == null || user.Id <= 0)
-                throw new ArgumentException("Invalid user for update.", nameof(user));
-
             try
             {
-                string sql = "UPDATE [User] SET Email = @Email, Role = @Role WHERE Id = @Id AND Active = 1";
-                var parameters = new DynamicParameters();
-                parameters.Add("@Id", user.Id);
-                parameters.Add("@Email", user.Email);
-                parameters.Add("@Role", user.Role);
+                var sql = @"UPDATE [User] SET Email = @Email, Role = @Role, Status = @Status, Active = @Active
+                        WHERE Id = @Id";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("Email", user.Email, DbType.String);
+                parameters.Add("Role", user.Role.ToString(), DbType.String);
+                parameters.Add("Status", (int)user.Status, DbType.Int32);
+                parameters.Add("Active", user.Active, DbType.Boolean);
+                _connection.Execute(sql, parameters);
 
-                int rowsAffected = _connection.Execute(sql, parameters);
-                return rowsAffected > 0 ? user : null;
+                return user;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating user with ID {UserId}", user.Id);
-                return null;
+
+                Console.WriteLine($"Error Upgrading User: {ex.Message}");
             }
+            return null;
         }
     }
 }

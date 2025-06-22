@@ -1,6 +1,7 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Shared.DTOs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.SqlServer.Dac.Model;
 using System.Globalization;
 using System.Security;
@@ -166,15 +167,15 @@ namespace Citizenhackathon2025.Application.Extensions
         /// </summary>
         public static Domain.Entities.User MapToUserEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
         {
-            if (!Enum.TryParse<Domain.Enums.Role>(dto.Role, true, out var roleParsed))
-                throw new ArgumentException($"Invalid role '{dto.Role}'", nameof(dto.Role));
+            if (!Guid.TryParse(securityStamp, out var parsedStamp))
+                throw new ArgumentException("Invalid GUID format for security stamp", nameof(securityStamp));
 
             var user = new Domain.Entities.User
             {
                 Email = dto.Email,
                 PasswordHash = hashPasswordFunc(dto.Pwd, securityStamp),
-                SecurityStamp = securityStamp,
-                Role = roleParsed,
+                SecurityStamp = parsedStamp,
+                Role = Enum.Parse<UserRole>(dto.Role, ignoreCase: true),
                 Status = Status.Pending
             };
 

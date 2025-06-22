@@ -26,12 +26,12 @@ namespace CityzenHackathon2025.API.Tools
         {
             return _secretKey;
         }
-        public string GenerateToken(string email, Role role)
+        public string GenerateToken(string email, UserRole role)
         {
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha512);
 
-            string roleValue = role.ToString().ToLower(); // "admin", "modo", "user"
+            string roleValue = role.ToRoleString(); // "admin", "modo", "user"
 
             var claims = new[]
             {

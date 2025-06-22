@@ -1,10 +1,12 @@
 ﻿using CitizeHackathon2025.Hubs.Hubs;
+using Citizenhackathon2025.Application.Extensions;
 using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Entities;
+using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Shared.DTOs;
+using CitizenHackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Shared.Utils;
-using Citizenhackathon2025.Application.Extensions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -27,103 +29,67 @@ namespace CitizenHackathon2025.API.Controllers
             _hubContext = hubContext;
             _logger = logger;
         }
-        private static byte[] HashPassword(string password, string securityStamp)
-        {
-            using var sha = System.Security.Cryptography.SHA512.Create();
-            var salted = $"{password}:{securityStamp}";
-            return sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(salted));
-        }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] UserDTO userDto)
+        public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
         {
-            if (userDto == null || string.IsNullOrWhiteSpace(userDto.Email) || string.IsNullOrWhiteSpace(userDto.Pwd))
-                return BadRequest("Email and password are required.");
-
-            // 🔐 Generate a SecurityStamp
-            string securityStamp = Guid.NewGuid().ToString();
-
-            // 🧭 Mapping from DTO to entity
-            User user;
-            try
-            {
-                user = userDto.MapToUserEntity(HashPassword, securityStamp); // ✅ Extension method
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-
-            // 📦 Register user
-            var result = await _userService.RegisterUserAsync(user); // ✅ DAL method
-
-            if (!result)
-                return Conflict("Email already exists or registration failed.");
-
-            return Ok("User registered successfully.");
+            var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, UserRole.User);
+            await _hubContext.Clients.All.SendAsync("UserRegistered", userDto.Email);
+            return Ok(userDto);
         }
-
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginDTO loginDto)
+        public async Task<IActionResult> Login([FromBody] LoginDTO dto)
         {
+            if (!await _userService.LoginAsync(dto.Email, dto.Password))
+                return Unauthorized("Invalid credentials");
 
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            var user = await _userService.LoginAsync(loginDto.Email, loginDto.Password);
-
-            if (user == false)
-            {
-                _logger.LogWarning("❌ Invalid login for {Email}", loginDto.Email);
-                return Unauthorized("Invalid credentials.");
-            }
-
-            return Ok(user);
+            var user = await _userService.GetUserByEmailAsync(dto.Email);
+            await _hubContext.Clients.All.SendAsync("UserLogged", user.Email);
+            return Ok("Login successful");
         }
+
         [HttpGet("active")]
-        public async Task<IActionResult> GetAllActiveUsers()
+        public async Task<IActionResult> GetAllActive()
         {
             var users = await _userService.GetAllActiveUsersAsync();
             return Ok(users);
         }
+
         [HttpGet("getbyemail/{email}")]
-        public async Task<IActionResult> GetUserByEmail(string email)
+        public async Task<IActionResult> GetByEmail(string email)
         {
             var user = await _userService.GetUserByEmailAsync(email);
-            if (user == null)
-                return NotFound("Utilisateur non trouvé.");
-
-            return Ok(user);
+            return user == null ? NotFound() : Ok(user);
         }
+
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetUserById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
             var user = await _userService.GetUserByIdAsync(id);
-            if (user == null)
-                return NotFound();
-
-            return Ok(user);
+            return user == null ? NotFound() : Ok(user);
         }
+
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeactivateUser(int id)
+        public async Task<IActionResult> Delete(int id)
         {
             await _userService.DeactivateUserAsync(id);
-            return Ok("User deactivated.");
+            return NoContent();
         }
+
         [HttpPut("update")]
-        public IActionResult UpdateUser([FromBody] User user)
+        public IActionResult Update([FromBody] User user)
         {
-            var result = _userService.UpdateUser(user);
-            return result != null ? Ok(result) : NotFound();
+            var updated = _userService.UpdateUser(user);
+            return updated != null ? Ok(updated) : BadRequest("Update failed");
         }
+
         [HttpPatch("role/{id}")]
-        public IActionResult SetUserRole(int id, [FromQuery] string role)
+        public IActionResult SetRole(int id, [FromQuery] string newRole)
         {
-            _userService.SetRole(id, role);
-            return Ok("User role updated.");
+            _userService.SetRole(id, newRole);
+            return Ok();
         }
-        
     }
 }
 

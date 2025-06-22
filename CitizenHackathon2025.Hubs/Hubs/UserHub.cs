@@ -1,8 +1,4 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Diagnostics;
-using Microsoft.Extensions.Logging;
 
 namespace Citizenhackathon2025.Hubs.Hubs
 {

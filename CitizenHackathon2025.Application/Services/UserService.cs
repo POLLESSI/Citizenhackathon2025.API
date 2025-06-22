@@ -7,6 +7,7 @@ using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Services;
+using CitizenHackathon2025.Shared.Utils;
 using Dapper;
 using Mapster;
 using Microsoft.AspNetCore.SignalR;
@@ -14,6 +15,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
@@ -30,140 +32,79 @@ namespace Citizenhackathon2025.Application.Services
         private readonly IUserRepository _userRepository;
         private readonly CitizenHackathon2025.Application.Interfaces.IUserHubService _hubService;
         private readonly ILogger<UserService> _logger;
-        private readonly IDbConnection _dbConnection;
+        private readonly IDbConnection _connection;
 
-        public UserService(IUserRepository userRepository, IUserHubService hubService, ILogger<UserService> logger, IDbConnection dbConnection)
+        public UserService(IUserRepository userRepository, IUserHubService hubService, ILogger<UserService> logger, IDbConnection connection)
         {
             _userRepository = userRepository;
             _hubService = hubService;
             _logger = logger;
-            _dbConnection = dbConnection;
+            _connection = connection;
         }
 
         public async Task DeactivateUserAsync(int id)
         {
-            try
-            {
-                await _userRepository.DeactivateUserAsync(id);
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine($"Error deleting user : {ex.ToString}");
-            }
+            await _userRepository.DeactivateUserAsync(id);
+            await _hubService.NotifyUserDeactivated(id);
         }
 
         public async Task<IEnumerable<User>> GetAllActiveUsersAsync()
-        {
-            return await _userRepository.GetAllActiveUsersAsync();
-        }
+            => await _userRepository.GetAllActiveUsersAsync();
 
-        public async Task<User?> GetUserByEmailAsync(string email)
-        {
-            const string sql = @"
-            SELECT Email, PasswordHash, SecurityStamp, Role, Status
-            FROM [User]
-            WHERE Email = @Email;
-        ";
+        public async Task<User> GetUserByEmailAsync(string email)
+            => await _userRepository.GetUserByEmailAsync(email);
 
-            return await _dbConnection.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
-        }
-
-        public Task<User> GetUserByIdAsync(int id)
-        {
-            try
-            {
-                return _userRepository.GetUserByIdAsync(id);
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine($"Error geting user : {ex.ToString}");
-            }
-            return null;
-        }
+        public async Task<User> GetUserByIdAsync(int id)
+            => await _userRepository.GetUserByIdAsync(id);
 
         public async Task<bool> LoginAsync(string email, string password)
         {
-            var user = await _userRepository.LoginUsingProcedureAsync(email, password);
-            return user != null;
-        }
-        public async Task<UserDTO?> LoginUsingProcedureAsync(string email, string password)
-        {
-            var user = await _userRepository.LoginUsingProcedureAsync(email, password);
-            return user != null ? user.Adapt<UserDTO>() : null;
+            var user = await _userRepository.GetUserByEmailAsync(email);
+            if (user == null) return false;
+
+            var hash = HashHelper.HashPassword(password, user.SecurityStamp.ToString());
+            return StructuralComparisons.StructuralEqualityComparer.Equals(hash, user.PasswordHash);
         }
 
-        public async Task<bool> RegisterUserAsync(User user)
+        public async Task<UserDTO> RegisterUserAsync(string email, string password, UserRole role)
         {
-            const string sql = @"
-            INSERT INTO [User] (Email, PasswordHash, SecurityStamp, Role, Status)
-            VALUES (@Email, @PasswordHash, @SecurityStamp, @Role, @Status);
-        ";
+            var stamp = Guid.NewGuid();
+            var passwordHash = HashHelper.HashPassword(password, stamp.ToString());
 
-            try
+            var newUser = new User
             {
-                var parameters = new
-                {
-                    Email = user.Email,
-                    PasswordHash = user.PasswordHash,
-                    SecurityStamp = user.SecurityStamp,
-                    Role = (int)user.Role,
-                    Status = (int)user.Status
-                };
+                Email = email,
+                Role = role,
+                SecurityStamp = stamp,
+                PasswordHash = passwordHash,
+                Status = Status.Pending
+            };
+            newUser.Activate();
 
-                var rowsAffected = await _dbConnection.ExecuteAsync(sql, parameters);
-                return rowsAffected == 1;
-            }
-            catch (SqlException ex) when (ex.Number == 2627) // Unique constraint (ex: Email already exists)
+            await _userRepository.RegisterUserAsync(email, passwordHash, newUser);
+            await _hubService.NotifyUserRegistered(newUser.Email);
+
+            return new UserDTO
             {
-                // Logiquement : Violation de clé unique
-                return false;
-            }
-            catch (Exception ex)
-            {
-                // Log si besoin
-                throw new ApplicationException("Erreur lors de l'enregistrement de l'utilisateur.", ex);
-            }
+                Email = newUser.Email,
+                Role = newUser.Role.ToString(),
+                Active = newUser.Active
+            };
         }
 
-
-        public void SetRole(int id, string? role)
+        public void SetRole(int id, string role)
         {
-            try
-            {
-                _userRepository.SetRole(id, role);
-            }
-            catch (Exception ex)
-            {
+            if (!Enum.TryParse<UserRole>(role, true, out var parsedRole))
+                throw new ArgumentException("Invalid role format", nameof(role));
 
-                Console.WriteLine($"Error changing rôle: {ex.ToString}");
-            }
+            _userRepository.SetRole(id, parsedRole.ToString());
         }
 
         public User UpdateUser(User user)
-        {
-            try
-            {
-                var updatedUser = _userRepository.UpdateUser(user);
-                if (updatedUser != null)
-                {
-                    _hubService.NotifyUserUpdated(updatedUser);
-                }
-                return updatedUser;
-            }
-            catch (System.ComponentModel.DataAnnotations.ValidationException ex)
-            {
-                Console.WriteLine($"Validation error : {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error updating user : {ex}");
-            }
-            return null;
-        }
+           => _userRepository.UpdateUser(user);
     }
 }
+
 
 
 

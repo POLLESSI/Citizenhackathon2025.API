@@ -1,11 +1,12 @@
 ﻿
 namespace Citizenhackathon2025.Domain.Enums
 {
-    public enum Role
+    public enum UserRole
     {
         Admin,
         Modo,
-        User
+        User,
+        Guest
     }
 }
 
