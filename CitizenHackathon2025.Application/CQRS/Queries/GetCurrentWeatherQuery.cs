@@ -1,4 +1,4 @@
-﻿using Citizenhackathon2025.Shared.DTOs;
+﻿using CitizenHackathon2025.DTOs.DTOs;
 using MediatR;
 
 namespace CitizenHackathon2025.Application.CQRS.Queries

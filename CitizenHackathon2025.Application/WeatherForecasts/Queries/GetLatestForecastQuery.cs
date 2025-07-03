@@ -1,4 +1,4 @@
-﻿using Citizenhackathon2025.Shared.DTOs;
+﻿using CitizenHackathon2025.DTOs.DTOs;
 using MediatR;
 
 namespace Citizenhackathon2025.Application.WeatherForecast.Queries

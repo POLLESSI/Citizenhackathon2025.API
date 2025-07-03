@@ -4,7 +4,7 @@ using Citizenhackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Entities;
 
-namespace CitizenHackathon2025.Application.Services
+namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class UserHubService : IUserHubService
     {

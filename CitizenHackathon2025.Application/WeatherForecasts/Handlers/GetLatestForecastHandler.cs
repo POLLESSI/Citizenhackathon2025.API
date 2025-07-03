@@ -1,7 +1,7 @@
 ﻿using Citizenhackathon2025.Application.WeatherForecast.Queries;
 using Citizenhackathon2025.Domain.Interfaces;
 //using CitizenHackathon2025.infrastructure.Repositories;
-using Citizenhackathon2025.Shared.DTOs;
+using CitizenHackathon2025.DTOs.DTOs;
 using Mapster;
 using MediatR;
 

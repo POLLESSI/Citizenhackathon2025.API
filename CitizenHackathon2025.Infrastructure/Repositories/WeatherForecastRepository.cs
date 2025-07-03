@@ -7,7 +7,6 @@ using System.Data;
 using System.Threading.Tasks;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Shared.DTOs;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;

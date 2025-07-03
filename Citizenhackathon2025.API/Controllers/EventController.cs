@@ -1,12 +1,12 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
-using Citizenhackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Hubs.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.API.Controllers
 {

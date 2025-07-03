@@ -1,7 +1,7 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Shared.DTOs;
 using Citizenhackathon2025.Domain.Enums;
 using Mapster;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.Mapping
 {

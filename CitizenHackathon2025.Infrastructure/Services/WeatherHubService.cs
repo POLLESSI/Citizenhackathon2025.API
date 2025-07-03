@@ -5,18 +5,18 @@ using Citizenhackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Application.Extensions;
 
-namespace Citizenhackathon2025.Application.Services
+namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class WeatherHubService
     {
-        private readonly IHubContext<Hubs.Hubs.WeatherHub> _hubContext;
+        private readonly IHubContext<WeatherHub> _hubContext;
 
-        public WeatherHubService(IHubContext<Hubs.Hubs.WeatherHub> hubContext)
+        public WeatherHubService(IHubContext<WeatherHub> hubContext)
         {
             _hubContext = hubContext;
         }
 
-        public async Task BroadcastWeatherAsync(Domain.Entities.WeatherForecast forecast, CancellationToken cancellationToken = default)
+        public async Task BroadcastWeatherAsync(WeatherForecast forecast, CancellationToken cancellationToken = default)
         {
             var dto = forecast.MapToWeatherForecastDTO();
             await _hubContext.Clients.All.SendAsync("ReceiveWeather", forecast, cancellationToken);

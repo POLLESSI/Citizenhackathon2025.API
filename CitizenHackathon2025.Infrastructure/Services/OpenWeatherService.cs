@@ -1,7 +1,6 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Shared.DTOs;
-using CitizenHackathon2025.Shared.DTOs;
+using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

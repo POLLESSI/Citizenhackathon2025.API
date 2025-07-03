@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
-using Citizenhackathon2025.Shared.DTOs;
 using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace Citizenhackathon2025.Application.Interfaces
 {

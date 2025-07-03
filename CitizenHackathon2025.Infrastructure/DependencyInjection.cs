@@ -1,6 +1,5 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Infrastructure.Services;
-using CitizenHackathon2025.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CitizenHackathon2025.Infrastructure

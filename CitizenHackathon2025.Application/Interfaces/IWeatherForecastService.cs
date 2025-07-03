@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Shared.DTOs;
+using CitizenHackathon2025.DTOs.DTOs;
 using static Citizenhackathon2025.Domain.Entities.WeatherForecast;
 
 namespace Citizenhackathon2025.Application.Interfaces

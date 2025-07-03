@@ -1,4 +1,4 @@
-﻿using Citizenhackathon2025.Application.UseCases;
+﻿using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

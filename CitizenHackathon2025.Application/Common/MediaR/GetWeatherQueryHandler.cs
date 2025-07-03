@@ -1,9 +1,9 @@
 ﻿using Citizenhackathon2025.Application.WeatherForecast.Queries;
 using Citizenhackathon2025.Application.Extensions;
 using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Shared.DTOs;
 using Microsoft.Extensions.Logging;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.Common.MediaR
 {

@@ -1,13 +1,13 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
-using Citizenhackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Application.Interfaces;
 using CityzenHackathon2025.API.Tools;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using static Citizenhackathon2025.Application.Extensions.MapperExtensions;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.API.Controllers
 {

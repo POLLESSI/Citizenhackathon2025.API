@@ -4,14 +4,13 @@ using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Enums;
 using Citizenhackathon2025.Hubs.Hubs;
-using Citizenhackathon2025.Shared.DTOs;
-using CitizenHackathon2025.Shared.DTOs;
 using CitizenHackathon2025.Shared.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.API.Controllers
 {

@@ -7,10 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="SignalR\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Mapster" Version="7.4.0" />
     <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
@@ -33,6 +29,10 @@
     <ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.DTOs\CitizenHackathon2025.DTOs.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="SignalR\" />
   </ItemGroup>
 
 </Project>

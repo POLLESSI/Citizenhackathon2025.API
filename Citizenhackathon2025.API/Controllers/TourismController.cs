@@ -1,6 +1,5 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Shared.DTOs;
-using CitizenHackathon2025.Application.Services;
+using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
