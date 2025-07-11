@@ -11,6 +11,7 @@ namespace Citizenhackathon2025.Application.Interfaces
     public interface IGPTService
     {
         Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync();
+        Task<Suggestion?> GetSuggestionByIdAsync(int id);
         Task<IEnumerable<Suggestion>> GetSuggestionsByEventIdAsync(int id);
         Task<IEnumerable<Suggestion>> GetSuggestionsByForecastIdAsync(int id);
         Task<IEnumerable<Suggestion>> GetSuggestionsByTrafficIdAsync(int id);

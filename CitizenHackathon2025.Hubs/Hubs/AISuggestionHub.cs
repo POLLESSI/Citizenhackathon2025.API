@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 
-namespace Citizenhackathon2025.API.Hubs
+namespace Citizenhackathon2025.Hubs.Hubs
 {
     public class AISuggestionHub : Hub
     {

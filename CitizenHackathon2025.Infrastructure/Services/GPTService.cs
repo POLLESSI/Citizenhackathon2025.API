@@ -53,6 +53,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
             //await _hubContext.Clients.All.SendAsync("SuggestionDeleted", suggestionId);
             _logger.LogInformation("Suggestion supprimée et signalée via SignalR : Id={Id}", suggestionId);
         }
+
+        public Task<Suggestion?> GetSuggestionByIdAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 

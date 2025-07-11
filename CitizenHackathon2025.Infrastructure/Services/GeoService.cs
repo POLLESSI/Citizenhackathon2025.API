@@ -8,9 +8,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             var dict = new Dictionary<string, (double, double)>
             {
-                ["Paris"] = (48.8566, 2.3522),
-                ["Lyon"] = (45.75, 4.85),
-                ["Marseille"] = (43.2965, 5.3698)
+                ["Brussels"] = (50.846782, 4.352421),
+                ["Namur"] = (50.461252, 4.868969),
+                ["Han-Sur-Lesse"] = (50.125352, 5.187751)
             };
 
             if (dict.TryGetValue(location, out var coords))

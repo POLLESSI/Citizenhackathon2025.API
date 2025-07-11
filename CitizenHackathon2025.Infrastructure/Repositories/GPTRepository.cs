@@ -8,11 +8,10 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Data.Common;
-using Citizenhackathon2025.Domain.Interfaces;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {
-    public class GPTRepository : Domain.Interfaces.IGPTRepository
+    public class GPTRepository : IGPTRepository
     {
         private readonly System.Data.IDbConnection _connection;
         private readonly ILogger<IGPTRepository> _logger;
@@ -111,8 +110,13 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             INSERT INTO GptInteractions (Prompt, Response, CreatedAt, Active)
             VALUES (@Prompt, @Response, @CreatedAt, @Active);
         ";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("Prompt", interaction.Prompt);
+            parameters.Add("Response", interaction.Response);
+            parameters.Add("CreatedAt", interaction.CreatedAt);
+            parameters.Add("Active", interaction.Active);
 
-            await _connection.ExecuteAsync(sql, interaction);
+            await _connection.ExecuteAsync(sql, parameters);
         }
         public async Task<IEnumerable<GPTInteraction>> GetAllActiveAsync()
         {
@@ -128,6 +132,16 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         public Task<string> AskAsync(string question)
         {
             return Task.FromResult("Simulated GPT response");
+        }
+
+        public Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<GPTInteraction?> GetByIdAsync(int id)
+        {
+            throw new NotImplementedException();
         }
     }
 }

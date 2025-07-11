@@ -1,5 +1,4 @@
-﻿
-namespace CitizenHackathon2025.Application.Abstractions.Validations
+﻿namespace CitizenHackathon2025.Application.Abstractions.Validations
 {
     public interface ILocalValidator<in TRequest>
     {

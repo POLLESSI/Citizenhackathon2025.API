@@ -34,6 +34,16 @@ namespace CitizenHackathon2025.API.Controllers
             var events = await _eventRepository.GetUpcomingOutdoorEventsAsync();
             return Ok(events);
         }
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetEventById(int id)
+        {
+            if (id <= 0)
+                return BadRequest("L'identifiant fourni est invalide.");
+            var @event = await _eventRepository.GetByIdAsync(id);
+            if (@event == null)
+                return NotFound($"No events found for the ID {id}.");
+            return Ok(@event);
+        }
         [HttpPost("save")]
         public async Task<IActionResult> SaveEvent([FromBody] Event @event)
         {

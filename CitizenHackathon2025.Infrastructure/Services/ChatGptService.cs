@@ -1,4 +1,5 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
+using Citizenhackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -145,6 +146,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
 
         public Task<string> SuggestAlternativeWithWeatherAsync(string location)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<GPTInteraction> GetChatGptByIdAsync(int id)
         {
             throw new NotImplementedException();
         }

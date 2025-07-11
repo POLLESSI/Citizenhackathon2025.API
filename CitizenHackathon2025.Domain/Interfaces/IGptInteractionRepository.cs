@@ -1,5 +1,4 @@
-﻿
-using Citizenhackathon2025.Domain.Entities;
+﻿using Citizenhackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Domain.Interfaces
 {
@@ -7,6 +6,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     {
         Task SaveInteractionAsync(string prompt, string response, DateTime timestamp);
         Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync();
+        Task<GPTInteraction?> GetByIdAsync(int id);
     }
 }
 

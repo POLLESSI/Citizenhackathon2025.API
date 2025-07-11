@@ -2,6 +2,7 @@
 {
     public class GptPrompt
     {
+    # nullable disable
         internal readonly object Content;
     }
 }

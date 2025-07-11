@@ -1,14 +1,11 @@
-﻿using System;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
+﻿using Citizenhackathon2025.Domain.Entities;
 using static Citizenhackathon2025.Domain.Entities.GPTInteraction;
 
-namespace Citizenhackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Domain.Interfaces
 {
-    public interface IAIService
+    public interface IAIRepository
     {
         Task<string> GetSuggestionsAsync(object content);
-
         /// <summary>
         /// Sends a structured prompt to the AI ​​(OpenAI) and returns the generated response.
         /// </summary>
@@ -24,75 +21,5 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<string> TranslateToGermanAsync(string englishText);
         Task<string> SuggestAlternativeAsync(string prompt);
         Task<string> SuggestAlternativeWithWeatherAsync(string location);
-
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

@@ -6,6 +6,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories.Providers.Hubs
 {
     public class SignalRNotifier
     {
+    #nullable disable
         private readonly IHubContext<WeatherHub> _hub;
 
         public async Task NotifyAsync(WeatherForecast forecast)

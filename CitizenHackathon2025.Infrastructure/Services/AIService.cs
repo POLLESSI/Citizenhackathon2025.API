@@ -1,5 +1,7 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain;
+using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -32,16 +34,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly HttpClient _httpClient;
         private readonly OpenAIOptions _options;
         private readonly IOpenWeatherService _weather;
-        private readonly string _apiKey = "sk-xxxxxxx"; // clé OpenAI de préférence, injectée via config
+        private readonly string _apiKey = "sk-xxxxxxx"; // OpenAI key preferably, injected via config
         private readonly string _model;
         private readonly IConfiguration _config;
         private readonly string _endpoint = "https://api.openai.com/v1/chat/completions";
+        private readonly IGptInteractionRepository _gptInteractionRepository;
 
-        public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather)
+        public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather, IGptInteractionRepository gptInteractionRepository)
         {
             _httpClient = httpClient;
             _options = options.Value;
             _weather = weather;
+            _gptInteractionRepository = gptInteractionRepository;
+
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
         }
 
@@ -176,6 +181,82 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             // Dummy call to GPT (replace with your call to OpenAI or other)
             return $"[Suggestion AI] HAS {location}, {weatherInfo}, You could: visit a museum, go to the cinema, or explore a covered gallery.";
+        }
+
+        public async Task<string> AskChatGptAsync(string prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+                throw new ArgumentException("Prompt cannot be empty.", nameof(prompt));
+
+            try
+            {
+                // Construction of the system prompt
+                string systemPrompt = "You are a helpful assistant answering general purpose user questions.";
+
+                // Call to the OpenAI API
+                var requestBody = new
+                {
+                    model = _options.Model, // or "gpt-4", "gpt-3.5-turbo" depending on your config
+                    messages = new[]
+                    {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = prompt }
+            },
+                    temperature = 0.5
+                };
+
+                var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync(_options.ApiUrl, content);
+                var responseString = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new Exception($"OpenAI API Error: {response.StatusCode} - {responseString}");
+                }
+
+                using var doc = JsonDocument.Parse(responseString);
+                var reply = doc.RootElement
+                                .GetProperty("choices")[0]
+                                .GetProperty("message")
+                                .GetProperty("content")
+                                .GetString() ?? "No response.";
+
+                // Backup to database via repository
+                if (_gptInteractionRepository is not null)
+                {
+                    await _gptInteractionRepository.SaveInteractionAsync(prompt, reply, DateTime.UtcNow);
+                }
+
+                return reply;
+            }
+            catch (Exception ex)
+            {
+                // Logging potentially to be added here
+                return $"Erreur lors de l'appel à GPT : {ex.Message}";
+            }
+        }
+
+        public async Task<GPTInteraction?> GetChatGptByIdAsync(int id)
+        {
+            if (id <= 0)
+                throw new ArgumentOutOfRangeException(nameof(id), "The identifier must be strictly positive.");
+
+            try
+            {
+                var interaction = await _gptInteractionRepository.GetByIdAsync(id);
+                if (interaction == null)
+                {
+                    return null;
+                }
+
+                return interaction;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Error retrieving GPT interaction with ID {id}.", ex);
+            }
         }
     }
 }

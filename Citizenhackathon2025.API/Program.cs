@@ -1,7 +1,6 @@
 using Azure.Core.Pipeline;
 //using Mapster.DependencyInjection;
 //using Citizenhackathon2025.Application.Mapping;
-using Citizenhackathon2025.API.Hubs;
 using Citizenhackathon2025.API.Middlewares;
 using Citizenhackathon2025.API.Security;
 using Citizenhackathon2025.Application.CQRS.Commands.Handlers;
@@ -20,6 +19,7 @@ using Citizenhackathon2025.Infrastructure.Persistence;
 using Citizenhackathon2025.Infrastructure.Repositories;
 using Citizenhackathon2025.Infrastructure.Repositories.Providers.Hubs;
 using Citizenhackathon2025.Infrastructure.Services;
+using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.CQRS.Queries;
@@ -43,6 +43,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Microsoft.SqlServer.Dac.Model;
@@ -143,7 +144,7 @@ builder.Services.AddScoped<DatabaseService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IGeoService, GeoService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>(); 
+//builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>(); 
 builder.Services.AddScoped<IPlaceService, PlaceService>();
 builder.Services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
 builder.Services.AddScoped<ISuggestionService, SuggestionService>();
@@ -151,6 +152,7 @@ builder.Services.AddSingleton<TokenGenerator>();
 builder.Services.AddScoped<ITrafficConditionService, TrafficConditionService>();
 builder.Services.AddScoped<ITrafficApiService, TrafficAPIService>();
 builder.Services.AddScoped<IAIService, AIService>();
+builder.Services.AddScoped<IAIService, OpenAIService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<OpenAiSuggestionService>();
 builder.Services.AddScoped<OpenWeatherService>();
@@ -168,7 +170,7 @@ builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRN
 builder.Services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IGPTRepository, GPTRepository>();
-builder.Services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
+builder.Services.AddScoped<IGPTRepository, GptInteractionsRepository>();
 builder.Services.AddScoped<IPlaceRepository, PlaceRepository>();
 builder.Services.AddScoped<ISuggestionRepository, SuggestionRepository>();
 builder.Services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
@@ -201,14 +203,20 @@ builder.Services.AddSingleton<AsyncPolicyWrap>(sp =>
     return Policy.WrapAsync(retryPolicy, circuitBreaker);
 });
 // ========== UTILS ==========
+
+// Token generator
 builder.Services.AddSingleton<TokenGenerator>();
+// DB Connection Factory
 builder.Services.AddSingleton<DbConnectionFactory>();
+
 builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient("Default")
     .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IOptions<OpenAIOptions>>().Value);
 builder.Services.AddHttpClient<IAIService, AIService>();
 builder.Services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
 {
@@ -306,10 +314,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Token Generator
-
-builder.Services.AddScoped<TokenGenerator>();
-
 // Security levels
 // Declaration of the different security levels to be implemented in the controller using the attribute [Authorize("font_name")]
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -339,6 +343,7 @@ builder.Services.AddSwaggerGen(c =>
             new string[] {}
         }
     });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "CitizenHackathon2025", Version = "v1" });
     //c.SwaggerDoc("v1", new OpenApiInfo
     //{
     //    Title = "CitizenHackathon2025 API",
@@ -356,6 +361,7 @@ SqlMapper.AddTypeHandler(new RoleTypeHandler());
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    app.UseDeveloperExceptionPage();
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
@@ -389,14 +395,15 @@ using (var scope = app.Services.CreateScope())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-app.UseMiddleware<AntiXssMiddleware>();
+//app.UseMiddleware<AntiXssMiddleware>();
 app.UseAntiXssMiddleware();
 app.UseUserAgentFiltering();
-app.UseMiddleware<ExceptionMiddleware>();
+//app.UseMiddleware<ExceptionMiddleware>();
 app.UseExceptionMiddleware();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseSecurityHeaders();
 app.UseAuditLogging();
 
 app.UseCors("AllowAnyOrigin");
@@ -439,17 +446,20 @@ app.MapGet("/api/weatherforecast", () =>
 //    await next.Invoke();
 //});
 
-static void UseSecurityHeaders(IApplicationBuilder app)
-{
-    app.Use(async (context, next) =>
-    {
-        context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
-        context.Response.Headers.Add("X-Frame-Options", "DENY");
-        context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
-        await next();
-    });
-}
-UseSecurityHeaders(app);
+//static void UseSecurityHeaders(IApplicationBuilder app)
+//{
+//    app.Use(async (context, next) =>
+//    {
+//        if (!context.Response.Headers.ContainsKey("X-Content-Type-Options"))
+//        {
+//            context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
+//        }
+//        context.Response.Headers.Add("X-Frame-Options", "DENY");
+//        context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
+//        await next();
+//    });
+//}
+//UseSecurityHeaders(app);
 
 //app.MapControllers();
 

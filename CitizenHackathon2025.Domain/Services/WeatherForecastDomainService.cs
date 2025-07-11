@@ -5,6 +5,7 @@ namespace CitizenHackathon2025.Domain.Services
 {
     public class WeatherForecastDomainService
     {
+    #nullable disable
         public bool IsWeatherSuitableForOutdoorActivity(WeatherForecast forecast)
         {
             return forecast.TemperatureC > 10 &&

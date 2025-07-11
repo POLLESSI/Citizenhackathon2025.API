@@ -1,4 +1,5 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
+using Citizenhackathon2025.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using System.Net.Http.Headers;
 using System.Text;
@@ -15,6 +16,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             _httpClient = httpClient;
             _configuration = configuration;
+        }
+
+        public async Task<string> AskChatGptAsync(string prompt)
+        {
+            return await Task.FromResult($"[GPT MOCKED RESPONSE] => {prompt}");
         }
 
         public async Task<string> GenerateSuggestionAsync(string prompt)
@@ -54,6 +60,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .GetString();
 
             return suggestion ?? "Suggestion not available.";
+        }
+
+        public Task<GPTInteraction?> GetChatGptByIdAsync(int id)
+        {
+            throw new NotImplementedException();
         }
 
         public Task<string> GetSuggestionsAsync(object content)
