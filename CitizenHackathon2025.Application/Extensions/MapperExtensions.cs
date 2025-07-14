@@ -1,12 +1,12 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Domain.Enums;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.SqlServer.Dac.Model;
 using System.Globalization;
 using System.Security;
 
-namespace Citizenhackathon2025.Application.Extensions
+namespace CitizenHackathon2025.Application.Extensions
 {
     public static class MapperExtensions
     {

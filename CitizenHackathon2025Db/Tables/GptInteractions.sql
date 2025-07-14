@@ -18,10 +18,12 @@ CREATE TRIGGER [dbo].[OnDeleteGptInteractions]
 	INSTEAD OF DELETE
 	AS
 	BEGIN
-		UPDATE GptInteractions SET Active = 0
+		UPDATE GptInteractions SET Active = 0,
+		CreatedAt = GETDATE()
 		WHERE Id = (SELECT Id FROM deleted)
 	END
 
+CREATE INDEX IX_GptInteractions_Active ON GptInteractions(Active);
 
 
 

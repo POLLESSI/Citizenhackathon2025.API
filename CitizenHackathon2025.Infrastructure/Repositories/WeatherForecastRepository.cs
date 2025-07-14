@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
-using System.Data;
 using System.Threading.Tasks;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
@@ -81,7 +80,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         {
             try
             {
-                const string sql = "SELECT * FROM WeatherForecast WHERE Id = @Id AND Active = 1";
+                const string sql = "SELECT Id, DateWeather, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh FROM WeatherForecast WHERE Id = @Id AND Active = 1";
 
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@id", id, DbType.Int64);
@@ -102,7 +101,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         {
             try
             {
-                string sql = " SELECT TOP 10 * FROM WeatherForecast WHERE Active = 1 ORDER BY DateEvent DESC";
+                string sql = " SELECT TOP 10 Id, DateWeather, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh FROM WeatherForecast WHERE Active = 1 ORDER BY DateEvent DESC";
 
                 var weatherForecasts = await _connection.QueryAsync<WeatherForecast?>(sql);
                 return [.. weatherForecasts];

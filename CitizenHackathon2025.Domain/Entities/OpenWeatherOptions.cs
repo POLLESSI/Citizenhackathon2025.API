@@ -1,5 +1,5 @@
 ﻿
-namespace Citizenhackathon2025.Domain.Entities
+namespace CitizenHackathon2025.Domain.Entities
 {
     public class OpenWeatherOptions
     {

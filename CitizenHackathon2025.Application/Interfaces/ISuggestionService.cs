@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.Suggestion;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Application.Interfaces
 {
@@ -16,6 +15,7 @@ namespace Citizenhackathon2025.Application.Interfaces
         /// </summary>
         /// <param name="userId">User ID</param>
         /// <returns>Active Suggestion List</returns>
+        Task<Suggestion?> GetByIdAsync(int id);
         Task<IEnumerable<Suggestion>> GetSuggestionsByUserAsync(int userId);
 
         /// <summary>

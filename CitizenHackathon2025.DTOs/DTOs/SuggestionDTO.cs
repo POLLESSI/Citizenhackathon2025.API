@@ -5,7 +5,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
 {
     public class SuggestionDTO
     {
-#nullable disable
+    #nullable disable
         [Required(ErrorMessage = "User ID is required.")]
         [Range(1, int.MaxValue, ErrorMessage = "User ID must be greater than 0.")]
         [DisplayName("User ID : ")]
@@ -28,6 +28,8 @@ namespace CitizenHackathon2025.DTOs.DTOs
         //[NoProfanity]
         public string Reason { get; set; }
         public bool Active { get; set; } = true;
+        public string Message { get; set; }
+        public string Context { get; set; }
     }
 }
 

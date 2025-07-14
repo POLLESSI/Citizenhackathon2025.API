@@ -1,265 +1,137 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain;
-using Citizenhackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Infrastructure.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using Microsoft.Owin;
-using Newtonsoft.Json;
-using Owin;
-using System;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
-[assembly: OwinStartup(typeof(AIService))]
+namespace CitizenHackathon2025.Infrastructure.Services;
 
-namespace CitizenHackathon2025.Infrastructure.Services
+public class AIService : IAIService
 {
-    public class AIService : IAIService
+    private readonly HttpClient _httpClient;
+    private readonly OpenAIOptions _options;
+    private readonly IOpenWeatherService _weather;
+    private readonly IAIRepository _aiRepository;
+
+    public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather, IAIRepository aiRepository)
     {
-        private const string OpenAIBaseUrl = "https://api.openai.com/v1/";
-        private const string OpenAIChatEndpoint = "chat/completions";
-        private const string OpenAIImageEndpoint = "images/generations";
-        private const string OpenAIKeyHeader = "Authorization";
-        private const string OpenAIKeyHeaderValue = "Bearer {0}";
-        private const string OpenAIContentTypeHeader = "Content-Type";
-        private const string OpenAIContentTypeHeaderValue = "application/json";
-        private const string OpenAIModelKey = "model";
-        private const string OpenAIMessagesKey = "messages";
-        private const string OpenAIImagePromptKey = "prompt";
-        private readonly HttpClient _httpClient;
-        private readonly OpenAIOptions _options;
-        private readonly IOpenWeatherService _weather;
-        private readonly string _apiKey = "sk-xxxxxxx"; // OpenAI key preferably, injected via config
-        private readonly string _model;
-        private readonly IConfiguration _config;
-        private readonly string _endpoint = "https://api.openai.com/v1/chat/completions";
-        private readonly IGptInteractionRepository _gptInteractionRepository;
+        _httpClient = httpClient;
+        _options = options.Value;
+        _weather = weather;
+        _aiRepository = aiRepository;
 
-        public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather, IGptInteractionRepository gptInteractionRepository)
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
+    }
+
+    public string GetModel() => _options.Model;
+
+    private async Task<string> SendChatRequestAsync(string systemPrompt, string userPrompt, double temperature = 0.7)
+    {
+        var requestBody = new
         {
-            _httpClient = httpClient;
-            _options = options.Value;
-            _weather = weather;
-            _gptInteractionRepository = gptInteractionRepository;
-
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
-        }
-
-        public string GetModel() => _options.Model;
-        private async Task<string> SendChatRequestAsync(string systemPrompt, string userPrompt, double temperature = 0.7)
-        {
-            var requestBody = new
+            model = _options.Model,
+            messages = new[]
             {
-                model = _options.Model,
-                messages = new[]
-                {
                 new { role = "system", content = systemPrompt },
                 new { role = "user", content = userPrompt }
             },
-                temperature
-            };
+            temperature
+        };
 
-            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var json = JsonSerializer.Serialize(requestBody);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync(_options.ApiUrl, content);
-            var responseString = await response.Content.ReadAsStringAsync();
+        var response = await _httpClient.PostAsync(_options.ApiUrl, content);
+        var responseString = await response.Content.ReadAsStringAsync();
 
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new Exception($"OpenAI error {response.StatusCode}: {responseString}");
-            }
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"OpenAI error {response.StatusCode}: {responseString}");
 
-            using var doc = JsonDocument.Parse(responseString);
-            return doc.RootElement
-                      .GetProperty("choices")[0]
-                      .GetProperty("message")
-                      .GetProperty("content")
-                      .GetString() ?? "Aucune réponse générée.";
-        }
+        using var doc = JsonDocument.Parse(responseString);
+        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "No response generated.";
+    }
 
-        public Task<string> GetSuggestionsAsync(object content)
-        {
-            var userPrompt = $"You are a tour assistant. Here is some data to analyze :\n{System.Text.Json.JsonSerializer.Serialize(content, new JsonSerializerOptions { WriteIndented = true })}";
-            return SendChatRequestAsync("You are a smart tourist assistant.", userPrompt);
-        }
+    public Task<string> GetSuggestionsAsync(object content)
+    {
+        var userPrompt = $"You are a tour assistant. Analyze this data:\n{JsonSerializer.Serialize(content, new JsonSerializerOptions { WriteIndented = true })}";
+        return SendChatRequestAsync("You are a smart tourist assistant.", userPrompt);
+    }
 
-        public Task<string> GetTouristicSuggestionsAsync(string prompt)
-        {
-            return SendChatRequestAsync("You are a smart tour assistant.", prompt, temperature: 0.2);
-        }
+    public Task<string> GetTouristicSuggestionsAsync(string prompt)
+        => SendChatRequestAsync("You are a smart tour assistant.", prompt, 0.2);
 
-        public Task<string> SummarizeTextAsync(string input)
-        {
-            var prompt = $"Summarize the following text clearly and concisely, in French :\n\n{input}";
-            return SendChatRequestAsync("You are a professional resume assistant.", prompt, temperature: 0.5);
-        }
+    public Task<string> SummarizeTextAsync(string input)
+        => SendChatRequestAsync("You are a professional resume assistant.", $"Summarize this in French:\n\n{input}", 0.5);
 
-        public Task<string> GenerateSuggestionAsync(string prompt)
-        {
-            return SendChatRequestAsync("You are a smart tour assistant.", prompt);
-        }
+    public Task<string> GenerateSuggestionAsync(string prompt)
+        => SendChatRequestAsync("You are a smart tour assistant.", prompt);
 
-        public Task<string> TranslateToFrenchAsync(string englishText)
-        {
-            var prompt = $"Translate into French (natural and professional style) :\n\n{englishText}";
-            return SendChatRequestAsync("You are a professional translator.", prompt, temperature: 0.3);
-        }
+    public Task<string> TranslateToFrenchAsync(string englishText)
+        => SendChatRequestAsync("You are a professional translator.", $"Translate into French (natural and professional style):\n\n{englishText}", 0.3);
 
-        public Task<string> TranslateToDutchAsync(string englishText)
-        {
-            if (string.IsNullOrWhiteSpace(englishText))
-                throw new ArgumentException("Text cannot be empty.", nameof(englishText));
+    public Task<string> TranslateToDutchAsync(string englishText)
+    {
+        if (string.IsNullOrWhiteSpace(englishText))
+            throw new ArgumentException("Text cannot be empty.", nameof(englishText));
 
-            var prompt = $"Translate into Dutch (natural style) :\n\n{englishText}";
-            return SendChatRequestAsync("You are an English-Dutch translator.", prompt, temperature: 0.3);
-       
-            //await Task.Delay(1); // Just to keep it async
-            //return "Mock translation into Dutch.";
-        }
+        return SendChatRequestAsync("You are an English-Dutch translator.", $"Translate into Dutch (natural style):\n\n{englishText}", 0.3);
+    }
 
-        public async Task<string> TranslateToGermanAsync(string englishText)
-        {
-            if (string.IsNullOrWhiteSpace(englishText))
-                throw new ArgumentException("Text cannot be empty", nameof(englishText));
+    public Task<string> TranslateToGermanAsync(string englishText)
+    {
+        if (string.IsNullOrWhiteSpace(englishText))
+            throw new ArgumentException("Text cannot be empty", nameof(englishText));
 
-            var prompt = $"Translate the following English text to German (Deutsch):\n\n{englishText}";
+        return SendChatRequestAsync("You are a helpful assistant that translates English to German.", $"Translate the following to German:\n\n{englishText}", 0.3);
+    }
 
-            var requestBody = new
-            {
-                model = "gpt-4", // or "gpt-3.5-turbo" depending on subscription
-                messages = new[]
-                {
-                    new { role = "system", content = "You are a helpful assistant that translates English to German." },
-                    new { role = "user", content = prompt }
-                },
-                temperature = 0.3
-            };
+    public Task<string> AskChatGptAsync(string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+            throw new ArgumentException("Prompt cannot be empty.", nameof(prompt));
 
-            var requestJson = System.Text.Json.JsonSerializer.Serialize(requestBody);
+        return SendChatRequestAsync("You are a helpful assistant answering general questions.", prompt, 0.5);
+    }
 
-            var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-            request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+    public Task<string> SuggestAlternativeAsync(string prompt)
+        => Task.FromResult($"Suggestion for: {prompt}");
 
-            var response = await _httpClient.SendAsync(request);
+    public async Task<string> SuggestAlternativeWithWeatherAsync(string location)
+    {
+        var weatherInfo = await _weather.GetWeatherSummaryAsync(location);
+        var prompt = $"Offer an activity to do in {location} given this weather: {weatherInfo}";
+        return await SendChatRequestAsync("You are a smart tour assistant.", prompt);
+    }
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                throw new Exception($"OpenAI error: {response.StatusCode} - {errorText}");
-            }
+    public async Task<GPTInteraction?> GetChatGptByIdAsync(int id)
+    {
+        if (id <= 0)
+            throw new ArgumentOutOfRangeException(nameof(id));
 
-            var responseJson = await response.Content.ReadAsStringAsync();
+        return await _aiRepository.GetByIdAsync(id);
+    }
 
-            using var doc = JsonDocument.Parse(responseJson);
-            var translation = doc.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
+    public async Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt) || string.IsNullOrWhiteSpace(reply))
+            throw new ArgumentException("Prompt and reply are required.");
 
-            return translation ?? "No translation generated.";
-        }
+        var interaction = new GPTInteraction { Prompt = prompt, Response = reply, CreatedAt = createdAt, Active = true };
+        await _aiRepository.SaveInteractionAsync(interaction);
+    }
 
-        public async Task<string> SuggestAlternativeAsync(string prompt)
-        {
-            // Fictitious example — adapt according to your GPT, OpenAI, or other engine.
-            return await Task.FromResult($"Suggestion for : {prompt}");
-        }
+    public async Task<GPTInteraction> GetByIdAsync(int id)
+    {
+        if (id <= 0)
+            throw new ArgumentOutOfRangeException(nameof(id));
 
-        public async Task<string> SuggestAlternativeWithWeatherAsync(string location)
-        {
-            var weatherInfo = await _weather.GetWeatherSummaryAsync(location);
-
-            string prompt = $"Offers a pleasant activity to do at {location} with the following weather : {weatherInfo}";
-
-            // Dummy call to GPT (replace with your call to OpenAI or other)
-            return $"[Suggestion AI] HAS {location}, {weatherInfo}, You could: visit a museum, go to the cinema, or explore a covered gallery.";
-        }
-
-        public async Task<string> AskChatGptAsync(string prompt)
-        {
-            if (string.IsNullOrWhiteSpace(prompt))
-                throw new ArgumentException("Prompt cannot be empty.", nameof(prompt));
-
-            try
-            {
-                // Construction of the system prompt
-                string systemPrompt = "You are a helpful assistant answering general purpose user questions.";
-
-                // Call to the OpenAI API
-                var requestBody = new
-                {
-                    model = _options.Model, // or "gpt-4", "gpt-3.5-turbo" depending on your config
-                    messages = new[]
-                    {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = prompt }
-            },
-                    temperature = 0.5
-                };
-
-                var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.PostAsync(_options.ApiUrl, content);
-                var responseString = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"OpenAI API Error: {response.StatusCode} - {responseString}");
-                }
-
-                using var doc = JsonDocument.Parse(responseString);
-                var reply = doc.RootElement
-                                .GetProperty("choices")[0]
-                                .GetProperty("message")
-                                .GetProperty("content")
-                                .GetString() ?? "No response.";
-
-                // Backup to database via repository
-                if (_gptInteractionRepository is not null)
-                {
-                    await _gptInteractionRepository.SaveInteractionAsync(prompt, reply, DateTime.UtcNow);
-                }
-
-                return reply;
-            }
-            catch (Exception ex)
-            {
-                // Logging potentially to be added here
-                return $"Erreur lors de l'appel à GPT : {ex.Message}";
-            }
-        }
-
-        public async Task<GPTInteraction?> GetChatGptByIdAsync(int id)
-        {
-            if (id <= 0)
-                throw new ArgumentOutOfRangeException(nameof(id), "The identifier must be strictly positive.");
-
-            try
-            {
-                var interaction = await _gptInteractionRepository.GetByIdAsync(id);
-                if (interaction == null)
-                {
-                    return null;
-                }
-
-                return interaction;
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException($"Error retrieving GPT interaction with ID {id}.", ex);
-            }
-        }
+        var result = await _aiRepository.GetByIdAsync(id);
+        return result ?? throw new KeyNotFoundException($"No GPT interaction found with ID {id}");
     }
 }
+
 
 
 

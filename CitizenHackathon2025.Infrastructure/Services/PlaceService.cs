@@ -3,8 +3,8 @@ using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -22,6 +22,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             var places = await _placeRepository.GetLatestPlaceAsync();
             return places;
+        }
+        public async Task<Place?> GetPlaceByIdAsync(int id)
+        {
+            return await _placeRepository.GetPlaceByIdAsync(id);
         }
 
         public async Task<Place> SavePlaceAsync(Place place)

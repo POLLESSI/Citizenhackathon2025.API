@@ -6,12 +6,11 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Data.SqlClient;
 using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Numerics;
 using Microsoft.Extensions.Logging;
-using Citizenhackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {
@@ -66,16 +65,16 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
-        public async Task<Place?> GetByIdAsync(int id)
+        public async Task<Place?> GetPlaceByIdAsync(int id)
         {
             try
             {
-                const string sql = "SELECT * FROM Place WHERE Id = @Id AND Active = 1";
+                const string sql = "SELECT Id, Name, Type, Indoor, Latitude, Longitude, Capacity, Tag FROM Place WHERE Id = @Id AND Active = 1";
 
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@id", id, DbType.Int64);
 
-                var place = await _connection.QueryFirstOrDefaultAsync<Place?>(sql, parameters);
+                var place = await _connection.QueryFirstOrDefaultAsync<Place>(sql, parameters);
 
                 return place;
             }

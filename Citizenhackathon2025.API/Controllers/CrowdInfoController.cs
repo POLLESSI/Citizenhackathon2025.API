@@ -6,8 +6,9 @@ using CityzenHackathon2025.API.Tools;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using static Citizenhackathon2025.Application.Extensions.MapperExtensions;
+using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -29,10 +30,6 @@ namespace CitizenHackathon2025.API.Controllers
         {
             var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync();
 
-            if (crowdInfos == null || !crowdInfos.Any())
-                return NotFound("No attendance data found.");
-
-            // Map vers DTO si besoin
             var result = crowdInfos.Select(c => c.MapToCrowdInfoDTO());
 
             return Ok(result);

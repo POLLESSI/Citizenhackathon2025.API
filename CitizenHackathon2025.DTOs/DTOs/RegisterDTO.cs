@@ -1,4 +1,4 @@
-﻿using Citizenhackathon2025.Domain.Enums;
+﻿using CitizenHackathon2025.Domain.Enums;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 

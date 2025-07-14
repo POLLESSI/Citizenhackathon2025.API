@@ -1,12 +1,14 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
-using Citizenhackathon2025.Application.Interfaces;
+﻿using Citizenhackathon2025.Application.Interfaces;
+using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
+using Citizenhackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.DTOs.DTOs;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Application.Extensions;
-using Microsoft.Extensions.Logging;
-using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -14,11 +16,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
     #nullable disable
         private readonly IWeatherForecastRepository _weatherRepository;
+        private readonly IHubContext<WeatherHub> _hubContext;
         private readonly Random _rng = new();
 
-        public WeatherForecastService(IWeatherForecastRepository weatherRepository)
+        public WeatherForecastService(IWeatherForecastRepository weatherRepository, IHubContext<WeatherHub> hubContext)
         {
             _weatherRepository = weatherRepository;
+            _hubContext = hubContext;
         }
 
         public Task AddAsync(WeatherForecastDTO weatherForecast)
@@ -46,10 +50,48 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var saved = await _weatherRepository.SaveWeatherForecastAsync(entity);
             return saved.MapToWeatherForecastDTO();
         }
+        public async Task<List<WeatherForecastDTO>> GetAllAsync()
+        {
+            var entities = await _weatherRepository.GetAllAsync();
+            return entities.Select(e => new WeatherForecastDTO
+            {
+                Id = e.Id,
+                DateWeather = e.DateWeather,
+                Summary = e.Summary,
+                TemperatureC = e.TemperatureC,
+                Humidity = e.Humidity,
+                RainfallMm = e.RainfallMm,
+                WindSpeedKmh = e.WindSpeedKmh
+            }).ToList();
+        }
         public Task<List<WeatherForecastDTO>> GetAllAsync(WeatherForecast forecast)
         {
-            throw new NotImplementedException();
+            throw new NotImplementedException(); 
         }
+        public async Task<WeatherForecastDTO?> GetByIdAsync(int id)
+        {
+            var entity = await _weatherRepository.GetByIdAsync(id);
+            if (entity == null)
+                return null;
+
+            var weatherDto = entity.MapToWeatherForecastDTO();
+            //var trafficDto = entity.MapToTrafficConditionDTO(); // to implement
+            //var crowdDto = entity.MapToCrowdInfoDTO();          // to implement
+            //var suggestionDto = entity.MapToSuggestionDTO();    // to implement
+
+            var payload = new
+            {
+                Weather = weatherDto,
+                //Traffic = trafficDto,
+                //Crowd = crowdDto,
+                //Suggestion = suggestionDto
+            };
+
+            await _hubContext.Clients.All.SendAsync("WeatherUpdate", payload);
+
+            return weatherDto;
+        }
+
 
         public async Task<IEnumerable<WeatherForecastDTO>> GetLatestWeatherForecastAsync()
         {
@@ -81,7 +123,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
             throw new NotImplementedException();
         }
 
-        
+        public Task<WeatherForecastDTO> GetForecastAsync(string destination)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 ﻿
-namespace Citizenhackathon2025.Domain.Enums
+namespace CitizenHackathon2025.Domain.Enums
 {
     public enum RequestStatus
     {

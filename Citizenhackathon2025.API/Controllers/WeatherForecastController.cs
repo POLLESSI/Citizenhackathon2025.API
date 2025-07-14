@@ -6,6 +6,7 @@ using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.WeatherForecasts.Queries;
 using CitizenHackathon2025.DTOs.DTOs;
 using CityzenHackathon2025.API.Tools;
 using MediatR;
@@ -84,6 +85,31 @@ namespace Citizenhackathon2025.API.Controllers
             await _hubContext.Clients.All.SendAsync("ExternalWeatherUpdate", weatherDto);
 
             return Ok(weatherDto);
+        }
+        // Get by ID
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<WeatherForecastDTO>> GetById(int id)
+        {
+            if (id <= 0)
+                return BadRequest("ID must be greater than 0.");
+
+            var forecast = await _mediator.Send(new GetWeatherForecastByIdQuery(id)); // via CQRS
+            if (forecast == null)
+                return NotFound($"Weather forecast with ID {id} not found.");
+
+            return Ok(forecast);
+        }
+
+        // Get all
+        [HttpGet("all")]
+        public async Task<ActionResult<List<WeatherForecastDTO>>> GetAllForecasts()
+        {
+            var forecasts = await _mediator.Send(new GetAllWeatherForecastsQuery());
+
+            if (forecasts == null || !forecasts.Any())
+                return NotFound("No weather forecasts available.");
+
+            return Ok(forecasts);
         }
     }
 }

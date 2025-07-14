@@ -1,7 +1,7 @@
-﻿using Citizenhackathon2025.Application.Extensions;
-using Citizenhackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Domain.Enums;
+using CitizenHackathon2025.Domain.Enums;
 using Citizenhackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Utils;
@@ -14,6 +14,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using CitizenHackathon2025.DTOs.DTOs;
+using Citizenhackathon2025.Application.Interfaces;
 
 namespace CitizenHackathon2025.API.Controllers
 {

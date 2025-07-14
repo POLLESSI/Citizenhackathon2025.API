@@ -8,6 +8,10 @@
         public string Longitude { get; set; }
         public string CrowdLevel { get; set; }
         public DateTime Timestamp { get; set; }
+
+        public string Area { get; set; }
+        public string Icon { get; set; }
+        public string Color { get; set; } = string.Empty;
     }
 }
 

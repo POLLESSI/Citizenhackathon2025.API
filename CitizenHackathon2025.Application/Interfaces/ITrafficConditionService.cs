@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.TrafficCondition;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Entities.ValueObjects;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace Citizenhackathon2025.Application.Interfaces
 {
@@ -12,8 +8,12 @@ namespace Citizenhackathon2025.Application.Interfaces
     {
 #nullable disable
         Task<IEnumerable<TrafficCondition?>> GetLatestTrafficConditionAsync();
+        Task<TrafficCondition?> GetByIdAsync(int id);
         Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition @trafficCondition);
         TrafficCondition? UpdateTrafficCondition(TrafficCondition @trafficCondition);
+        Task<TrafficDTO> CheckRoadAsync(Location from, string to);
+        Task CheckRoadAsync(CitizenHackathon2025.Domain.ValueObjects.Location userPosition, string destination);
+        Task<TrafficAnalysisResult> CheckRoadAsync(string from, string to);
     }
 }
 

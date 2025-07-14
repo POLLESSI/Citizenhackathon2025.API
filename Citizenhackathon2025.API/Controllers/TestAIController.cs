@@ -1,5 +1,5 @@
 ﻿using Citizenhackathon2025.Hubs.Hubs;
-using Citizenhackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.API.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

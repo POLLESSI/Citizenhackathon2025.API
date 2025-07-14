@@ -1,8 +1,8 @@
-﻿namespace Citizenhackathon2025.Domain.Entities
+﻿namespace CitizenHackathon2025.Domain.Entities
 {
     public class Suggestion
     {
-#nullable disable
+    #nullable disable
         public int Id { get; set; }
         public int User_Id { get; set; }
         public DateTime DateSuggestion { get; set; }
@@ -11,6 +11,12 @@
         public string? Reason { get; set; }
         public bool Active { get; set; }
         public DateTime? DateDeleted { get; set; }
+
+        // Links to external entities
+        public int? EventId { get; set; }
+        public int? ForecastId { get; set; }
+        public int? TrafficId { get; set; }
+        public string? LocationName { get; set; }
     }
 }
 

@@ -1,11 +1,11 @@
 ﻿using Dapper;
 using System.Data.SqlClient;
-using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Entities;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using IDbConnection = System.Data.IDbConnection;
+using Citizenhackathon2025.Domain.Interfaces;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {

@@ -1,5 +1,5 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Extensions;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories.Providers.Hubs

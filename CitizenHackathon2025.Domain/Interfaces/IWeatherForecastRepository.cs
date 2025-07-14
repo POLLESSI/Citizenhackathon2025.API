@@ -15,6 +15,7 @@ namespace Citizenhackathon2025.Domain.Interfaces
         Task<WeatherForecast> SaveWeatherForecastAsync(WeatherForecast forecast);
         Task<WeatherForecast> GenerateNewForecastAsync();
         Task<List<WeatherForecast>> GetHistoryAsync(int limit = 128);
+        Task<WeatherForecast?> GetByIdAsync(int id);
         Task<List<WeatherForecast>> GetAllAsync();
         //WeatetherForecast? UpdateWeatherForecast(WeatherForecast weatherForecast);
     }

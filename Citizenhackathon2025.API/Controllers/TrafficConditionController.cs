@@ -1,8 +1,8 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -52,10 +52,27 @@ namespace CitizenHackathon2025.API.Controllers
             await _hubContext.Clients.All.SendAsync("NewTrafficCondition", saved);
             return Ok(saved);
         }
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetTrafficConditionById(int id)
+        {
+            var trafficCondition = await _trafficConditionRepository.GetByIdAsync(id);
+            if (trafficCondition == null || !trafficCondition.Active)
+            {
+                return NotFound($"TrafficCondition with ID {id} not found or inactive.");
+            }
+
+            return Ok(trafficCondition);
+        }
         [HttpGet("test-di")]
         public IActionResult TestDi()
         {
             return Ok(_trafficApiService.GetType().Name); // Must display "TrafficApiService"
+        }
+        [HttpGet("test-getbyid/{id}")]
+        public async Task<IActionResult> TestGetById([FromServices] ITrafficConditionService service, int id)
+        {
+            var tc = await service.GetByIdAsync(id);
+            return tc == null ? NotFound() : Ok(tc);
         }
         [HttpPost]
         public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficCondition @trafficCondition)

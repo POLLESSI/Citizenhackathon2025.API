@@ -1,6 +1,4 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.User;
-
+﻿using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Domain.Interfaces
 {

@@ -1,4 +1,5 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Domain.Interfaces
 {

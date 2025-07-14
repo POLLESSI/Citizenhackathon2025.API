@@ -1,13 +1,14 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Domain.Interfaces;
+﻿using Citizenhackathon2025.Domain.Interfaces;
 using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {
     public class CrowdInfoRepository : ICrowdInfoRepository
     {
+    #nullable disable
         private readonly System.Data.IDbConnection _dbConnection;
 
         public CrowdInfoRepository(System.Data.IDbConnection dbConnection)

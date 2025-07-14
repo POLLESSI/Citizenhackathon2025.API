@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Diagnostics;
+﻿using CitizenHackathon2025.DTOs.DTOs;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace Citizenhackathon2025.Hubs.Hubs
 {
@@ -21,6 +22,11 @@ namespace Citizenhackathon2025.Hubs.Hubs
         {
             _logger.LogInformation("NotifyNewSuggestion called");
             await Clients.All.SendAsync("NewSuggestion");
+        }
+        public async Task SendSuggestion(SuggestionDTO suggestion)
+        {
+            _logger.LogInformation("Sending Suggestion to clients: {@Suggestion}", suggestion);
+            await Clients.All.SendAsync("ReceiveSuggestion", suggestion);
         }
     }
 }

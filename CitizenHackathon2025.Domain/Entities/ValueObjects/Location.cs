@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Citizenhackathon2025.Domain.Entities.ValueObjects
+namespace CitizenHackathon2025.Domain.Entities.ValueObjects
 {
     /// <summary>
     /// Represents a geolocation by latitude and longitude.

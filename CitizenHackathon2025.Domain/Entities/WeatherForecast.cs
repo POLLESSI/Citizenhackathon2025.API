@@ -13,6 +13,7 @@ namespace Citizenhackathon2025.Domain.Entities
         public double RainfallMm { get; set; }
         public int Humidity { get; set; }
         public double WindSpeedKmh { get; set; }
+        public bool Active { get; private set; } = true;
     }
     // DEPRECATED: Migrer to WeatherForecast DDD
     //[Obsolete("Use the DDD-based WeatherForecast entity instead.")]

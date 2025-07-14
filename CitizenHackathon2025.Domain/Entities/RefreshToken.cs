@@ -1,9 +1,10 @@
 ﻿using System;
 
-namespace Citizenhackathon2025.Domain.Entities
+namespace CitizenHackathon2025.Domain.Entities
 {
     public class RefreshToken
     {
+    #nullable disable
         public Guid Id { get; set; } = Guid.NewGuid();
         public string Token { get; set; }
         public string Email { get; set; }

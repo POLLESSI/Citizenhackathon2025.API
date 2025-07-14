@@ -8,6 +8,8 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Data.Common;
+using CitizenHackathon2025.Domain.DTOs;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {
@@ -140,6 +142,56 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         }
 
         public Task<GPTInteraction?> GetByIdAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<IEnumerable<Suggestion>> GetSuggestionsByPlaceCrowdAsync(string placeName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync(string? typeFilter = null, bool? indoorFilter = null, DateTime? sinceDate = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<bool> DeactivateInteractionAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        Task<IEnumerable<Suggestion>> IGPTRepository.GetAllSuggestionsAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        Task<IEnumerable<Suggestion>> IGPTRepository.GetSuggestionsByEventIdAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        Task<IEnumerable<Suggestion>> IGPTRepository.GetSuggestionsByForecastIdAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        Task<IEnumerable<Suggestion>> IGPTRepository.GetSuggestionsByTrafficIdAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        Task<IEnumerable<GPTInteraction>> IGPTRepository.GetAllInteractionsAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        Task<IEnumerable<Suggestion>> IGPTRepository.GetSuggestionsByPlaceCrowdAsync(string placeName)
+        {
+            throw new NotImplementedException();
+        }
+
+        Task<GPTInteraction?> IGPTRepository.GetByIdAsync(int id)
         {
             throw new NotImplementedException();
         }

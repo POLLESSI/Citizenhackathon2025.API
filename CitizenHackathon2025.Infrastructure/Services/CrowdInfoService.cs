@@ -1,6 +1,7 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
@@ -42,6 +43,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             return crowdInfo;
+        }
+
+        public Task<CrowdLevelDTO> GetCrowdLevelAsync(string destination)
+        {
+            throw new NotImplementedException();
         }
 
         public async Task<CrowdInfo> SaveCrowdInfoAsync(CrowdInfo crowdInfo)

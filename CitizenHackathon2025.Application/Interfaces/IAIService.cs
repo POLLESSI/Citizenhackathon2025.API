@@ -1,9 +1,6 @@
-﻿using System;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.GPTInteraction;
+﻿using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IAIService
     {
@@ -24,7 +21,8 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<string> TranslateToGermanAsync(string englishText);
         Task<string> SuggestAlternativeAsync(string prompt);
         Task<string> SuggestAlternativeWithWeatherAsync(string location);
-
+        Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt);
+        Task<GPTInteraction?> GetByIdAsync(int id);
     }
 }
 

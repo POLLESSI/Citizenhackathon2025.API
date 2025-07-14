@@ -1,6 +1,6 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
@@ -22,6 +22,24 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             var suggestions = await _suggestionRepository.GetLatestSuggestionAsync();
             return suggestions;
+        }
+        public async Task<Suggestion?> GetByIdAsync(int id)
+        {
+            try
+            {
+                var suggestion = await _suggestionRepository.GetByIdAsync(id);
+                if (suggestion == null || !suggestion.Active)
+                {
+                    Console.WriteLine($"Suggestion with ID {id} not found or inactive.");
+                    return null;
+                }
+                return suggestion;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error retrieving suggestion by ID {id}: {ex.Message}");
+                return null;
+            }
         }
 
         public async Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion)

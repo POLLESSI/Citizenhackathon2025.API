@@ -1,5 +1,6 @@
 ﻿using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,26 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 Console.WriteLine($"Error retrieving latest suggestions: {ex.Message}");
                 return new List<Suggestion>();
             }
+        }
+        public async Task<Suggestion?> GetByIdAsync(int id)
+        {
+            try
+            {
+                const string sql = "SELECT Id, User_Id, DateSuggestion, OriginalPlace, SugestedAlternatives, Reason FROM Suggestions WHERE Id = @Id AND Active = 1";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", id, DbType.Int64);
+
+                var suggestion = await _connection.QueryFirstOrDefaultAsync<Suggestion>(sql, parameters);
+
+                return suggestion;
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine($"Error getting Suggestion : {ex.ToString}");
+                return null;
+            }
+            
         }
 
         public async Task<IEnumerable<Suggestion?>> GetSuggestionsByUserAsync(int userId)
@@ -80,28 +101,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
-        public async Task<Suggestion?> GetByIdAsync(int id)
-        {
-            try
-            {
-                const string sql = "SELECT * FROM Suggestion WHERE Id = @Id AND Active = 1";
-
-                DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@id", id, DbType.Int64);
-
-                var suggestion = await _connection.QueryFirstOrDefaultAsync<Suggestion?>(sql, parameters);
-
-                return suggestion;
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine($"Error geting Suggestion : {ex.ToString}");
-                return null;
-            }
-
-        }
-
+        
         public Suggestion UpdateSuggestion(Suggestion suggestion)
         {
             if (suggestion == null || suggestion.Id <= 0)

@@ -1,5 +1,4 @@
-﻿
-namespace Citizenhackathon2025.Domain.Enums
+﻿namespace CitizenHackathon2025.Domain.Enums
 {
     // <summary>
     /// Represents types of weather conditions.

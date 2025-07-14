@@ -1,6 +1,6 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Domain.Interfaces;
+﻿using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -24,8 +24,18 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatestPlace()
         {
-            var places = await _placeRepository.GetLatestPlaceAsync(); // 👈 appel correct
+            var places = await _placeRepository.GetLatestPlaceAsync(); // 👈 correct call
             return Ok(places);
+        }
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetPlaceById(int id)
+        {
+            var place = await _placeRepository.GetPlaceByIdAsync(id); // direct call to the repo
+
+            if (place == null)
+                return NotFound($"Place with ID {id} not found.");
+
+            return Ok(place);
         }
         [HttpPost]
         public async Task<IActionResult> SavePlace([FromBody] PlaceDTO dto)
@@ -45,12 +55,12 @@ namespace CitizenHackathon2025.API.Controllers
                 //Active = true 
             };
 
-            var savedPlace = await _placeRepository.SavePlaceAsync(place); // 👈 correction du paramètre
+            var savedPlace = await _placeRepository.SavePlaceAsync(place); // 👈 parameter correction
 
             if (savedPlace == null)
                 return StatusCode(500, "Registration Error");
 
-            // ✅ Diffusion en temps réel
+            // ✅ Real-time broadcasting
             await _hubContext.Clients.All.SendAsync("NewPlace", savedPlace);
 
             return Ok(savedPlace);

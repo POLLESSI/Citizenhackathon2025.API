@@ -1,6 +1,6 @@
 ﻿using Volo.Abp.Domain.Entities;
 
-namespace Citizenhackathon2025.Domain.Entities.ValueObjects
+namespace CitizenHackathon2025.Domain.Entities.ValueObjects
 {
     public class WeatherForecast : AggregateRoot<Guid>
     {

@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
-using Citizenhackathon2025.Application.Interfaces;
+﻿using Citizenhackathon2025.Application.Interfaces;
 using Citizenhackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.DTOs;
+using CitizenHackathon2025.Domain.Entities;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -55,6 +56,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
 
         public Task<Suggestion?> GetSuggestionByIdAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+        public async Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetRecommendationsForSwimmingAreasAsync()
+        {
+            DateTime fromLast24h = DateTime.UtcNow.AddHours(-24);
+            return await _gptRepository.GetSuggestionsGroupedByPlaceAsync("Swimming area", indoorFilter: false, sinceDate: fromLast24h);
+        }
+
+        public Task<string> GenerateSuggestionAsync(string prompt)
         {
             throw new NotImplementedException();
         }

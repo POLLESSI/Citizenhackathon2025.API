@@ -2,10 +2,10 @@
 using Dapper;
 using System.Data.SqlClient;
 using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Infrastructure.Repositories
 {
@@ -36,7 +36,24 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 return [];
             }
         }
+        public async Task<TrafficCondition?> GetByIdAsync(int id)
+        {
+            try
+            {
+                const string sql = "SELECT Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType FROM TrafficConditions WHERE Id = @Id AND Active = 1";
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@Id", id, DbType.Int64);
 
+                var trafficCondition = await _connection.QueryFirstOrDefaultAsync<TrafficCondition>(sql, parameters);
+                return trafficCondition;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting Traffic Condition by Id: {ex.ToString}");
+                return null;
+            }
+           
+        }
         public async Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition trafficCondition)
         {
             try
@@ -65,28 +82,6 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
-        public async Task<Event?> GetByIdAsync(int id)
-        {
-            try
-            {
-                const string sql = "SELECT * FROM TrafficCondition WHERE Id = @Id AND Active = 1";
-
-                DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@id", id, DbType.Int64);
-
-                var trafficCondition = await _connection.QueryFirstOrDefaultAsync<TrafficCondition?>(sql, parameters);
-
-                return null;
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine($"Error geting Traffic Condition : {ex.ToString}");
-                return null;
-            }
-
-        }
-
         public TrafficCondition UpdateTrafficCondition(TrafficCondition trafficCondition)
         {
             if (trafficCondition == null || trafficCondition.Id <= 0)

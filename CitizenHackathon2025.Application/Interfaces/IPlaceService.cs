@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.Place;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Application.Interfaces
 {
@@ -12,6 +12,7 @@ namespace Citizenhackathon2025.Application.Interfaces
     {
 #nullable disable
         Task<IEnumerable<Place?>> GetLatestPlaceAsync();
+        Task<Place?> GetPlaceByIdAsync(int id);
         Task<Place> SavePlaceAsync(Place @place);
         Place? UpdatePlace(Place @place);
     }

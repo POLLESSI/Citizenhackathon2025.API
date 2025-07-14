@@ -1,5 +1,5 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Infrastructure.Repositories;
@@ -29,6 +29,7 @@ namespace CitizenHackathon2025.API.Controllers
             var interactions = await _gptRepository.GetAllInteractionsAsync();
             return Ok(interactions);
         }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
@@ -38,18 +39,23 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(interaction);
         }
+
         /// <summary>
         /// Sends a query to the AI ​​and returns an intelligent response.
         /// The response is also broadcast via SignalR to all connected clients.
         /// </summary>
         /// <param name="prompt">The text sent by the user.</param>
         /// <returns>An AI-generated response (simulated here).</returns>
+        /// 
         [HttpPost("ask")]
         public async Task<IActionResult> Ask([FromBody] string question)
         {
             var response = await _gptRepository.AskAsync(question);
             return Ok(response);
+
+            
         }
+
         [HttpPost("ask-gpt")]
         public async Task<IActionResult> AskGpt([FromBody] GptPrompt prompt)
         {
@@ -77,28 +83,34 @@ namespace CitizenHackathon2025.API.Controllers
                 response = interaction.Response,
                 createdAt = interaction.CreatedAt
             });
+            var groupedSuggestions = await _gptRepository.GetSuggestionsGroupedByPlaceAsync(typeFilter: "Swimming area", indoorFilter: false, sinceDate: DateTime.UtcNow.AddDays(-1));
 
             return Ok(new
             {
                 prompt = interaction.Prompt,
-                response = interaction.Response
+                response = interaction.Response,
+                createdAt = interaction.CreatedAt,
+                groupedSuggestions
             });
         }
+
         [HttpGet("test-gpt")]
         public async Task<IActionResult> TestGPT([FromServices] IAIService aiService)
         {
             var result = await aiService.AskChatGptAsync("Give me 3 ideas for activities on a rainy day in Han-Sur-Lesse.");
             return Ok(result);
         }
-        //[HttpDelete("{id}")]
-        //public async Task<IActionResult> Delete(int id)
-        //{
-        //    var success = await _gptRepository.DeactivateInteractionAsync(id);
-        //    if (!success)
-        //        return NotFound($"No active GPT interaction with ID {id} found.");
 
-        //    return Ok(new { message = "Interaction deactivated successfully." });
-        //}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var success = await _gptRepository.DeactivateInteractionAsync(id);
+            if (!success)
+                return NotFound($"No active GPT interaction with ID {id} found.");
+
+            return Ok(new { message = "Interaction deactivated successfully." });
+        }
+
         [HttpPost("replay/{id}")]
         public async Task<IActionResult> ReplayInteraction(int id)
         {
@@ -119,7 +131,6 @@ namespace CitizenHackathon2025.API.Controllers
                 interaction = interaction
             });
         }
-
     }
 }
 

@@ -3,7 +3,7 @@ using Citizenhackathon2025.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
 using Citizenhackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Extensions;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {

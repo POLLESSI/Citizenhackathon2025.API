@@ -1,7 +1,7 @@
 ﻿
 using MediatR;
 using Citizenhackathon2025.Application.CQRS.Queries;
-using static Citizenhackathon2025.Application.Extensions.MapperExtensions;
+using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;

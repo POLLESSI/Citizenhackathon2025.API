@@ -1,5 +1,4 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.GPTInteraction;
+﻿using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Domain.Interfaces
 {
@@ -21,5 +20,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<string> TranslateToGermanAsync(string englishText);
         Task<string> SuggestAlternativeAsync(string prompt);
         Task<string> SuggestAlternativeWithWeatherAsync(string location);
+        Task SaveInteractionAsync(GPTInteraction interaction);
+        Task<GPTInteraction?> GetByIdAsync(int id);
     }
 }

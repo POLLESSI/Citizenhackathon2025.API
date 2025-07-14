@@ -7,6 +7,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
 {
     public class WeatherForecastDTO
     {
+    #nullable disable
         public int Id { get; set; }
         public DateTime DateWeather { get; set; }
 
@@ -49,6 +50,8 @@ namespace CitizenHackathon2025.DTOs.DTOs
 
         public string IconUrl { get; set; } = ""; // ex: https://openweathermap.org/img/wn/{icon}.png
         public string WeatherMain { get; set; } = "";
+        public bool IsSevere { get; set; }
+        public string Description { get; set; }
     }
 }
 

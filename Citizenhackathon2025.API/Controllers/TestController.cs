@@ -21,7 +21,7 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpGet("suggestion")]
         public async Task<IActionResult> GetSuggestion()
         {
-            var result = await _service.GetPersonalizedSuggestionsAsync("Paris", 1);
+            var result = await _service.GetPersonalizedSuggestionsAsync("Brusssels", 1);
             return Ok(result);
         }
         [HttpGet("test-hash")]

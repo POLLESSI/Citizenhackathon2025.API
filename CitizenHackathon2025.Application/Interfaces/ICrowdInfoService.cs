@@ -1,4 +1,5 @@
-﻿using Citizenhackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace Citizenhackathon2025.Application.Interfaces
 {
@@ -9,6 +10,7 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id);
         Task<bool> DeleteCrowdInfoAsync(int id);
         CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo);
+        Task<CrowdLevelDTO> GetCrowdLevelAsync(string destination);
     }
 }
 

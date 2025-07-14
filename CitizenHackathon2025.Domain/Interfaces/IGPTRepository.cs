@@ -1,7 +1,9 @@
 ﻿using System.Threading.Tasks;
 using System.Collections.Generic;
 using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.Suggestion;
+using static CitizenHackathon2025.Domain.Entities.Suggestion;
+using CitizenHackathon2025.Domain.DTOs;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace Citizenhackathon2025.Domain.Interfaces
 {
@@ -46,7 +48,16 @@ namespace Citizenhackathon2025.Domain.Interfaces
         Task<string> AskAsync(string question);
         Task SaveInteractionAsync(GPTInteraction interaction);
         Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync();
+        Task<IEnumerable<Suggestion>> GetSuggestionsByPlaceCrowdAsync(string placeName);
+        public Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync(string? typeFilter = null, bool? indoorFilter = null, DateTime? sinceDate = null);
         Task<GPTInteraction?> GetByIdAsync(int id);
+
+        /// <summary>
+        /// Deactivates a GPT interaction (logical delete).
+        /// </summary>
+        /// <param name="id">The ID of the interaction to deactivate.</param>
+        /// <returns>True if the deactivation succeeded, false otherwise.</returns>
+        Task<bool> DeactivateInteractionAsync(int id);
     }
 }
 

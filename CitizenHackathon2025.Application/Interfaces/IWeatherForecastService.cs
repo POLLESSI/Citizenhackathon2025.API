@@ -17,9 +17,12 @@ namespace Citizenhackathon2025.Application.Interfaces
         Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO @weatherForecast);
         Task<WeatherForecastDTO> GenerateNewForecastAsync();
         Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit = 128);
+        Task<WeatherForecastDTO?> GetByIdAsync(int id);
+        Task<List<WeatherForecastDTO>> GetAllAsync();
         Task<List<WeatherForecastDTO>> GetAllAsync(Domain.Entities.WeatherForecast forecast);
         Task SendWeatherToAllClientsAsync();
         //WeatherForecastDTO? UpdateWeatherForecast(WeatherForecastDTO weatherForecast);
+        Task<WeatherForecastDTO> GetForecastAsync(string destination);
     }
 }
 

@@ -1,8 +1,8 @@
-﻿namespace Citizenhackathon2025.Domain.Entities
+﻿namespace CitizenHackathon2025.Domain.Entities
 {
     public class Event
     {
-#nullable disable
+    #nullable disable
         public int Id { get; set; }
         public string Name { get; set; }
         public double Latitude { get; set; }

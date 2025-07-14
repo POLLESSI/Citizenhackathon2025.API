@@ -1,5 +1,5 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Http;
@@ -38,6 +38,16 @@ namespace CitizenHackathon2025.API.Controllers
         {
             var suggestions = await _suggestionRepository.GetLatestSuggestionAsync();
             return Ok(suggestions);
+        }
+        // GET: api/Suggestion/5
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetSuggestionById(int id)
+        {
+            var result = await _mediator.Send(new GetSuggestionByIdQuery(id));
+            if (result == null || !result.Active)
+                return NotFound($"No active suggestion found for ID {id}");
+
+            return Ok(result);
         }
 
         // GET: api/Suggestion/user/5
@@ -130,6 +140,12 @@ namespace CitizenHackathon2025.API.Controllers
             await _hubContext.Clients.All.SendAsync("NewSuggestion", savedSuggestion);
 
             return Ok(new { Suggestion = savedSuggestion });
+        }
+        [HttpPost("suggestion")]
+        public async Task<ActionResult<SuggestionDTO>> GetSuggestion([FromBody] SuggestAlternativeCommand command)
+        {
+            var result = await _mediator.Send(command);
+            return Ok(result);
         }
         // ✅ POST text summary
         [HttpPost("summarize")]

@@ -1,7 +1,6 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.User;
-using Citizenhackathon2025.Domain.Enums;
-using CitizenHackathon2025.DTOs.DTOs;
+﻿using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Enums;
 
 namespace Citizenhackathon2025.Application.Interfaces
 {

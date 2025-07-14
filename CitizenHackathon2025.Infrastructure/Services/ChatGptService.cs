@@ -1,5 +1,6 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -151,6 +152,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
 
         public Task<GPTInteraction> GetChatGptByIdAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<GPTInteraction> GetByIdAsync(int id)
         {
             throw new NotImplementedException();
         }
