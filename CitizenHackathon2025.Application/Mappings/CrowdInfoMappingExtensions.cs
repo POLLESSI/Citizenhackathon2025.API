@@ -1,7 +1,16 @@
-﻿namespace CitizenHackathon2025.Application.Mappings
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Application.Extensions;
+
+namespace CitizenHackathon2025.Application.Mappings
 {
-    public class CrowdInfoMappingExtensions
+    public static class CrowdInfoMappingExtensions
     {
+        public static CrowdInfoDTO ToDTO(this CrowdInfo entity) => entity.MapToCrowdInfoDTO();
+
+        public static CrowdInfo ToEntity(this CrowdInfoDTO dto) => dto.MapToCrowdInfo();
+
+        public static CrowdInfoDTO WithTimestamp(this CrowdInfoDTO dto) => dto.MapToCrowdInfoWithTimestamp();
     }
 }
 

@@ -1,7 +1,12 @@
-﻿namespace CitizenHackathon2025.Application.Mappings
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Application.Extensions;
+
+namespace CitizenHackathon2025.Application.Mappings
 {
-    public class TrafficConditionMappingExtensions
+    public static class TrafficConditionMappingExtensions
     {
+        public static TrafficConditionDTO ToDTO(this TrafficCondition entity) => entity.MapToTrafficConditionDTO();
     }
 }
 
