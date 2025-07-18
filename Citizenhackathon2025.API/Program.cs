@@ -57,6 +57,7 @@ using Polly.Wrap;
 using Serilog;
 using System.Data;
 using System.Data.SqlClient;
+using System.Net.Http.Headers;
 using System.Text;
 
 internal class Program
@@ -316,10 +317,10 @@ internal class Program
         {
             options.AddPolicy("AllowAnyOrigin", policy =>
             {
-                policy.AllowAnyOrigin()
+                policy.WithOrigins(/*"https://localhost:7254",*/ "https://localhost:7051")
                       .AllowAnyMethod()
                       .AllowAnyHeader()
-                      /*.WithOrigins("https://monsite.com")*/;
+                      .AllowCredentials();
             });
         });
 
@@ -334,7 +335,6 @@ internal class Program
             o.AddPolicy("User", policy => policy.RequireClaim("role", "user"));
         });
 
-        // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
@@ -362,6 +362,12 @@ internal class Program
         });
 
         builder.Services.AddHttpClient<ChatGptService>();
+
+        services.AddHttpClient<GptExternalService>(client =>
+        {
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", "sk-xxxxxxxxxxxxxxxx");
+        });
 
         var app = builder.Build();
 

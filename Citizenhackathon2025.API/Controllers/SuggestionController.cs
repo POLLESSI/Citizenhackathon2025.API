@@ -1,15 +1,16 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Entities;
-using Citizenhackathon2025.Domain.Interfaces;
+﻿using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Application.CQRS.Commands;
+using CitizenHackathon2025.Application.CQRS.Queries;
+using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Suggestions.Commands;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
+using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.SqlServer.Dac.Model;
-using MediatR;
-using CitizenHackathon2025.Application.CQRS.Queries;
-using CitizenHackathon2025.Application.CQRS.Commands;
-using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -114,8 +115,14 @@ namespace CitizenHackathon2025.API.Controllers
             var saved = await _suggestionRepository.SaveSuggestionAsync(entity);
             return Ok(saved);
         }
-        // ✅ POST AI generation + recording + SignalR
         [HttpPost("generate")]
+        public async Task<IActionResult> Generate([FromBody] SuggestionContextDTO context)
+        {
+            var suggestion = await _mediator.Send(new GenerateSmartSuggestionCommand(context));
+            return Ok(suggestion);
+        }
+        // ✅ POST AI generation + recording + SignalR
+        [HttpPost("generate/weather")]
         public async Task<IActionResult> GenerateSuggestion([FromBody] WeatherForecastSuggestionDTO forecastDto)
         {
             var prompt = $"He does {forecastDto.TemperatureC}°C with {forecastDto.Humidity}% humidity to {forecastDto.Location}. " +
