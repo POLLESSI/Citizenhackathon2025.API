@@ -4,6 +4,7 @@ using CitizenHackathon2025.Application.CQRS.Commands;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Suggestions.Commands;
+using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 using MediatR;

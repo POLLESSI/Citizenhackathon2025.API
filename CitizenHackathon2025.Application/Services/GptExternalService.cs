@@ -1,6 +1,6 @@
 ﻿using System.Net.Http.Json;
 
-namespace CitizenHackathon2025.Infrastructure.Services
+namespace CitizenHackathon2025.Application.Services
 {
     public class GptExternalService
     {

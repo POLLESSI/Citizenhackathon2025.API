@@ -23,6 +23,7 @@ using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.Domain.Interfaces;
@@ -174,6 +175,7 @@ internal class Program
         builder.Services.AddScoped<IUserHubService, UserHubService>();
         builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
         // ========== REPOSITORIES ==========
+        services.AddScoped<IAggregateSuggestionService, AstroIAService>();
         builder.Services.AddScoped<IAIRepository, AIRepository>();
         builder.Services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
         builder.Services.AddScoped<IEventRepository, EventRepository>();
@@ -245,6 +247,13 @@ internal class Program
         builder.Services.AddScoped<WeatherSuggestionOrchestrator>();
         builder.Services.AddHttpClient<OpenWeatherMapClient>();
         builder.Services.AddHttpClient<IOpenWeatherService, OpenWeatherService>();
+        builder.Services.AddHttpClient<GptExternalService>(client =>
+        {
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "TA_CLE_OPENAI");
+        });
+
+        builder.Services.AddScoped<AstroIAService>();
+        builder.Services.AddScoped<GptExternalService>();
         builder.Services.AddHttpClient<ITrafficApiService, TrafficAPIService>(client =>
         {
             client.BaseAddress = new Uri("https://api.waze.com/...");

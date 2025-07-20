@@ -1,7 +1,7 @@
-﻿using CitizenHackathon2025.Shared.Enums;
+﻿using CitizenHackathon2025.DTOs.Enums;
 using System.Text;
 
-namespace CitizenHackathon2025.DTOs.DTOs
+namespace CitizenHackathon2025.Domain.DTOs
 {
     /// <summary>
     /// Contains the context to generate an OutZen smart suggestion.

@@ -1,6 +1,7 @@
 ﻿using CitizenHackathon2025.Application.Suggestions.Commands;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using CitizenHackathon2025.Application.Services;
 
 namespace CitizenHackathon2025.Application.Suggestions.Handlers
 {

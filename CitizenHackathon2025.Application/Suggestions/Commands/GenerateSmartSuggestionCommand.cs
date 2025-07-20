@@ -1,4 +1,5 @@
-﻿using MediatR;
+﻿using CitizenHackathon2025.Domain.DTOs;
+using MediatR;
 
 namespace CitizenHackathon2025.Application.Suggestions.Commands
 {
