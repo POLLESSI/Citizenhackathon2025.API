@@ -416,23 +416,21 @@ internal class Program
 
         // Common
 
-
         app.UseHttpsRedirection();
         app.UseStaticFiles();
         //app.UseMiddleware<AntiXssMiddleware>();
-        app.UseAntiXssMiddleware();
-        app.UseUserAgentFiltering();
-        //app.UseMiddleware<ExceptionMiddleware>();
         app.UseExceptionMiddleware();
+        app.UseAntiXssMiddleware();
+        app.UseSecurityHeaders();
+        app.UseUserAgentFiltering();
+        app.UseAuditLogging();
+        //app.UseMiddleware<ExceptionMiddleware>();
+
         app.UseRouting();
+        app.UseCors("AllowAnyOrigin");
         app.UseAuthentication();
         app.UseAuthorization();
-        app.UseSecurityHeaders();
-        app.UseAuditLogging();
-
-        app.UseCors("AllowAnyOrigin");
-
-
+        
         app.MapControllers();
 
         app.UseEndpoints(Endpoints =>

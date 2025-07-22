@@ -23,7 +23,20 @@ namespace Citizenhackathon2025.API.Security
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
             context.Response.Headers["X-Frame-Options"] = "DENY";
             context.Response.Headers["Referrer-Policy"] = "no-referrer";
-            context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'";
+            context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload";
+            context.Response.Headers["Permissions-Policy"] = "geolocation=(self), microphone=(), camera=()";
+
+            context.Response.Headers["Content-Security-Policy"] =
+                "default-src 'self'; " +
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "img-src 'self' data:; " +
+                "font-src 'self'; " +
+                "connect-src 'self' https://localhost:7254 https://localhost:7051 wss://localhost:7254 wss://localhost:7051; " +
+                "frame-ancestors 'none'; " +
+                "base-uri 'self'; " +
+                "form-action 'self';" +
+                "report-uri /csp-report;";
 
             // Cleaning cookies (eg: HttpOnly, Secure, etc.)
             foreach (var cookie in context.Request.Cookies)
