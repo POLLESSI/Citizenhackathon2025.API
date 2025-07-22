@@ -28,6 +28,7 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Enums\" />
+	  <Folder Include="Security\" />
 	</ItemGroup>
 
 </Project>

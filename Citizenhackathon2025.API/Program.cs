@@ -33,6 +33,7 @@ using CitizenHackathon2025.Infrastructure;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using CitizenHackathon2025.Infrastructure.Services;
+using CitizenHackathon2025.Infrastructure.Services.Monitoring;
 using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Services;
@@ -74,7 +75,7 @@ internal class Program
 
         var builder = WebApplication.CreateBuilder(args);
 
-#nullable disable
+    #nullable disable
         // 1. Configuration
         var configuration = builder.Configuration;
         var services = builder.Services;
@@ -218,6 +219,8 @@ internal class Program
         builder.Services.AddSingleton<TokenGenerator>();
         // DB Connection Factory
         builder.Services.AddSingleton<DbConnectionFactory>();
+
+        builder.Services.AddSingleton<CspViolationStore>();
 
         builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
 
