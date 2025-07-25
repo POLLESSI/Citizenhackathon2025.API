@@ -104,7 +104,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             
             // TODO: exploiter les données météo ici
         }
-        public Task StopAsync(CancellationToken cancellationToken)
+        public new Task StopAsync(CancellationToken cancellationToken)
         {
             _timer?.Change(Timeout.Infinite, 0);
             return Task.CompletedTask;
