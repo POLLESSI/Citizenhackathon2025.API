@@ -31,8 +31,4 @@
     <ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="SignalR\" />
-  </ItemGroup>
-
 </Project>

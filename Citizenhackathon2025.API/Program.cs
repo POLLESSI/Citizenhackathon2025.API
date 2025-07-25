@@ -34,6 +34,7 @@ using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using CitizenHackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.Infrastructure.Services.Monitoring;
+using CitizenHackathon2025.Infrastructure.SignalR;
 using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Services;
@@ -101,25 +102,27 @@ internal class Program
         var jwtKey = builder.Configuration["JwtSettings:SecretKey"];
         var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "CitizenHackathon2025API";
 
-        builder.Services.AddAuthentication(options =>
+        builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Events = new JwtBearerEvents
         {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
-        .AddJwtBearer(options =>
-        {
-            options.RequireHttpsMetadata = true;
-            options.SaveToken = true;
-            options.TokenValidationParameters = new TokenValidationParameters
+            OnMessageReceived = context =>
             {
-                ValidateIssuer = true,
-                ValidateAudience = false,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtIssuer,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!))
-            };
-        });
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hub/outzen"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
 
         //var secretKey = builder.Configuration["JwtSettings:SecretKey"];
 
@@ -221,6 +224,8 @@ internal class Program
         builder.Services.AddSingleton<DbConnectionFactory>();
 
         builder.Services.AddSingleton<CspViolationStore>();
+
+        services.AddSingleton<IRealTimeNotifier, RealTimeNotifier>();
 
         builder.Services.AddScoped<IHubNotifier, Citizenhackathon2025.Hubs.Hubs.SignalRNotifier>();
 
@@ -327,9 +332,9 @@ internal class Program
 
         builder.Services.AddCors(options =>
         {
-            options.AddPolicy("AllowAnyOrigin", policy =>
+            options.AddDefaultPolicy(policy =>
             {
-                policy.WithOrigins(/*"https://localhost:7254",*/ "https://localhost:7051")
+                policy.WithOrigins("https://localhost:7254", "https://localhost:7051")
                       .AllowAnyMethod()
                       .AllowAnyHeader()
                       .AllowCredentials();
@@ -427,10 +432,11 @@ internal class Program
         app.UseSecurityHeaders();
         app.UseUserAgentFiltering();
         app.UseAuditLogging();
+        app.UseMiddleware<OutZenTokenMiddleware>();
         //app.UseMiddleware<ExceptionMiddleware>();
 
         app.UseRouting();
-        app.UseCors("AllowAnyOrigin");
+        app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
         
@@ -442,6 +448,7 @@ internal class Program
 
             Endpoints.MapHub<EventHub>("/hubs/eventHub");
             Endpoints.MapHub<NotificationHub>("/hubs/notifications");
+            Endpoints.MapHub<OutZenHub>("/hub/outzen");
             Endpoints.MapHub<PlaceHub>("/hubs/placeHub");
             Endpoints.MapHub<SuggestionHub>("/hubs/suggestionHub");
             Endpoints.MapHub<TrafficHub>("/hubs/trafficHub");

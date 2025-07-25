@@ -33,6 +33,21 @@ namespace CitizenHackathon2025.API.Controllers
             _mediator = mediator;
         }
 
+        // ✅ GET: /api/Suggestion/all
+        [HttpGet]
+        public IActionResult GetSuggestions()
+        {
+            var eventId = HttpContext.Items["OutZen.EventId"] as string;
+            if (eventId == null)
+                return Unauthorized();
+
+            // Suggestion logic by eventId
+            return Ok(new
+            {
+                EventId = eventId,
+                Suggestions = new[] { "Parc d'aventure", "Musée alternatif", "Ciné relax" }
+            });
+        }
 
         // ✅ GET: /api/Suggestion/latest
         [HttpGet("latest")]
