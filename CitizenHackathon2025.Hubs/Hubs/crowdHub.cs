@@ -5,7 +5,7 @@ namespace Citizenhackathon2025.Hubs.Hubs
 {
     public class CrowdHub : Hub
     {
-#nullable disable
+    #nullable disable
 
         private readonly Microsoft.Extensions.Logging.ILogger<CrowdHub> _logger;
 

@@ -158,7 +158,6 @@ internal class Program
         builder.Services.AddScoped<IGeoService, GeoService>();
         builder.Services.AddScoped<IGPTService, GPTService>();
         builder.Services.AddScoped<INotificationService, NotificationService>();
-        //builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>(); 
         builder.Services.AddScoped<IPlaceService, PlaceService>();
         builder.Services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
         builder.Services.AddScoped<ISuggestionService, SuggestionService>();
@@ -312,7 +311,10 @@ internal class Program
             });
 
         // SignalR
-        builder.Services.AddSignalR();
+        builder.Services.AddSignalR(options =>
+        {
+            options.EnableDetailedErrors = true;
+        });
         builder.Services.AddHostedService<EventArchiverService>();
         builder.Services.AddHostedService<WeatherService>();
 
@@ -435,29 +437,24 @@ internal class Program
         app.UseMiddleware<OutZenTokenMiddleware>();
         //app.UseMiddleware<ExceptionMiddleware>();
 
-        app.UseRouting();
         app.UseCors();
+        app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();
         
         app.MapControllers();
 
-        app.UseEndpoints(Endpoints =>
-        {
-            Endpoints.MapControllers();
-
-            Endpoints.MapHub<EventHub>("/hubs/eventHub");
-            Endpoints.MapHub<NotificationHub>("/hubs/notifications");
-            Endpoints.MapHub<OutZenHub>("/hub/outzen");
-            Endpoints.MapHub<PlaceHub>("/hubs/placeHub");
-            Endpoints.MapHub<SuggestionHub>("/hubs/suggestionHub");
-            Endpoints.MapHub<TrafficHub>("/hubs/trafficHub");
-            Endpoints.MapHub<UpdateHub>("/hubs/updateHub");
-            Endpoints.MapHub<UserHub>("/hubs/userHub");
-            Endpoints.MapHub<CrowdHub>("/hubs/crowdHub");
-            Endpoints.MapHub<AISuggestionHub>("/aisuggestionhub");
-            Endpoints.MapHub<CitizeHackathon2025.Hubs.Hubs.WeatherForecastHub>("/hubs/weatherforecastHub");
-        });
+        app.MapHub<EventHub>("/hubs/eventHub");
+        app.MapHub<NotificationHub>("/hubs/notifications");
+        app.MapHub<OutZenHub>("/hub/outzen");
+        app.MapHub<PlaceHub>("/hubs/placeHub");
+        app.MapHub<SuggestionHub>("/hubs/suggestionHub");
+        app.MapHub<TrafficHub>("/hubs/trafficHub");
+        app.MapHub<UpdateHub>("/hubs/updateHub");
+        app.MapHub<UserHub>("/hubs/userHub");
+        app.MapHub<CrowdHub>("/hubs/crowdHub");
+        app.MapHub<AISuggestionHub>("/aisuggestionhub");
+        app.MapHub<CitizeHackathon2025.Hubs.Hubs.WeatherForecastHub>("/hubs/weatherforecastHub");
 
         app.MapGet("/api/weatherforecast", () =>
         {
