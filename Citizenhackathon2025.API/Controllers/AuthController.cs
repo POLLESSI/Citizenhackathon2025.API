@@ -50,7 +50,7 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("refresh")]
         public IActionResult Refresh()
         {
-            // Récupère claims (après validation du token existant)
+            // Recover claims (after validation of the existing token)
             var email = User.FindFirstValue(ClaimTypes.Email);
             var roleStr = User.FindFirstValue(ClaimTypes.Role);
             if (email == null || roleStr == null)
@@ -77,7 +77,7 @@ namespace CitizenHackathon2025.API.Controllers
             var user = await _userService.GetUserByEmailAsync(email);
             if (user == null)
             {
-                // passe ici seulement en DEV
+                // only goes here in DEV
                 await _userService.RegisterUserAsync(email, "Test1234=", role);
                 user = await _userService.GetUserByEmailAsync(email);
             }

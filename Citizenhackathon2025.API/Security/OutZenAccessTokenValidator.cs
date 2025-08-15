@@ -5,7 +5,8 @@ namespace CitizenHackathon2025.API.Security
 {
     public static class OutZenAccessTokenValidator
     {
-        private const string SecretKey = "OUTZEN_SECRET_KEY_SUPER_SAFE"; // stocké en config dans appsettings
+    #nullable disable
+        private const string SecretKey = "OUTZEN_SECRET_KEY_SUPER_SAFE"; // stored in config in appsettings
 
         public static bool Validate(string token, out string eventId)
         {

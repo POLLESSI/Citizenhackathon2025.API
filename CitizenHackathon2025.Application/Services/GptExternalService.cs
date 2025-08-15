@@ -15,8 +15,8 @@ namespace CitizenHackathon2025.Application.Services
                 model = "gpt-4o",
                 temperature = 0.8,
                 messages = new[] {
-                new { role = "system", content = "Tu es un assistant belge expert des sorties calmes en Wallonie." },
-                new { role = "user", content = $"Peux-tu améliorer cette suggestion : {prompt}" }
+                new { role = "system", content = "You are a Belgian assistant expert in quiet outings in Wallonia." },
+                new { role = "user", content = $"Can you improve this suggestion : {prompt}" }
             }
             };
 

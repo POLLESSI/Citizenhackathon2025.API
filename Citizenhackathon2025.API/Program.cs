@@ -1,13 +1,8 @@
-using Azure.Core.Pipeline;
 //using Mapster.DependencyInjection;
 //using Citizenhackathon2025.Application.Mapping;
 using Citizenhackathon2025.API.Middlewares;
 using Citizenhackathon2025.API.Security;
-using Citizenhackathon2025.Application.CQRS.Commands.Handlers;
-using Citizenhackathon2025.Application.CQRS.Queries.Handlers;
 using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Application.WeatherForecast.Commands;
-using Citizenhackathon2025.Application.WeatherForecast.Handlers;
 using Citizenhackathon2025.Application.WeatherForecast.Queries;
 using Citizenhackathon2025.Domain.Entities;
 using Citizenhackathon2025.Domain.Interfaces;
@@ -15,17 +10,14 @@ using Citizenhackathon2025.Hubs.Hubs;
 using Citizenhackathon2025.Infrastructure.ExternalAPIs;
 using Citizenhackathon2025.Infrastructure.Persistence;
 using Citizenhackathon2025.Infrastructure.Repositories;
-using Citizenhackathon2025.Infrastructure.Repositories.Providers.Hubs;
 using Citizenhackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.CQRS.Queries;
-using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
@@ -44,24 +36,12 @@ using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Microsoft.SqlServer.Dac.Model;
-using Microsoft.VisualStudio.Services.CircuitBreaker;
 using Polly;
-using Polly.Extensions.Http;
-using Polly.Retry;
-using Polly.Wrap;
 using Serilog;
 using System.Data;
-using System.Data.SqlClient;
 using System.Net.Http.Headers;
-using System.Text;
 
 internal class Program
 {
@@ -281,6 +261,22 @@ internal class Program
         ILogger<Program> logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();
 
         logger.LogInformation("Application DI built successfully.");
+        // ========== MIDDLEWARES ==========
+        // Connection
+
+        var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
+            {
+                policy
+                    .WithOrigins("http://localhost:7144")
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
+            });
+        });
 
         // ========== LOGGING ==========
         builder.Logging.AddConsole();
@@ -330,18 +326,7 @@ internal class Program
         //builder.Services.AddSingleton<UserHub>();
         //builder.Services.AddScoped<CitizeHackathon2025.Hubs.Hubs.WeatherForecastHub>();
 
-        // Connection
-
-        builder.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(policy =>
-            {
-                policy.WithOrigins("https://localhost:7254", "https://localhost:7051")
-                      .AllowAnyMethod()
-                      .AllowAnyHeader()
-                      .AllowCredentials();
-            });
-        });
+        
 
         // Security levels
         // Declaration of the different security levels to be implemented in the controller using the attribute [Authorize("font_name")]
@@ -428,17 +413,15 @@ internal class Program
 
         app.UseHttpsRedirection();
         app.UseStaticFiles();
-        //app.UseMiddleware<AntiXssMiddleware>();
         app.UseExceptionMiddleware();
         app.UseAntiXssMiddleware();
         app.UseSecurityHeaders();
         app.UseUserAgentFiltering();
         app.UseAuditLogging();
         app.UseMiddleware<OutZenTokenMiddleware>();
-        //app.UseMiddleware<ExceptionMiddleware>();
 
-        app.UseCors();
         app.UseRouting();
+        app.UseCors(MyAllowSpecificOrigins);
         app.UseAuthentication();
         app.UseAuthorization();
         
@@ -456,18 +439,10 @@ internal class Program
         app.MapHub<AISuggestionHub>("/aisuggestionhub");
         app.MapHub<CitizeHackathon2025.Hubs.Hubs.WeatherForecastHub>("/hubs/weatherforecastHub");
 
-        app.MapGet("/api/weatherforecast", () =>
+        app.Use(async (context, next) =>
         {
-            var rng = new Random();
-            return new WeatherForecast
-            {
-                DateWeather = DateTime.Now,
-                TemperatureC = rng.Next(-20, 55),
-                Summary = "Static",
-                RainfallMm = rng.Next(0, 100),
-                Humidity = rng.Next(30, 100),
-                WindSpeedKmh = rng.Next(0, 200) * 100
-            };
+            Console.WriteLine($"Request {context.Request.Method} {context.Request.Path}");
+            await next.Invoke();
         });
         //app.Use(async (context, next) =>
         //{

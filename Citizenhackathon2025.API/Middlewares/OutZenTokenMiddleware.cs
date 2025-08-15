@@ -13,6 +13,7 @@ namespace CitizenHackathon2025.API.Middlewares
 
         public async Task Invoke(HttpContext context)
         {
+        #nullable disable
             var path = context.Request.Path.Value;
             if (path != null && path.StartsWith("/api/outzen", StringComparison.OrdinalIgnoreCase))
             {
