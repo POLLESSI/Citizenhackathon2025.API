@@ -77,7 +77,7 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpPut("update")]
-        public IActionResult Update([FromBody] User user)
+        public IActionResult Update([FromBody] Users user)
         {
             var updated = _userService.UpdateUser(user);
             return updated != null ? Ok(updated) : BadRequest("Update failed");

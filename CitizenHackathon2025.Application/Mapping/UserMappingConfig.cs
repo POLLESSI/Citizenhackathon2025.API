@@ -9,14 +9,14 @@ namespace CitizenHackathon2025.Application.Mapping
     {
         public void Register(TypeAdapterConfig config)
         {
-            // User → UserDTO
-            config.NewConfig<User, UserDTO>()
+            // Users → UserDTO
+            config.NewConfig<Users, UserDTO>()
                 .Map(dest => dest.Email, src => src.Email)
                 .Map(dest => dest.Role, src => src.Role.ToString())
-                .Ignore(dest => dest.Pwd); // Pas de hash inverse
+                .Ignore(dest => dest.Pwd); // No reverse hash
 
-            // UserDTO → User (by hand, Pwd → PasswordHash must be treated separately)
-            config.NewConfig<UserDTO, User>()
+            // UserDTO → Users (by hand, Pwd → PasswordHash must be treated separately)
+            config.NewConfig<UserDTO, Users>()
                 .Map(dest => dest.Email, src => src.Email)
                 .Map(dest => dest.Role, src => Enum.Parse<UserRole>(src.Role ?? "", true))
                 .Ignore(dest => dest.Id)

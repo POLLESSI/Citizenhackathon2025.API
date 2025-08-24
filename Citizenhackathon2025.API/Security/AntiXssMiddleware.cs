@@ -32,7 +32,7 @@ namespace Citizenhackathon2025.API.Security
                 "style-src 'self' 'unsafe-inline'; " +
                 "img-src 'self' data:; " +
                 "font-src 'self'; " +
-                "connect-src 'self' https://localhost:7254 https://localhost:7051 wss://localhost:7254 wss://localhost:7051; " +
+                "connect-src 'self' https://localhost:7254 https://localhost:7260 wss://localhost:7254 wss://localhost:7051; " +
                 "frame-ancestors 'none'; " +
                 "base-uri 'self'; " +
                 "form-action 'self';" +

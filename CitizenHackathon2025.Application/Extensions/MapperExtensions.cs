@@ -147,8 +147,20 @@ namespace CitizenHackathon2025.Application.Extensions
                 IncidentType = entity.IncidentType
             };
         }
+        public static TrafficCondition MapToTrafficCondition(this TrafficConditionUpdateDTO dto)
+        {
+            var entity = new TrafficCondition
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dto.DateCondition,
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType
+            };
+            return entity.WithId(dto.Id);
+        }
         //Mapping vers DTO
-        public static UserDTO UserToDTO(this Domain.Entities.User user)
+        public static UserDTO UserToDTO(this Domain.Entities.Users user)
         {
             /// <summary>
             /// Maps a User entity to a UserDTO (without exposing the PasswordHash).
@@ -165,18 +177,18 @@ namespace CitizenHackathon2025.Application.Extensions
         /// <summary>
         /// Maps a UserDTO to a User entity (PasswordHash to be managed separately).
         /// </summary>
-        public static Domain.Entities.User MapToUserEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
+        public static Domain.Entities.Users MapToUserEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
         {
             if (!Guid.TryParse(securityStamp, out var parsedStamp))
                 throw new ArgumentException("Invalid GUID format for security stamp", nameof(securityStamp));
 
-            var user = new Domain.Entities.User
+            var user = new Domain.Entities.Users
             {
                 Email = dto.Email,
                 PasswordHash = hashPasswordFunc(dto.Pwd, securityStamp),
                 SecurityStamp = parsedStamp,
                 Role = Enum.Parse<UserRole>(dto.Role, ignoreCase: true),
-                Status = Status.Pending
+                Status = Status.Pending.ToUserStatus()
             };
 
             user.Activate();

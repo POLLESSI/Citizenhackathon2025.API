@@ -1,5 +1,4 @@
-﻿
-namespace CitizenHackathon2025.Shared.Interfaces
+﻿namespace CitizenHackathon2025.Shared.Interfaces
 {
     public interface IPasswordHasher
     {

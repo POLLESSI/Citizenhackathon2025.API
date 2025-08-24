@@ -11,6 +11,13 @@
         public string IncidentType { get; set; }
         public bool Active { get; private set; } = true;
 
+        // 👇 smooth method to reassign the ID during an update
+        public TrafficCondition WithId(int id)
+        {
+            this.Id = id;
+            return this;
+        }
+
     }
 }
 

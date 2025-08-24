@@ -30,6 +30,7 @@ using CitizenHackathon2025.Infrastructure.SignalR;
 using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Services;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using CityzenHackathon2025.API.Tools;
 using Dapper;
 using Mapster;
@@ -76,6 +77,8 @@ internal class Program
         });
         builder.Services.AddScoped<DatabaseService>();
 
+        SqlMapper.AddTypeHandler(new RoleTypeHandler());
+
         // Authentications
 
         // Secret key (to be put in appsettings.json or secrets in production)
@@ -83,26 +86,26 @@ internal class Program
         var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "CitizenHackathon2025API";
 
         builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
             {
-                var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-
-                if (!string.IsNullOrEmpty(accessToken) &&
-                    path.StartsWithSegments("/hub/outzen"))
+                options.Events = new JwtBearerEvents
                 {
-                    context.Token = accessToken;
-                }
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
 
-                return Task.CompletedTask;
-            }
-        };
-    });
+                        if (!string.IsNullOrEmpty(accessToken) &&
+                            path.StartsWithSegments("/hub/outzen"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
+            });
 
         //var secretKey = builder.Configuration["JwtSettings:SecretKey"];
 
@@ -140,6 +143,8 @@ internal class Program
         builder.Services.AddScoped<INotificationService, NotificationService>();
         builder.Services.AddScoped<IPlaceService, PlaceService>();
         builder.Services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
+        builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         builder.Services.AddScoped<ISuggestionService, SuggestionService>();
         builder.Services.AddSingleton<TokenGenerator>();
         builder.Services.AddScoped<ITrafficConditionService, TrafficConditionService>();
@@ -264,17 +269,14 @@ internal class Program
         // ========== MIDDLEWARES ==========
         // Connection
 
-        var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
-
         builder.Services.AddCors(options =>
         {
-            options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
+            options.AddDefaultPolicy(policy =>
             {
-                policy
-                    .WithOrigins("http://localhost:7144")
-                    .AllowAnyHeader()
-                    .AllowAnyMethod()
-                    .AllowCredentials();
+                policy.WithOrigins("https://localhost:7260")
+                      .AllowAnyHeader()
+                      .AllowAnyMethod()
+                      .AllowCredentials();
             });
         });
 
@@ -334,9 +336,10 @@ internal class Program
 
         builder.Services.AddAuthorization(o =>
         {
-            o.AddPolicy("Admin", policy => policy.RequireClaim("role", "admin"));
-            o.AddPolicy("Modo", policy => policy.RequireClaim("role", "admin", "modo"));
-            o.AddPolicy("User", policy => policy.RequireClaim("role", "user"));
+            o.AddPolicy("Admin", policy => policy.RequireClaim(Claims.Role, Roles.Admin));
+            o.AddPolicy("Modo", policy => policy.RequireClaim(Claims.Role, Roles.Admin, Roles.Modo));
+            o.AddPolicy("User", policy => policy.RequireClaim(Claims.Role, Roles.User));
+            o.AddPolicy("Guest", policy => policy.RequireClaim(Claims.Role, Roles.Guest));
         });
 
         builder.Services.AddEndpointsApiExplorer();
@@ -418,10 +421,11 @@ internal class Program
         app.UseSecurityHeaders();
         app.UseUserAgentFiltering();
         app.UseAuditLogging();
-        app.UseMiddleware<OutZenTokenMiddleware>();
+        
 
         app.UseRouting();
-        app.UseCors(MyAllowSpecificOrigins);
+        app.UseMiddleware<OutZenTokenMiddleware>();
+        app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
         
@@ -429,7 +433,7 @@ internal class Program
 
         app.MapHub<EventHub>("/hubs/eventHub");
         app.MapHub<NotificationHub>("/hubs/notifications");
-        app.MapHub<OutZenHub>("/hub/outzen");
+        app.MapHub<OutZenHub>("/hub/outzenhub");
         app.MapHub<PlaceHub>("/hubs/placeHub");
         app.MapHub<SuggestionHub>("/hubs/suggestionHub");
         app.MapHub<TrafficHub>("/hubs/trafficHub");

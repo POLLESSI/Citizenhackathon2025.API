@@ -1,16 +1,20 @@
 ﻿using System;
+using CitizenHackathon2025.Domain.Enums;
 
 namespace CitizenHackathon2025.Domain.Entities
 {
     public class RefreshToken
     {
-    #nullable disable
-        public Guid Id { get; set; } = Guid.NewGuid();
-        public string Token { get; set; }
-        public string Email { get; set; }
+#nullable disable
+        public int Id { get; set; }                  
+        public string Token { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
         public DateTime ExpiryDate { get; set; }
-        public bool IsRevoked { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public RefreshTokenStatus Status { get; set; } = RefreshTokenStatus.Active;
+        public bool IsActive() => Status == RefreshTokenStatus.Active && ExpiryDate > DateTime.UtcNow;
+        public void Revoke() => Status = RefreshTokenStatus.Revoked;
+        public void Expire() => Status = RefreshTokenStatus.Expired;
     }
 }
 

@@ -45,7 +45,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(new
             {
                 EventId = eventId,
-                Suggestions = new[] { "Parc d'aventure", "Musée alternatif", "Ciné relax" }
+                Suggestions = new[] { "Adventure Park", "Alternative Museum", "Relaxing Cinema" }
             });
         }
 

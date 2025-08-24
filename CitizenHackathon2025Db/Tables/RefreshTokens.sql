@@ -6,7 +6,7 @@
     [ExpiryDate] DATETIME2 NOT NULL,
     [IsRevoked] BIT NOT NULL,
     [CreatedAt] DATETIME2 NOT NULL,
-    [Active] BIT DEFAULT 1,
+    [Status] INT NOT NULL DEFAULT 1 -- 1=Active, 2=Revoked, 3=Expired
 
     CONSTRAINT [PK_RefreshTokens] PRIMARY KEY ([Id]),
     CONSTRAINT [UQ_RefreshTokens_Token] UNIQUE ([Token])
@@ -14,14 +14,14 @@
 
 GO
 
-CREATE TRIGGER [dbo].[OnDeleteRefreshTokens]
-    ON [dbo].[RefreshTokens]
-    INSTEAD OF DELETE
-    AS
-    BEGIN
-        UPDATE RefreshTokens SET Active = 0
-        WHERE Id IN (SELECT Id FROM deleted)
-    END
+--CREATE TRIGGER [dbo].[OnDeleteRefreshTokens]
+--    ON [dbo].[RefreshTokens]
+--    INSTEAD OF DELETE
+--    AS
+--    BEGIN
+--        UPDATE RefreshTokens SET Active = 0
+--        WHERE Id IN (SELECT Id FROM deleted)
+--    END
 
 
 

@@ -4,15 +4,15 @@ namespace Citizenhackathon2025.Domain.Interfaces
 {
     public interface IUserRepository
     {
-        Task<User?> GetUserByEmailAsync(string email);
-        Task<User?> GetUserByIdAsync(int id);
-        Task<IEnumerable<User>> GetAllActiveUsersAsync();
-        Task<User> RegisterUserAsync(string email, byte[] passwordHash, User user);
+        Task<Users?> GetUserByEmailAsync(string email);
+        Task<Users?> GetUserByIdAsync(int id);
+        Task<IEnumerable<Users>> GetAllActiveUsersAsync();
+        Task<Users> RegisterUserAsync(string email, byte[] passwordHash, Users user);
         Task<bool> LoginAsync(string email, string password);
-        Task<User?> LoginUsingProcedureAsync(string email, string password);
+        Task<Users?> LoginUsingProcedureAsync(string email, string password);
         Task DeactivateUserAsync(int id);
         void SetRole(int id, string? role);
-        User? UpdateUser(User user);
+        Users? UpdateUser(Users user);
     }
 }
 

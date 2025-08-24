@@ -9,8 +9,12 @@ namespace CitizenHackathon2025.Application.Mapping
         public void Register(TypeAdapterConfig config)
         {
             config.NewConfig<WeatherForecast, WeatherForecastDTO>()
-                .Map(dest => dest.Summary, src => src.Summary);
-            // etc...
+                .Map(dest => dest.Summary, src => src.Summary)
+                .Map(dest => dest.TemperatureC, src => src.TemperatureC)
+                .Map(dest => dest.Humidity, src => src.Humidity)
+                .Map(dest => dest.WindSpeedKmh, src => src.WindSpeedKmh)
+                .Map(dest => dest.RainfallMm, src => src.RainfallMm);
+
         }
     }
 }

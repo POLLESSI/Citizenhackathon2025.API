@@ -11,7 +11,7 @@
 	[DateDeleted] DATETIME NULL,
 
 	CONSTRAINT [PK_Suggestion] PRIMARY KEY ([Id]),
-	CONSTRAINT [FK_Suggestion_User] FOREIGN KEY (User_Id) REFERENCES [User] ([Id])
+	CONSTRAINT [FK_Suggestion_User] FOREIGN KEY (User_Id) REFERENCES [Users] ([Id])
 )
 
 GO

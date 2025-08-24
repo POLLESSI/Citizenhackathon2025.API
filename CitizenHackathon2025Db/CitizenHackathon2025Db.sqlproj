@@ -62,6 +62,7 @@
     <Folder Include="Programmability\Procedures" />
     <Folder Include="Programmability\Procedures\spAuth" />
     <Folder Include="Scripts" />
+    <Folder Include="obj\" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="Tables\CrowdInfo.sql" />
@@ -70,7 +71,7 @@
     <Build Include="Tables\Place.sql" />
     <Build Include="Tables\Suggestion.sql" />
     <Build Include="Tables\TrafficCondition.sql" />
-    <Build Include="Tables\User.sql" />
+    <Build Include="Tables\Users.sql" />
     <Build Include="Tables\WeatherForecast.sql" />
     <Build Include="Programmability\Functions\fHasher.sql" />
     <Build Include="Programmability\Procedures\spAuth\sqlUserLogin.sql" />
@@ -80,5 +81,6 @@
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
     <None Include="CitizenHackathon2025Db.publish.xml" />
+    <None Include="Scripts\MigrationScript.sql" />
   </ItemGroup>
 </Project>

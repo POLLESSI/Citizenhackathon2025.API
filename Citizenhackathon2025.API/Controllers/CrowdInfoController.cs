@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.SignalR;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Hubs.Hubs;
 
 namespace CitizenHackathon2025.API.Controllers
 {

@@ -1,20 +1,13 @@
-﻿using CitizenHackathon2025.Application.Extensions;
+﻿using Citizenhackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
-using Citizenhackathon2025.Infrastructure.Services;
-using CitizenHackathon2025.Shared.Interfaces;
-using CitizenHackathon2025.Shared.Utils;
+using CitizenHackathon2025.DTOs.DTOs;
 using CityzenHackathon2025.API.Tools;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using CitizenHackathon2025.DTOs.DTOs;
-using Citizenhackathon2025.Application.Interfaces;
+using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -26,64 +19,80 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly ILogger<AuthController> _logger;
         private readonly TokenGenerator _tokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
-        private readonly IPasswordHasher _passwordHasher;
 
-        public AuthController(IUserService userService, ILogger<AuthController> logger, TokenGenerator tokenGenerator, IRefreshTokenService refreshTokenService, IPasswordHasher passwordHasher)
+        public AuthController(
+            IUserService userService,
+            ILogger<AuthController> logger,
+            TokenGenerator tokenGenerator,
+            IRefreshTokenService refreshTokenService)
         {
-            _userService = userService ?? throw new ArgumentNullException(nameof(userService));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _userService = userService;
+            _logger = logger;
             _tokenGenerator = tokenGenerator;
             _refreshTokenService = refreshTokenService;
-            _passwordHasher = passwordHasher;
         }
+
+        // -----------------------------
+        // LOGIN
+        // -----------------------------
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginDTO dto)
+        public async Task<IActionResult> Login([FromBody] LoginDTO request)
         {
-            if (!await _userService.LoginAsync(dto.Email, dto.Password))
-                return Unauthorized("Invalid credentials");
+            var user = await _userService.AuthenticateAsync(request.Email, request.Password);
 
-            var user = await _userService.GetUserByEmailAsync(dto.Email);
-            var token = _tokenGenerator.GenerateToken(user.Email, user.Role);
-            return Ok(new { Token = token });
+            if (user == null)
+            {
+                _logger.LogWarning("Login attempt failed for {Email}", request.Email);
+                return Unauthorized(new { Message = "Invalid credentials" });
+            }
+
+            var accessToken = _tokenGenerator.GenerateToken(user.Email, user.Role);
+            var refreshToken = await _refreshTokenService.GenerateAsync(user.Email);
+
+            _logger.LogInformation("User {Email} logged in successfully", user.Email);
+
+            return Ok(new
+            {
+                AccessToken = accessToken,
+                RefreshToken = refreshToken
+            });
         }
 
-        [HttpPost("refresh")]
-        public IActionResult Refresh()
-        {
-            // Recover claims (after validation of the existing token)
-            var email = User.FindFirstValue(ClaimTypes.Email);
-            var roleStr = User.FindFirstValue(ClaimTypes.Role);
-            if (email == null || roleStr == null)
-                return Unauthorized();
-
-            var role = RoleExtensions.ParseRole(roleStr);
-            var token = _tokenGenerator.GenerateToken(email, role);
-            return Ok(new { Token = token });
-        }
-
+        // -----------------------------
+        // REGISTER
+        // -----------------------------
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
         {
             var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, UserRole.User);
+            _logger.LogInformation("New registered user : {Email}", dto.Email);
             return Ok(userDto);
         }
 
-        [HttpPost("dev-login")]
-        public async Task<IActionResult> DevLogin()
+        // -----------------------------
+        // REFRESH
+        // -----------------------------
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshDTO request)
         {
-            var email = "exemple@exemple.com";
-            var role = UserRole.Admin;
+            var isValid = await _refreshTokenService.ValidateAsync(request.RefreshToken);
+            if (!isValid)
+                return Unauthorized(new { Message = "Invalid or expired refresh token" });
 
-            var user = await _userService.GetUserByEmailAsync(email);
+            var user = await _userService.GetUserByIdAsync(request.UserId);
             if (user == null)
-            {
-                // only goes here in DEV
-                await _userService.RegisterUserAsync(email, "Test1234=", role);
-                user = await _userService.GetUserByEmailAsync(email);
-            }
+                return Unauthorized(new { Message = "User not found" });
 
-            var token = _tokenGenerator.GenerateToken(user.Email, user.Role);
-            return Ok(new { Token = token });
+            var newAccessToken = _tokenGenerator.GenerateToken(user.Email, user.Role);
+            var newRefreshToken = await _refreshTokenService.GenerateAsync(user.Email);
+
+            await _refreshTokenService.InvalidateAsync(request.RefreshToken);
+
+            return Ok(new
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken
+            });
         }
     }
 }

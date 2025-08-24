@@ -38,7 +38,7 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> GetEventById(int id)
         {
             if (id <= 0)
-                return BadRequest("L'identifiant fourni est invalide.");
+                return BadRequest("The provided ID is invalid.");
             var @event = await _eventRepository.GetByIdAsync(id);
             if (@event == null)
                 return NotFound($"No events found for the ID {id}.");
@@ -53,7 +53,7 @@ namespace CitizenHackathon2025.API.Controllers
             var savedEvent = await _eventRepository.SaveEventAsync(@event); // 👈 correction du paramètre
 
             if (savedEvent == null)
-                return StatusCode(500, "Erreur lors de l'enregistrement");
+                return StatusCode(500, "Error while saving");
 
             // ✅ Diffusion en temps réel
             await _hubContext.Clients.All.SendAsync("NewEvent", savedEvent);

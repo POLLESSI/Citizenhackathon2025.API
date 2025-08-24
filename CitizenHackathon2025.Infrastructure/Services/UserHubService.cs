@@ -30,7 +30,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             await _hubContext.Clients.All.SendAsync("UserRegistered", email);
         }
 
-        public async Task NotifyUserUpdated(User user)
+        public async Task NotifyUserUpdated(Users user)
         {
             await _hubContext.Clients.All.SendAsync("UserUpdated", new
             {

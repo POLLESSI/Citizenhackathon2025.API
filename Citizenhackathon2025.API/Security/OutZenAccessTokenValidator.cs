@@ -25,7 +25,7 @@ namespace CitizenHackathon2025.API.Security
 
             var expiresAt = DateTimeOffset.FromUnixTimeSeconds(expiresAtUnix).UtcDateTime;
             if (expiresAt < DateTime.UtcNow)
-                return false; // Token expiré
+                return false; // Token expired
 
             var expectedSignature = ComputeSignature(parts[0], parts[1]);
             if (!CryptographicOperations.FixedTimeEquals(

@@ -1,8 +1,10 @@
 ﻿using Citizenhackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Extensions;
 using Citizenhackathon2025.Domain.Interfaces;
 using Citizenhackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -90,11 +92,16 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(savedTrafficCondition);
         }
-        [HttpPut("update")]
-        public IActionResult UpdateTrafficCondition([FromBody] TrafficCondition trafficCondition)
+        [HttpPut("{id:int}")]
+        public IActionResult UpdateTrafficCondition(int id, [FromBody] TrafficConditionUpdateDTO dto)
         {
-            var result = _trafficConditionRepository.UpdateTrafficCondition(trafficCondition);
-            return result != null ? Ok(result) : NotFound();
+            if (id != dto.Id)
+                return BadRequest("Id mismatch between URL and body");
+
+            var entity = dto.MapToTrafficCondition();
+            var result = _trafficConditionRepository.UpdateTrafficCondition(entity);
+
+            return result != null ? Ok(result) : NotFound($"TrafficCondition with ID {id} not found.");
         }
     }
 }

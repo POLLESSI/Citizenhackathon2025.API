@@ -6,15 +6,16 @@ namespace Citizenhackathon2025.Application.Interfaces
 {
     public interface IUserService
     {
-    #nullable disable
-        Task<User> GetUserByEmailAsync(string email);
-        Task<User> GetUserByIdAsync(int id);
-        Task<IEnumerable<User>> GetAllActiveUsersAsync();
+#nullable disable
+        Task<Users> AuthenticateAsync(string email, string password);
+        Task<Users> GetUserByEmailAsync(string email);
+        Task<Users> GetUserByIdAsync(int id);
+        Task<IEnumerable<Users>> GetAllActiveUsersAsync();
         Task<UserDTO> RegisterUserAsync(string email, string password, UserRole role);
         Task<bool> LoginAsync(string email, string password);
         Task DeactivateUserAsync(int id);
         void SetRole(int id, string? role);
-        User? UpdateUser(User user);
+        Users? UpdateUser(Users user);
     }
 }
 

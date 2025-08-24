@@ -41,19 +41,30 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _connection = connection;
         }
 
+        public async Task<Users> AuthenticateAsync(string email, string password)
+        {
+            var user = await _userRepository.GetUserByEmailAsync(email);
+            if (user == null) return null;
+
+            var hash = HashHelper.HashPassword(password, user.SecurityStamp.ToString());
+            var isValid = StructuralComparisons.StructuralEqualityComparer.Equals(hash, user.PasswordHash);
+
+            return isValid ? user : null;
+        }
+
         public async Task DeactivateUserAsync(int id)
         {
             await _userRepository.DeactivateUserAsync(id);
             await _hubService.NotifyUserDeactivated(id);
         }
 
-        public async Task<IEnumerable<User>> GetAllActiveUsersAsync()
+        public async Task<IEnumerable<Users>> GetAllActiveUsersAsync()
             => await _userRepository.GetAllActiveUsersAsync();
 
-        public async Task<User> GetUserByEmailAsync(string email)
+        public async Task<Users> GetUserByEmailAsync(string email)
             => await _userRepository.GetUserByEmailAsync(email);
 
-        public async Task<User> GetUserByIdAsync(int id)
+        public async Task<Users> GetUserByIdAsync(int id)
             => await _userRepository.GetUserByIdAsync(id);
 
         public async Task<bool> LoginAsync(string email, string password)
@@ -70,13 +81,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var stamp = Guid.NewGuid();
             var passwordHash = HashHelper.HashPassword(password, stamp.ToString());
 
-            var newUser = new User
+            var newUser = new Users
             {
                 Email = email,
                 Role = role,
                 SecurityStamp = stamp,
                 PasswordHash = passwordHash,
-                Status = Status.Pending
+                Status = UserStatus.AwaitingConfirmation
             };
             newUser.Activate();
 
@@ -99,7 +110,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _userRepository.SetRole(id, parsedRole.ToString());
         }
 
-        public User UpdateUser(User user)
+        public Users UpdateUser(Users user)
            => _userRepository.UpdateUser(user);
     }
 }

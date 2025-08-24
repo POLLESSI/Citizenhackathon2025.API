@@ -8,14 +8,17 @@ namespace CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers
     {
         public override void SetValue(IDbDataParameter parameter, UserRole value)
         {
-            parameter.Value = value.ToString();
+            parameter.Value = (int)value; // stored in int
         }
 
         public override UserRole Parse(object value)
         {
-            return Enum.TryParse(typeof(UserRole), value.ToString(), out var result)
-                ? (UserRole)result
-                : UserRole.User; 
+            if (value == null || value == DBNull.Value)
+                return UserRole.User; // fallback
+
+            return Enum.IsDefined(typeof(UserRole), (int)value)
+                ? (UserRole)(int)value
+                : UserRole.User; // fallback
         }
     }
 }

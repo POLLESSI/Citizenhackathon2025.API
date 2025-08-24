@@ -7,9 +7,9 @@ namespace CitizenHackathon2025.Application.Mappings
 {
     public static class UserMappingExtensions
     {
-        public static UserDTO ToDTO(this User user) => user.UserToDTO();
+        public static UserDTO ToDTO(this Users user) => user.UserToDTO();
 
-        public static User ToEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
+        public static Users ToEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
             => dto.MapToUserEntity(hashPasswordFunc, securityStamp);
     }
 }

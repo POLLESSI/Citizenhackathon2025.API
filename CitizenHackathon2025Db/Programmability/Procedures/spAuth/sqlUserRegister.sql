@@ -1,18 +1,21 @@
 ﻿CREATE PROCEDURE [dbo].[sqlUserRegister]
-	@Email NVARCHAR(64),
+    @Email NVARCHAR(64),
     @Password NVARCHAR(64),
-    @Role NVARCHAR(16) = 'User' -- Default role is 'User'
+    @Role INT = 0  -- Default role = User
 AS
 BEGIN
-    DECLARE @PasswordHash BINARY(64), @SecurityStamp UNIQUEIDENTIFIER;
+    SET NOCOUNT ON;
 
+    DECLARE @PasswordHash BINARY(64), @SecurityStamp UNIQUEIDENTIFIER;
     SET @SecurityStamp = NEWID();
+
+    -- Appelle ta fonction de hashage
     SET @PasswordHash = dbo.fHasher(TRIM(@Password), @SecurityStamp);
 
-     INSERT INTO [User] (Email, PasswordHash, SecurityStamp, Role, Status)
-    VALUES (TRIM(@Email), @PasswordHash, @SecurityStamp, @Role, 0);
+    INSERT INTO [Users] (Email, PasswordHash, SecurityStamp, Role, Status, Active)
+    VALUES (TRIM(@Email), @PasswordHash, @SecurityStamp, @Role, 0, 1);
 END
-
+GO
 
 
 

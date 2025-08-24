@@ -6,7 +6,7 @@ namespace CityzenHackathon2025.API.Tools
 {
     public class DateTimeJsonConverter : JsonConverter<DateTime>
     {
-        private const string Format = "yyyy-MM-ddTHH:mm:ss"; // Forçage du format ISO complet
+        private const string Format = "yyyy-MM-ddTHH:mm:ss"; // Force full ISO format
 
         public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
@@ -14,7 +14,7 @@ namespace CityzenHackathon2025.API.Tools
             if (string.IsNullOrEmpty(value))
                 return default;
 
-            // Essaie de parser en DateTime avec heure
+            // Try parsing into DateTime with time
             if (DateTime.TryParse(value, out var date))
                 return date;
 
@@ -23,7 +23,7 @@ namespace CityzenHackathon2025.API.Tools
 
         public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
         {
-            // Toujours écrire avec l'heure même si elle est 00:00
+            // Always write with the time even if it is 00:00
             writer.WriteStringValue(value.ToString(Format));
         }
     }
