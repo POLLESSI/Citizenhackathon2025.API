@@ -1,7 +1,6 @@
 ﻿using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
-
 namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IOpenWeatherService

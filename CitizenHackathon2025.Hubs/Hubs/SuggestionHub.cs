@@ -1,11 +1,8 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading.Tasks;
 
-namespace Citizenhackathon2025.Hubs.Hubs
+namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class SuggestionHub : Hub
     {

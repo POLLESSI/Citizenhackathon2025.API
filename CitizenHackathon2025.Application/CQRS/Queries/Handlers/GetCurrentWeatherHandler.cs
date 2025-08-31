@@ -1,11 +1,10 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
-using Citizenhackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Application.CQRS.Queries;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace Citizenhackathon2025.Application.CQRS.Queries.Handlers
+namespace CitizenHackathon2025.Application.CQRS.Queries.Handlers
 {
     public class GetCurrentWeatherHandler : IRequestHandler<GetCurrentWeatherQuery, WeatherForecastDTO?>
     {

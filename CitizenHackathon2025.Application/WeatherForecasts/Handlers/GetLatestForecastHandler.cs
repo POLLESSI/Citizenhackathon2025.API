@@ -1,11 +1,10 @@
-﻿using Citizenhackathon2025.Application.WeatherForecast.Queries;
-using Citizenhackathon2025.Domain.Interfaces;
-//using CitizenHackathon2025.infrastructure.Repositories;
+﻿using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using Mapster;
 using MediatR;
 
-namespace Citizenhackathon2025.Application.WeatherForecast.Handlers
+namespace CitizenHackathon2025.Application.WeatherForecasts.Handlers
 {
     public class GetLatestForecastHandler : IRequestHandler<GetLatestForecastQuery, WeatherForecastDTO>
     {

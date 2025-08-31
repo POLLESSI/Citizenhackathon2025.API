@@ -1,13 +1,12 @@
-﻿using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 
-namespace Citizenhackathon2025.Hubs.Hubs
+namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class SignalRNotifier : IHubNotifier
     {
-        private readonly IHubContext<WeatherHub> _hubContext;
+        private readonly IHubContext<WeatherForecastHub> _hubContext;
 
-        public SignalRNotifier(IHubContext<WeatherHub> hubContext)
+        public SignalRNotifier(IHubContext<WeatherForecastHub> hubContext)
         {
             _hubContext = hubContext;
         }

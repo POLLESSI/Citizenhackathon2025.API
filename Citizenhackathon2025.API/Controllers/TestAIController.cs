@@ -1,7 +1,6 @@
-﻿using Citizenhackathon2025.Hubs.Hubs;
+﻿using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.API.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 

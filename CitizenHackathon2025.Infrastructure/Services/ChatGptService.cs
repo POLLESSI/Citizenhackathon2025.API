@@ -1,17 +1,11 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly.CircuitBreaker;
-using System;
-using System.Linq;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {

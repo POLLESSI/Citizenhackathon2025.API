@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-
-namespace CitizenHackathon2025.Application.Interfaces
+﻿namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface INotificationService
     {

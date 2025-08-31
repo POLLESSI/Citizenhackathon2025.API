@@ -2,8 +2,6 @@
 using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {

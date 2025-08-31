@@ -1,5 +1,5 @@
 ﻿using MediatR;
-using Citizenhackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Application.CQRS.Queries.Handlers

@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-
-namespace Citizenhackathon2025.Hubs.Hubs
+﻿namespace CitizenHackathon2025.Hubs.Hubs
 {
     public interface IHubNotifier
     {

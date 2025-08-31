@@ -1,30 +1,20 @@
-﻿using Azure;
-using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.DTOs;
+using CitizenHackathon2025.Domain.Entities;
 using Dapper;
-using Microsoft.Data.SqlClient;
-using Microsoft.Identity.Client;
-using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Interfaces;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories
+namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class GptInteractionsRepository : IGPTRepository
     {
-    #nullable disable
-        private readonly System.Data.IDbConnection _connection;
-       /* private readonly string _apiKey = "sk-..."; */// to be injected into a real project via IConfiguration
-        private readonly string _endpoint = "https://api.openai.com/v1/chat/completions";
-        private readonly string _model = "gpt-4";
+#nullable disable
+        private readonly IDbConnection _connection;
+        /* private readonly string _apiKey = "sk-..."; */ // to inject via IConfiguration if you use it
+        // private readonly string _endpoint = "https://api.openai.com/v1/chat/completions";
+        // private readonly string _model = "gpt-4o";
         public GptInteractionsRepository(System.Data.IDbConnection connection)
         {
             _connection = connection;
@@ -41,20 +31,12 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 if (_connection.State != ConnectionState.Open)
                     _connection.Open();
 
-                var parameters = new
-                {
-                    suggestion.User_Id,
-                    suggestion.DateSuggestion,
-                    suggestion.OriginalPlace,
-                    suggestion.SuggestedAlternatives,
-                    suggestion.Reason,
-                    suggestion.Active,
-                    suggestion.DateDeleted,
-                    suggestion.EventId,
-                    suggestion.ForecastId,
-                    suggestion.TrafficId,
-                    suggestion.LocationName
-                };
+                DynamicParameters parameters = new DynamicParameters();
+                parameters.Add("@User_Id", suggestion.User_Id, DbType.Int32);
+                parameters.Add("@DateSuggestion", suggestion.DateSuggestion, DbType.DateTime);
+                parameters.Add("@OriginalPlace", suggestion.OriginalPlace, DbType.String);
+                parameters.Add("@SuggestedAlternatives", suggestion.SuggestedAlternatives, DbType.String);
+                parameters.Add("@Reason", suggestion.Reason, DbType.String);
 
                 // Execute the query and retrieve the generated Id
                 int newId = await _connection.QuerySingleAsync<int>(sql, parameters);
@@ -71,44 +53,50 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                     _connection.Close();
             }
         }
-        public async Task SaveInteractionAsync(GPTInteraction interaction)
+        public Task SaveInteractionAsync(GPTInteraction interaction)
         {
-            string sql = "INSERT INTO GptInteractions (Id, Prompt, Response, CreatedAt, Active) VALUES (@Id, @Prompt, @Response, @CreatedAt, 1)";
+            // Hash SHA-256 hex (64 chars) du prompt pour l’UPSERT idempotent
+            var promptHash = Sha256Hex(interaction.Prompt ?? string.Empty);
+
+            const string sql = @"
+                            MERGE [GptInteractions] AS t
+                            USING (SELECT @PromptHash AS PromptHash) AS s
+                            ON (t.PromptHash = s.PromptHash)
+                            WHEN MATCHED THEN
+                                UPDATE SET
+                                    Response  = @Response,
+                                    CreatedAt = SYSUTCDATETIME(),
+                                    Active    = 1
+                            WHEN NOT MATCHED THEN
+                                INSERT (Prompt, PromptHash, Response, Active)
+                                VALUES (@Prompt, @PromptHash, @Response, 1);";
             DynamicParameters parameters = new DynamicParameters();
-            parameters.Add("@Id", Guid.NewGuid(), DbType.Guid);
-            parameters.Add("@Prompt", interaction.Prompt);
-            parameters.Add("@Response", interaction.Response);
-            parameters.Add("@CreatedAt", interaction.CreatedAt);
-
-            try
+            parameters.Add("Prompt", interaction.Prompt, DbType.String);
+            parameters.Add("PromptHash", promptHash, DbType.String);
+            parameters.Add("Response", interaction.Response, DbType.String);
+            static string Sha256Hex(string input)
             {
-                await _connection.ExecuteAsync(sql, parameters);
+                using var sha256 = SHA256.Create();
+                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+                StringBuilder builder = new StringBuilder();
+                foreach (var b in bytes)
+                    builder.Append(b.ToString("x2"));
+                return builder.ToString();
             }
-            catch (SqlException ex) when (ex.Number == 2627) // UNIQUE constraint violation
-            {
-
-                var update = @"UPDATE GptInteractions SET Response = @Response WHERE Prompt = @Prompt AND Active = 1";
-                DynamicParameters updateParams = new DynamicParameters();
-                updateParams.Add("@Prompt", interaction.Prompt);
-                updateParams.Add("@Response", interaction.Response);
-                // If the prompt already exists, update the response instead of inserting a new record
-                await _connection.ExecuteAsync(update, updateParams);
-            }
+            return _connection.ExecuteAsync(sql, parameters);
         }
         public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync()
         {
             var sql = "SELECT * FROM Suggestion WHERE Active = 1 ORDER BY DateSuggestion DESC";
             return await _connection.QueryAsync<Suggestion>(sql);
         }
-        public async Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync()
-        {
-            var sql = "SELECT * FROM GptInteractions WHERE Active = 1 ORDER BY CreatedAt DESC";
-            return await _connection.QueryAsync<GPTInteraction>(sql);
-        }
+        public Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync()
+            => _connection.QueryAsync<GPTInteraction>("SELECT * FROM [GptInteractions] WHERE Active = 1 ORDER BY CreatedAt DESC");
+
 
         public async Task<GPTInteraction?> GetByIdAsync(int id)
         {
-            const string sql = "SELECT * FROM GPTInteractions WHERE Id = @Id AND Active = 1";
+            const string sql = "SELECT * FROM [GptInteractions] WHERE Id = @Id AND Active = 1";
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("Id", id, DbType.Int32);
 
@@ -188,7 +176,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             return await _connection.QueryAsync<Suggestion>(sql, parameters);
         }
 
-        public async Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync( string? typeFilter = null, bool? indoorFilter = null, DateTime? sinceDate = null)
+        public async Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync(string? typeFilter = null, bool? indoorFilter = null, DateTime? sinceDate = null)
         {
             var sql = @"
                     SELECT 
@@ -274,32 +262,15 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             return simulatedResponse;
         }
 
-        public async Task<bool> DeactivateInteractionAsync(int id)
-        {
-            const string sql = @"
-                        UPDATE GPTInteraction
-                        SET Active = 0,
-                            DeletedAt = GETDATE()
-                        WHERE Id = @Id AND Active = 1";
-
-            try
-            {
-                if (_connection.State != ConnectionState.Open)
-                    _connection.Open();
-
-                var affectedRows = await _connection.ExecuteAsync(sql, new { Id = id });
-                return affectedRows > 0;
-            }
-            catch (Exception ex)
-            {
-                throw new DataException($"Error disabling GPT interaction (id: {id})", ex);
-            }
-            finally
-            {
-                if (_connection.State == ConnectionState.Open)
-                    _connection.Close();
-            }
-        }
+        public Task<bool> DeactivateInteractionAsync(int id)
+                    => _connection.ExecuteAsync(@"
+                                    UPDATE [GptInteractions]
+                                    SET Active = 0
+                                    WHERE Id = @Id AND Active = 1;", new
+                    {
+                        Id = id
+                    })
+                .ContinueWith(t => t.Result > 0);
 
         // To be used when we have real AI behind it
         //public async Task<string> AskAsync(string question)
@@ -327,25 +298,15 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
         //        throw new Exception($"GPT request failed: {error}");
         //    }
 
-        //    var json = await response.Content.ReadAsStringAsync();
-        //    using var doc = JsonDocument.Parse(json);
-        //    var answer = doc.RootElement
-        //        .GetProperty("choices")[0]
-        //        .GetProperty("message")
-        //        .GetProperty("content")
-        //        .GetString();
-
-        //    // Saving the interaction in the database
-        //    var interaction = new GPTInteraction
-        //    {
-        //        Prompt = question,
-        //        Response = answer,
-        //        CreatedAt = DateTime.UtcNow
-        //    };
-
-        //    await SaveInteractionAsync(interaction);
-        //    return answer;
-        //}
+        // ======================
+        // Helpers
+        // ======================
+        private static string Sha256Hex(string input)
+        {
+            using var sha = SHA256.Create();
+            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input ?? string.Empty));
+            return Convert.ToHexString(bytes); // 64 hex uppercase
+        }
     }
 }
 

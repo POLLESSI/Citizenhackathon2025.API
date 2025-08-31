@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using static Citizenhackathon2025.Domain.Entities.WeatherForecast;
+﻿using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Domain.Interfaces
+namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface IWeatherForecastRepository
     {
@@ -18,6 +12,7 @@ namespace Citizenhackathon2025.Domain.Interfaces
         Task<WeatherForecast?> GetByIdAsync(int id);
         Task<List<WeatherForecast>> GetAllAsync();
         //WeatetherForecast? UpdateWeatherForecast(WeatherForecast weatherForecast);
+        Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity);
     }
 }
 

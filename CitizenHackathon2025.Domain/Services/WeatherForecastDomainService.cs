@@ -1,5 +1,4 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.ValueObjects;
+﻿using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Domain.Services
 {

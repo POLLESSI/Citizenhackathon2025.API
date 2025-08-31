@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using System.Collections.Generic;
 using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.CQRS.Queries

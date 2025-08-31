@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 
-namespace Citizenhackathon2025.Application.Common
+namespace CitizenHackathon2025.Application.Common
 {
     public static class Validators
     {

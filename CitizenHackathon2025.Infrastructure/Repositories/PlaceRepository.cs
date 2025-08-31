@@ -1,18 +1,9 @@
-﻿using System;
-using Dapper;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Data.SqlClient;
-using Citizenhackathon2025.Domain.Interfaces;
+﻿using Dapper;
+using CitizenHackathon2025.Domain.Interfaces;
 using System.Data;
-using Microsoft.Data.SqlClient;
-using System.Numerics;
-using Microsoft.Extensions.Logging;
 using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories
+namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class PlaceRepository : IPlaceRepository
     {
@@ -95,9 +86,15 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
             }
             try
             {
-                string sql = "UPDATE Place SET Name = @Name, Type = @Type, Indoor = IIF(@Indoor = 'true', 1, 0), Latitude = CAST(@Latitude AS DECIMAL(8, 6)), Longitude = CAST(@Longitude AS DECIMAL(9, 6)), Capacity = @Capacity, Tag = @Tag WHERE ID = @Id AND Active = 1";
+                const string sql = @"
+                            IF EXISTS (SELECT 1 FROM Place WHERE Name=@Name)
+                              UPDATE Place SET Type=@Type, Indoor=@Indoor, Latitude=@Latitude, Longitude=@Longitude, Capacity=@Capacity, Tag=@Tag
+                              WHERE Name=@Name;
+                            ELSE
+                              INSERT INTO Place(Name, Type, Indoor, Latitude, Longitude, Capacity, Tag, Active)
+                              VALUES (@Name, @Type, @Indoor, @Latitude, @Longitude, @Capacity, @Tag, 1);";
                 DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@Id", place.Id, DbType.Int64);
+                //parameters.Add("@Id", place.Id, DbType.Int64);
                 parameters.Add("@Name", place.Name, DbType.String);
                 parameters.Add("@Type", place.Type, DbType.String);
                 parameters.Add("@Indoor", place.Indoor, DbType.String);

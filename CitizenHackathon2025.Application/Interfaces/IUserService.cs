@@ -1,12 +1,11 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
-
-namespace Citizenhackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IUserService
     {
-#nullable disable
+    #nullable disable
         Task<Users> AuthenticateAsync(string email, string password);
         Task<Users> GetUserByEmailAsync(string email);
         Task<Users> GetUserByIdAsync(int id);

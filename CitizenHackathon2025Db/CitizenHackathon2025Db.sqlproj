@@ -82,5 +82,7 @@
     <None Include="Scripts\SeedData.sql" />
     <None Include="CitizenHackathon2025Db.publish.xml" />
     <None Include="Scripts\MigrationScript.sql" />
+    <None Include="Scripts\Suggestion.Indexes.sql" />
+    <None Include="Scripts\Script.PreDeployment.sql" />
   </ItemGroup>
 </Project>

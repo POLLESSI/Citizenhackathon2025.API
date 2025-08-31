@@ -1,17 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using Dapper;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
-using System.Data.Common;
 using CitizenHackathon2025.Domain.DTOs;
-using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories
+namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class GPTRepository : IGPTRepository
     {

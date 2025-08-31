@@ -1,7 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-
-namespace CitizenHackathon2025.Shared.Utils
+﻿namespace CitizenHackathon2025.Shared.Utils
 {
     public static class HashHelper
     {

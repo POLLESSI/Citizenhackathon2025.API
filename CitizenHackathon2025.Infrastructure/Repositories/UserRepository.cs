@@ -1,136 +1,218 @@
-﻿using Citizenhackathon2025.Domain.Interfaces;
+﻿using System.Data;
+using System.Security.Cryptography;
+using System.Text;
+using Dapper;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
-using CitizenHackathon2025.Shared.Utils;
-using Dapper;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Logging;
-using Microsoft.SqlServer.Dac.Model;
-using System.Collections;
-using System.Data;
-using System.Data.SqlClient;
-using System.Drawing;
-using System.Security.Cryptography;
-using System.Text;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories
+namespace CitizenHackathon2025.Infrastructure.Repositories
 {
-    public class UserRepository : IUserRepository
+    public class UserRepository : CitizenHackathon2025.Domain.Interfaces.IUserRepository
     {
-#nullable disable
         private readonly IDbConnection _connection;
-        private readonly ILogger<UserRepository> _logger;
 
-        public UserRepository(IDbConnection connection, ILogger<UserRepository> logger)
+        public UserRepository(IDbConnection connection)
         {
             _connection = connection;
-            _logger = logger;
 
-            // Registers the TypeHandler for UserRole
+            // Type handler to properly map UserRole <-> int
             SqlMapper.AddTypeHandler(new RoleTypeHandler());
         }
 
+        // =========================================
+        // READ
+        // =========================================
+        public Task<Users?> GetUserByEmailAsync(string email)
+        {
+            const string sql = @"
+                        SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash, Role, Status, Active
+                        FROM [Users]
+                        WHERE Email = @Email;";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Email", email, DbType.String, size: 64);
+            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
+            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
+            parameters.Add("@Role", dbType: DbType.Int32);
+            parameters.Add("@Status", dbType: DbType.Int32);
+
+            return _connection.QueryFirstOrDefaultAsync<Users>(sql, parameters);
+        }
+
+        public Task<Users?> GetUserByIdAsync(int id)
+        {
+            const string sql = @"
+                        SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash, Role, Status, Active
+                        FROM [Users]
+                        WHERE Id = @Id;";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
+            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
+            parameters.Add("@Role", dbType: DbType.Int32);
+            parameters.Add("@Status", dbType: DbType.Int32);
+
+            return _connection.QueryFirstOrDefaultAsync<Users>(sql, parameters);
+        }
+
+        public Task<IEnumerable<Users>> GetAllActiveUsersAsync()
+        {
+            const string sql = @"
+                        SELECT Id, Email, SecurityStamp, PasswordHash, Role, Status, Active
+                        FROM [Users]
+                        WHERE Active = 1
+                        ORDER BY Id DESC;";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", dbType: DbType.Int32);
+            parameters.Add("@Email", dbType: DbType.String, size: 64);
+            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
+            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
+            parameters.Add("@Role", dbType: DbType.Int32);
+            parameters.Add("@Status", dbType: DbType.Int32);
+
+            return _connection.QueryAsync<Users>(sql, parameters);
+        }
+
+        // =========================================
+        // CREATE (registration)
+        // =========================================
+        // NB : Here we use the hash passed by the caller + a SecurityStamp
+        // (If you prefer to force the use of the SP sqlUserRegister, change the signature on the service side)
         public async Task<Users> RegisterUserAsync(string email, byte[] passwordHash, Users user)
         {
-            try
-            {
-                var sql = @"
-                INSERT INTO [Users] 
-                    (Email, PasswordHash, SecurityStamp, Role, Status, Active)
-                VALUES 
-                    (@Email, @PasswordHash, @SecurityStamp, @Role, @Status, @Active);";
+            if (string.IsNullOrWhiteSpace(email))
+                throw new ArgumentException("Email cannot be empty.", nameof(email));
 
-                var parameters = new DynamicParameters();
-                parameters.Add("Email", user.Email, DbType.String);
-                parameters.Add("PasswordHash", passwordHash, DbType.Binary);
-                parameters.Add("SecurityStamp", user.SecurityStamp, DbType.Guid);
-                parameters.Add("Role", (int)user.Role, DbType.Int32); // ✅ conversion int
-                parameters.Add("Status", (int)user.Status, DbType.Int32);
-                parameters.Add("Active", user.Active, DbType.Boolean);
+            if (passwordHash == null || passwordHash.Length == 0)
+                throw new ArgumentException("PasswordHash cannot be empty.", nameof(passwordHash));
 
-                await _connection.ExecuteAsync(sql, parameters);
+            // SecurityStamp: if not filled in, one is created.
+            var stamp = user.SecurityStamp == Guid.Empty ? Guid.NewGuid() : user.SecurityStamp;
 
-                return user;
-            }
-            catch (SqlException ex)
-            {
-                _logger.LogError(ex, "SQL error while registering user {Email}", user.Email);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error while registering user {Email}", user.Email);
-                throw;
-            }
+            const string insertSql = @"
+                            INSERT INTO [Users] (Email, PasswordHash, SecurityStamp, Role, Status, Active)
+                            VALUES (@Email, @PasswordHash, @SecurityStamp, @Role, @Status, 1);
+                            ";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Email", email.Trim(), DbType.String, size: 64);
+            parameters.Add("@PasswordHash", passwordHash, DbType.Binary, size: 64);
+            parameters.Add("@SecurityStamp", stamp, DbType.Guid);
+            parameters.Add("@Role", (int)user.Role, DbType.Int32); // enum -> int
+            parameters.Add("@Status", (int)UserStatus.Active, DbType.Int32); 
+
+            await _connection.ExecuteAsync(insertSql, parameters);
+
+            // Return the user from the DB (avoids private setter issues)
+            var created = await GetUserByEmailAsync(email.Trim());
+            if (created is null)
+                throw new InvalidOperationException("User insert failed unexpectedly.");
+            return created;
         }
 
-        public async Task<Users> GetUserByEmailAsync(string email)
-        {
-            var sql = "SELECT * FROM [Users] WHERE Email = @Email AND Active = 1";
-            return await _connection.QueryFirstOrDefaultAsync<Users>(sql, new { Email = email });
-        }
-
-        public async Task<Users> GetUserByIdAsync(int id)
-        {
-            var sql = "SELECT * FROM [Users] WHERE Id = @Id";
-            return await _connection.QueryFirstOrDefaultAsync<Users>(sql, new { Id = id });
-        }
-
+        // =========================================
+        // LOGIN - Variante code (hash C# compatible SQL)
+        // =========================================
         public async Task<bool> LoginAsync(string email, string password)
         {
+            // User recovery
             var user = await GetUserByEmailAsync(email);
-            if (user == null || !user.Active || user.Status != (int)UserStatus.Active)
-                return false;
+            if (user is null) return false;
+            if (!user.Active) return false;
+            if (user.Status != UserStatus.Active) return false;
 
-            var hash = HashHelper.HashPassword(password, user.SecurityStamp.ToString());
-            return StructuralComparisons.StructuralEqualityComparer.Equals(hash, user.PasswordHash);
+            // Recalculate HASH in SQL way (NVARCHAR -> UTF-16 LE)
+            var expected = ComputeSqlLikeSha512(password, user.SecurityStamp);
+
+            // Constant time comparison
+            var ok = user.PasswordHash is not null
+                && user.PasswordHash.Length == expected.Length
+                && CryptographicOperations.FixedTimeEquals(user.PasswordHash, expected);
+
+            return ok;
         }
 
-        public Task<Users> LoginUsingProcedureAsync(string email, string password)
+        // =========================================
+        // LOGIN - Variant via the dbo.sqlUserLogin stored procedure
+        // Returns the full user if successful, otherwise null
+        // =========================================
+        public async Task<Users?> LoginUsingProcedureAsync(string email, string password)
         {
-            throw new NotImplementedException();
+            var p = new DynamicParameters();
+            p.Add("@Email", email, DbType.String, size: 64);
+            p.Add("@Password", password, DbType.String, size: 64);
+
+            // The SP returns (Id, Email, Role, Active) if OK; nothing otherwise
+            // We don't get everything back here: we do a complete SELECT again if successful.
+            var minimal = await _connection.QueryFirstOrDefaultAsync(
+                new CommandDefinition("dbo.sqlUserLogin", p, commandType: CommandType.StoredProcedure));
+
+            if (minimal == null) return null;
+
+            // We return the complete entity
+            return await GetUserByEmailAsync(email);
         }
 
-        public void SetRole(int id, string role)
+        // =========================================
+        // UPDATE / COMMANDES
+        // =========================================
+        public Task DeactivateUserAsync(int id)
         {
-            if (!Enum.TryParse<UserRole>(role, true, out var parsedRole))
-                throw new ArgumentException("Invalid role format", nameof(role));
-
-            var sql = "UPDATE [Users] SET Role = @Role WHERE Id = @Id";
-            _connection.Execute(sql, new { Id = id, Role = (int)parsedRole });
+            const string sql = @"UPDATE [Users] SET Active = 0 WHERE Id = @Id;";
+            return _connection.ExecuteAsync(sql, new { Id = id });
         }
 
-        public async Task DeactivateUserAsync(int id)
+        public void SetRole(int id, string? role)
         {
-            var sql = "UPDATE [Users] SET Active = 0 WHERE Id = @Id";
-            await _connection.ExecuteAsync(sql, new { Id = id });
+            if (string.IsNullOrWhiteSpace(role))
+                return;
+
+            if (!Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsed))
+                throw new ArgumentException($"Invalid role '{role}'.", nameof(role));
+
+            const string sql = @"UPDATE [Users] SET Role = @Role WHERE Id = @Id;";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+            parameters.Add("@Role", (int)parsed, DbType.Int32);
+
+            _connection.Execute(sql, parameters);
         }
 
-        public Users UpdateUser(Users user)
+        public Users? UpdateUser(Users user)
         {
-            var sql = @"
-            UPDATE [Users]
-            SET Email = @Email, Role = @Role, Status = @Status, Active = @Active
-            WHERE Id = @Id";
-            _connection.Execute(sql, new
-            {
-                user.Id,
-                Role = (int)user.Role, // ✅ int conversion
-                Status = (int)user.Status,
-                user.Email,
-                user.Active
-            });
+            const string sql = @"
+                        UPDATE [Users]
+                        SET Email = @Email,
+                            Role = @Role,
+                            Status = @Status,
+                            Active = @Active
+                        WHERE Id = @Id;
 
-            return user;
+                        SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash, Role, Status, Active
+                        FROM [Users]
+                        WHERE Id = @Id;";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", user.Id, DbType.Int32);
+            parameters.Add("@Email", user.Email, DbType.String, size: 64);
+            parameters.Add("@Role", (int)user.Role, DbType.Int32);
+            parameters.Add("@Status", (int)user.Status, DbType.Int32);
+            parameters.Add("@Active", user.Active, DbType.Boolean);
+
+            return _connection.QueryFirstOrDefault<Users>(sql, parameters);
         }
 
-        public async Task<IEnumerable<Users>> GetAllActiveUsersAsync()
+        // =========================================
+        // Helpers
+        // =========================================
+
+        /// <summary>
+        /// Reproduced HASHBYTES('SHA2_512', @Password + CONVERT(NVARCHAR(36), @SecurityStamp))
+        /// NVARCHAR -> UTF-16 THE (Encoding.Unicode).
+        /// </summary>
+        private static byte[] ComputeSqlLikeSha512(string? password, Guid securityStamp)
         {
-            var sql = "SELECT * FROM [Users] WHERE Active = 1";
-            return await _connection.QueryAsync<Users>(sql);
+            var combined = (password ?? string.Empty).Trim() + securityStamp.ToString();
+            var bytes = Encoding.Unicode.GetBytes(combined); // UTF-16 LE
+            return SHA512.HashData(bytes);
         }
     }
 }

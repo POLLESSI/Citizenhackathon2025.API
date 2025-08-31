@@ -1,12 +1,9 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Hub = Microsoft.AspNetCore.SignalR.Hub;
 using Microsoft.AspNetCore.Authorization;
 
-namespace Citizenhackathon2025.Hubs.Hubs
+namespace CitizenHackathon2025.Hubs.Hubs
 {
     [Authorize]
     public class GPTHub : Hub

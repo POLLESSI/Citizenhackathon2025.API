@@ -1,8 +1,6 @@
-﻿using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Hubs.Services;
+﻿using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using CitizenHackathon2025.DTOs.DTOs;

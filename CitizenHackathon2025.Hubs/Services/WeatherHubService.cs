@@ -1,14 +1,14 @@
-﻿using Citizenhackathon2025.Hubs.Hubs;
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
 
 namespace CitizenHackathon2025.Hubs.Services
 {
     public class WeatherHubService : IWeatherHubService
     {
-        private readonly IHubContext<WeatherHub> _hubContext;
+        private readonly IHubContext<WeatherForecastHub> _hubContext;
 
-        public WeatherHubService(IHubContext<WeatherHub> hubContext)
+        public WeatherHubService(IHubContext<WeatherForecastHub> hubContext)
         {
             _hubContext = hubContext;
         }

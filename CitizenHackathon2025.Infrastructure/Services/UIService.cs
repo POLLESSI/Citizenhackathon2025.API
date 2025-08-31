@@ -1,6 +1,4 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 
 namespace CitizenHackathon2025.Infrastructure.Services

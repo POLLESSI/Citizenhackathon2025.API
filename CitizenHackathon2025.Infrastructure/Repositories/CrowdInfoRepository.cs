@@ -1,39 +1,43 @@
-﻿using Citizenhackathon2025.Domain.Interfaces;
-using System.Data;
+﻿using CitizenHackathon2025.Domain.Interfaces;
 using Dapper;
-using Microsoft.Data.SqlClient;
 using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories
+namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class CrowdInfoRepository : ICrowdInfoRepository
     {
     #nullable disable
-        private readonly System.Data.IDbConnection _dbConnection;
+        private readonly System.Data.IDbConnection _connection;
 
-        public CrowdInfoRepository(System.Data.IDbConnection dbConnection)
+        public CrowdInfoRepository(System.Data.IDbConnection connection)
         {
-            _dbConnection = dbConnection;
+            _connection = connection;
         }
 
         public async Task<bool> DeleteCrowdInfoAsync(int id)
         {
             var sql = "DELETE FROM CrowdInfo WHERE Id = @Id";
-            var affectedRows = await _dbConnection.ExecuteAsync(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id);
+
+            var affectedRows = await _connection.ExecuteAsync(sql, parameters);
             return affectedRows > 0;
         }
 
         public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
         {
             var sql = "SELECT Id, LocationName, Latitude, Longitude, CrowdLevel, Timestamp FROM CrowdInfo WHERE Active = 1 ORDER BY LocationName DESC";
-            var result = await _dbConnection.QueryAsync<CrowdInfo>(sql);
+            var result = await _connection.QueryAsync<CrowdInfo>(sql);
             return result;
         }
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id)
         {
             var sql = "SELECT * FROM CrowdInfo WHERE Id = @Id";
-            var result = await _dbConnection.QuerySingleOrDefaultAsync<CrowdInfo>(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id);
+
+            var result = await _connection.QuerySingleOrDefaultAsync<CrowdInfo>(sql, parameters);
             return result;
         }
 
@@ -44,8 +48,14 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 VALUES (@LocationName, @Latitude, @Longitude, @CrowdLevel, @Timestamp);
                 SELECT CAST(SCOPE_IDENTITY() as int);
             ";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@LocationName", crowdInfo.LocationName);
+            parameters.Add("@Latitude", crowdInfo.Latitude);
+            parameters.Add("@Longitude", crowdInfo.Longitude);
+            parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel);
+            parameters.Add("@Timestamp", crowdInfo.Timestamp);
 
-            var id = await _dbConnection.QuerySingleAsync<int>(sql, crowdInfo);
+            var id = await _connection.QuerySingleAsync<int>(sql, parameters);
             crowdInfo.Id = id;
             return crowdInfo;
         }
@@ -70,7 +80,7 @@ namespace Citizenhackathon2025.Infrastructure.Repositories
                 parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel);
                 parameters.Add("@Timestamp", crowdInfo.Timestamp);
 
-                var affectedRows = _dbConnection.Execute(sql, parameters);
+                var affectedRows = _connection.Execute(sql, parameters);
 
                 if (affectedRows == 0)
                 {

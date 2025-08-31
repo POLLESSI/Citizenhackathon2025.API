@@ -1,9 +1,8 @@
-﻿using System;
-using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 
 
-namespace CitizenHackathon2025.Shared.Extentions
+namespace CitizenHackathon2025.Shared.Extensions
 {
     public static class CrowdInfoDTOExtensions
     {

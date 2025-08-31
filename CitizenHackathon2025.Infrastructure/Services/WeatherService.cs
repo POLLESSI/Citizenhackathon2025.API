@@ -1,13 +1,10 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Citizenhackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Hubs.Services;
 using Polly;
 using Polly.Wrap;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -101,8 +98,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 Console.WriteLine($"[WeatherService] Error: {ex.Message}");
             }
-            
-            // TODO: exploiter les données météo ici
+
+            // TODO: exploit weather data here
         }
         public new Task StopAsync(CancellationToken cancellationToken)
         {

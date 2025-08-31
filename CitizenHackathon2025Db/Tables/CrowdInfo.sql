@@ -9,7 +9,7 @@
 	[Active] BIT DEFAULT 1,
 
 	CONSTRAINT [PK_CrowdInfo] PRIMARY KEY ([Id]),
-	CONSTRAINT [UQ_CrowdInfo_LocationName_Timestamp] UNIQUE ([LocationName], [Timestamp])
+	CONSTRAINT [UQ_CrowdInfo_LocationName_Timestamp] UNIQUE (LocationName, [Timestamp])
 )
 
 GO

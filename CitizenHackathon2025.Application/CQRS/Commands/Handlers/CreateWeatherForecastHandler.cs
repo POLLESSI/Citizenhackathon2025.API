@@ -1,9 +1,9 @@
 ﻿using MediatR;
-using Citizenhackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.DTOs.DTOs;
 
-namespace Citizenhackathon2025.Application.CQRS.Commands.Handlers
+namespace CitizenHackathon2025.Application.CQRS.Commands.Handlers
 {
     public class CreateWeatherForecastHandler : IRequestHandler<CreateWeatherForecastCommand, WeatherForecastDTO>
     {

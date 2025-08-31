@@ -2,11 +2,11 @@
 using CitizenHackathon2025.Domain.Entities.ValueObjects;
 using CitizenHackathon2025.DTOs.DTOs;
 
-namespace Citizenhackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface ITrafficConditionService
     {
-#nullable disable
+    #nullable disable
         Task<IEnumerable<TrafficCondition?>> GetLatestTrafficConditionAsync();
         Task<TrafficCondition?> GetByIdAsync(int id);
         Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition @trafficCondition);

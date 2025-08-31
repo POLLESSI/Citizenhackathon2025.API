@@ -1,5 +1,4 @@
 ﻿using CitizenHackathon2025.Infrastructure.Services;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CitizenHackathon2025.API.Controllers

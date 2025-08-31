@@ -1,5 +1,5 @@
-﻿using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Hubs.Hubs;
+﻿using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Application.CQRS.Commands;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
@@ -7,7 +7,9 @@ using CitizenHackathon2025.Application.Suggestions.Commands;
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -15,112 +17,69 @@ using Microsoft.SqlServer.Dac.Model;
 
 namespace CitizenHackathon2025.API.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
-    public class SuggestionController : ControllerBase
+    [Route("api/[controller]")]
+    [Authorize]
+    public class SuggestionsController : ControllerBase
     {
-    #nullable disable
-        private readonly ISuggestionRepository _suggestionRepository;
-        private readonly IAIService _aiService;
-        private readonly IHubContext<GPTHub> _hubContext;
-        private readonly IMediator _mediator;
+        private readonly ISuggestionRepository _repo;
+        private readonly IHubContext<OutZenHub> _hub;
 
-        public SuggestionController(ISuggestionRepository suggestionRepository, IAIService aiService, IHubContext<GPTHub> hubContext, IMediator mediator)
+        public SuggestionsController(ISuggestionRepository repo, IHubContext<OutZenHub> hub)
         {
-            _suggestionRepository = suggestionRepository;
-            _aiService = aiService;
-            _hubContext = hubContext;
-            _mediator = mediator;
+            _repo = repo;
+            _hub = hub;
         }
 
-        // ✅ GET: /api/Suggestion/all
         [HttpGet]
-        public IActionResult GetSuggestions()
+        public async Task<IActionResult> Get([FromQuery] int? userId, CancellationToken ct)
         {
-            var eventId = HttpContext.Items["OutZen.EventId"] as string;
-            if (eventId == null)
-                return Unauthorized();
+            if (userId.HasValue)
+                return Ok(await _repo.GetSuggestionsByUserAsync(userId.Value));
 
-            // Suggestion logic by eventId
-            return Ok(new
-            {
-                EventId = eventId,
-                Suggestions = new[] { "Adventure Park", "Alternative Museum", "Relaxing Cinema" }
-            });
+            return Ok(await _repo.GetLatestSuggestionAsync());
         }
 
-        // ✅ GET: /api/Suggestion/latest
-        [HttpGet("latest")]
-        public async Task<IActionResult> GetLatestSuggestions()
-        {
-            var suggestions = await _suggestionRepository.GetLatestSuggestionAsync();
-            return Ok(suggestions);
-        }
-        // GET: api/Suggestion/5
         [HttpGet("{id:int}")]
-        public async Task<IActionResult> GetSuggestionById(int id)
+        public async Task<IActionResult> GetById(int id, CancellationToken ct)
         {
-            var result = await _mediator.Send(new GetSuggestionByIdQuery(id));
-            if (result == null || !result.Active)
-                return NotFound($"No active suggestion found for ID {id}");
-
-            return Ok(result);
+            var s = await _repo.GetByIdAsync(id);
+            return s is { Active: true } ? Ok(s) : NotFound();
         }
 
-        // GET: api/Suggestion/user/5
-        [HttpGet("user/{userId:int}")]
-        public async Task<IActionResult> GetSuggestionsByUser(int userId)
-        {
-            var query = new GetSuggestionsByUserQuery(userId);
-            var result = await _mediator.Send(query);
-            return Ok(result);
-        }
-
-        // DELETE: api/Suggestion/5
-        [HttpDelete("{id:int}")]
-        public async Task<IActionResult> SoftDelete(int id)
-        {
-            var command = new SoftDeleteSuggestionCommand(id);
-            var result = await _mediator.Send(command);
-
-            if (!result)
-                return NotFound($"Suggestion with ID {id} not found or already disabled.");
-
-            return NoContent();
-        }
-        // ✅ POSTs classics
         [HttpPost]
-        public async Task<IActionResult> SaveSuggestion([FromBody] Suggestion suggestion)
+        public async Task<IActionResult> Create([FromBody] SuggestionDTO dto, CancellationToken ct)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
-            var savedSuggestion = await _suggestionRepository.SaveSuggestionAsync(suggestion);
+            // Ownership: User_Id from claims if needed
+            var entity = new Suggestion
+            {
+                User_Id = dto.UserId,
+                DateSuggestion = dto.DateSuggestion == default ? DateTime.UtcNow : dto.DateSuggestion,
+                OriginalPlace = dto.OriginalPlace,
+                SuggestedAlternatives = dto.SuggestedAlternatives,
+                Reason = dto.Reason,
+                LocationName = dto.Context // or a dedicated field if you want
+            };
 
-            if (savedSuggestion == null)
-                return StatusCode(500, "Error while saving");
+            var saved = await _repo.SaveSuggestionAsync(entity);
 
-            await _hubContext.Clients.All.SendAsync("NewSuggestion", savedSuggestion);
-            return Ok(savedSuggestion);
+            // Send to EventId group if present
+            if (saved?.EventId is int evId)
+                await _hub.Clients.Group($"event:{evId}").SendAsync("NewSuggestion", saved, ct);
+
+            return CreatedAtAction(nameof(GetById), new { id = saved!.Id }, saved);
         }
-        [HttpPost("ai")]
-        public async Task<IActionResult> GetSuggestionFromAI([FromBody] SuggestionDTO dto)
-        {
-            var prompt = $"I am currently at {dto.OriginalPlace} the {dto.DateSuggestion:dd/MM/yyyy}. " +
-                         $"The crowd is dense and the weather is uncertain. Offer me a quiet and interesting alternative.";
 
-            var suggestion = await _aiService.GenerateSuggestionAsync(prompt);
-            return Ok(new { suggestion });
-        }
-
-        [HttpPost("create")]
-        public async Task<IActionResult> Create([FromBody] SuggestionDTO dto)
+        [HttpPut("{id:int}")]
+        public IActionResult Update(int id, [FromBody] SuggestionDTO dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
             var entity = new Suggestion
             {
+                Id = id,
                 User_Id = dto.UserId,
                 DateSuggestion = dto.DateSuggestion,
                 OriginalPlace = dto.OriginalPlace,
@@ -128,121 +87,15 @@ namespace CitizenHackathon2025.API.Controllers
                 Reason = dto.Reason
             };
 
-            var saved = await _suggestionRepository.SaveSuggestionAsync(entity);
-            return Ok(saved);
+            var updated = _repo.UpdateSuggestion(entity);
+            return updated is null ? NotFound() : Ok(updated);
         }
-        [HttpPost("generate")]
-        public async Task<IActionResult> Generate([FromBody] SuggestionContextDTO context)
+
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Delete(int id)
         {
-            var suggestion = await _mediator.Send(new GenerateSmartSuggestionCommand(context));
-            return Ok(suggestion);
-        }
-        // ✅ POST AI generation + recording + SignalR
-        [HttpPost("generate/weather")]
-        public async Task<IActionResult> GenerateSuggestion([FromBody] WeatherForecastSuggestionDTO forecastDto)
-        {
-            var prompt = $"He does {forecastDto.TemperatureC}°C with {forecastDto.Humidity}% humidity to {forecastDto.Location}. " +
-                         $"Offers a pleasant alternative activity or location for locals, with a concise and engaging tone.";
-
-            // Fix for CS0815: The issue occurs because the method `GetSuggestionsAsync` in `IAIService` is defined to return `Task` (void), 
-            // but the code is trying to assign its result to a variable. The method should return a `Task<string>` instead.
-
-            var gptResponse = await _aiService.GetSuggestionsAsync(prompt);
-
-            var newSuggestion = new Suggestion
-            {
-                User_Id = 1, // or via ClaimsPrincipal if auth
-                DateSuggestion = DateTime.UtcNow,
-                OriginalPlace = forecastDto.Location,
-                SuggestedAlternatives = gptResponse,
-                Reason = "AI-generated based on weather"
-            };
-
-            var savedSuggestion = await _suggestionRepository.SaveSuggestionAsync(newSuggestion);
-
-            await _hubContext.Clients.All.SendAsync("NewSuggestion", savedSuggestion);
-
-            return Ok(new { Suggestion = savedSuggestion });
-        }
-        [HttpPost("suggestion")]
-        public async Task<ActionResult<SuggestionDTO>> GetSuggestion([FromBody] SuggestAlternativeCommand command)
-        {
-            var result = await _mediator.Send(command);
-            return Ok(result);
-        }
-        // ✅ POST text summary
-        [HttpPost("summarize")]
-        public async Task<IActionResult> SummarizeText([FromBody] string inputText)
-        {
-            if (string.IsNullOrWhiteSpace(inputText))
-                return BadRequest("Empty text");
-
-            try
-            {
-                var summary = await _aiService.SummarizeTextAsync(inputText);
-                return Ok(new { Summary = summary });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"GPT error while summarizing : {ex.Message}");
-            }
-        }
-        // ✅ POST translation into French
-        [HttpPost("translate/french")]
-        public async Task<IActionResult> TranslateToFrench([FromBody] string englishText)
-        {
-            if (string.IsNullOrWhiteSpace(englishText))
-                return BadRequest("Empty text");
-
-            try
-            {
-                var translated = await _aiService.TranslateToFrenchAsync(englishText);
-                return Ok(new { Translation = translated });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"GPT error while translating : {ex.Message}");
-            }
-        }
-        // ✅ POST translation into Dutch
-        [HttpPost("translate/dutch")]
-        public async Task<IActionResult> TranslateToDutchAsync([FromBody] string englishText)
-        {
-            if (string.IsNullOrWhiteSpace(englishText))
-                return BadRequest("Empty text");
-
-            try
-            {
-                var translated = await _aiService.TranslateToDutchAsync(englishText);
-                return Ok(new { Translation = translated });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"GPT error while translating : {ex.Message}");
-            }
-        }
-        // ✅ POST translation into Dutch
-        [HttpPost("translate/german")]
-        public async Task<IActionResult> TranslateToGermanAsync([FromBody] string englishText)
-        {
-            if (string.IsNullOrWhiteSpace(englishText))
-                return BadRequest("Empty text");
-
-            try
-            {
-                var translated = await _aiService.TranslateToGermanAsync(englishText);
-                return Ok(new { Translation = translated });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"GPT error while translating : {ex.Message}");
-            }
-        }
-        [HttpPut("update")]
-        public IActionResult UpdateSuggestion([FromBody] Suggestion suggestion)
-        {
-            var result = _suggestionRepository.UpdateSuggestion(suggestion);
-            return result != null ? Ok(result) : NotFound();
+            var ok = await _repo.SoftDeleteSuggestionAsync(id);
+            return ok ? NoContent() : NotFound();
         }
     }
 }

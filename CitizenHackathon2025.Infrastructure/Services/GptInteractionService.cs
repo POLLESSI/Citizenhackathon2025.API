@@ -1,20 +1,23 @@
-﻿using CitizenHackathon2025.Shared.Utils;
-using Microsoft.Data.SqlClient;
+﻿using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class GptInteractionService
     {
-        public void SavePrompt(string prompt, string response)
+        private readonly IGPTRepository _gptRepository;
+        public GptInteractionService(IGPTRepository gptRepository)
         {
-            string promptHash = Convert.ToHexString(HashHelper.HashPassword(prompt, "static-stamp-gpt"));
-
-            // Example of recording via Dapper or ADO.NET
-            var command = new SqlCommand("INSERT INTO GptInteractions (Prompt, PromptHash, Response) VALUES (@prompt, @promptHash, @response)");
-            command.Parameters.AddWithValue("@prompt", prompt);
-            command.Parameters.AddWithValue("@promptHash", promptHash);
-            command.Parameters.AddWithValue("@response", response);
-
+            _gptRepository = gptRepository;
+        }
+        public async void SavePrompt(string prompt, string response)
+        {
+            await _gptRepository.SaveInteractionAsync(new GPTInteraction
+            {
+                Prompt = prompt,
+                Response = response,
+                CreatedAt = DateTime.UtcNow
+            });
             // ... Run command here with SqlConnection
         }
     }

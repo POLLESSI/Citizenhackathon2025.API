@@ -1,6 +1,6 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Domain.Interfaces
+namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface IPlaceRepository
     {

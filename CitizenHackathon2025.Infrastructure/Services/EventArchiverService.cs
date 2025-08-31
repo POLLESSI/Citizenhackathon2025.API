@@ -1,11 +1,7 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
-using Citizenhackathon2025.Domain.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
-using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Interfaces;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {

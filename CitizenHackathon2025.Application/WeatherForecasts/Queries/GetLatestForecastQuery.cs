@@ -1,7 +1,7 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using MediatR;
 
-namespace Citizenhackathon2025.Application.WeatherForecast.Queries
+namespace CitizenHackathon2025.Application.WeatherForecasts.Queries
 {
     public record GetLatestForecastQuery : IRequest<WeatherForecastDTO>
     {

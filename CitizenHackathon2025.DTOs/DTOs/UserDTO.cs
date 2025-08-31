@@ -5,7 +5,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
 {
     public class UserDTO
     {
-#nullable disable
+    #nullable disable
         public int Id { get; set; }
         [Required(ErrorMessage = "Email is required.")]
         [EmailAddress(ErrorMessage = "Invalid email format.")]

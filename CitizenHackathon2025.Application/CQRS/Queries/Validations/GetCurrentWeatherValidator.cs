@@ -1,6 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Abstractions.Validations;
 using CitizenHackathon2025.Domain.LocalBusinessRules.Validations;
-using CitizenHackathon2025.Application.CQRS.Queries;
 
 namespace CitizenHackathon2025.Application.CQRS.Queries.Validations
 {

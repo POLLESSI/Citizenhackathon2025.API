@@ -1,6 +1,4 @@
-﻿using System;
-using System.Data;
-using System.Threading.Tasks;
+﻿using System.Data;
 using Dapper;
 using Microsoft.Extensions.Logging;
 
@@ -29,7 +27,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erreur de connectivité à la base de données");
+                _logger.LogError(ex, "Database connectivity error");
                 return false;
             }
         }

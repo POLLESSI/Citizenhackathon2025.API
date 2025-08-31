@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 //using OpenAI_API;
 //using OpenAI_API.Chat;
 //using OpenAI_API.Models;
-using System.Reflection;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {

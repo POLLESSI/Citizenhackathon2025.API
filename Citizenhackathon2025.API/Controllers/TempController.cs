@@ -1,7 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Extensions;
-using Citizenhackathon2025.Domain.Interfaces;
-using Microsoft.AspNetCore.Http;
+using CitizenHackathon2025.Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using CitizenHackathon2025.DTOs.DTOs;
 

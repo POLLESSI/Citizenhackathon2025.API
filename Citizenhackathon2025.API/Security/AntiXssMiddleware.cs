@@ -1,11 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using System.IO;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-
-namespace Citizenhackathon2025.API.Security
+﻿namespace CitizenHackathon2025.API.Security
 {
     public class AntiXssMiddleware
     {

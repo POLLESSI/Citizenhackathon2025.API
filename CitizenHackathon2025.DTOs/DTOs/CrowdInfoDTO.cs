@@ -2,7 +2,7 @@
 {
     public class CrowdInfoDTO
     {
-#nullable disable
+    #nullable disable
         public string LocationName { get; set; }
         public string Latitude { get; set; }
         public string Longitude { get; set; }

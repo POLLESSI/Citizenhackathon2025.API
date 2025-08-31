@@ -2,10 +2,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
-using System.Net.Http;
-using System.Net.Http.Json;
 
-namespace Citizenhackathon2025.Infrastructure.ExternalAPIs
+namespace CitizenHackathon2025.Infrastructure.ExternalAPIs
 {
     public class OpenWeatherMapClient
     {

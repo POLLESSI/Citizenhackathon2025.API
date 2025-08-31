@@ -5,11 +5,11 @@ using System.Text;
 using System.Threading.Tasks;
 using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface ISuggestionService
     {
-#nullable disable
+    #nullable disable
         /// <summary>
         /// Gets all active suggestions from a given user.
         /// </summary>

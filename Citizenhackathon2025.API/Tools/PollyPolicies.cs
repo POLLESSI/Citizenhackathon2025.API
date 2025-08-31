@@ -1,8 +1,5 @@
 ﻿using Polly;
-using Polly.Retry;
 using Polly.Wrap;
-using System;
-using System.Net.Http;
 
 namespace CitizenHackathon2025.API.Tools
 {

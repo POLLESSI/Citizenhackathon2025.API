@@ -1,12 +1,8 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel;
-using System.Text.Json.Serialization;
-
-namespace CitizenHackathon2025.DTOs.DTOs
+﻿namespace CitizenHackathon2025.DTOs.DTOs
 {
     public class WeatherForecastSuggestionDTO
     {
-#nullable disable
+    #nullable disable
         public string TemperatureC { get; set; }
         public string Humidity { get; set; }
         public string Location

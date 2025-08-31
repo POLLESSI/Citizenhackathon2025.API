@@ -1,9 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Threading.Tasks;
-
 
 namespace CitizenHackathon2025.API.Controllers
 {

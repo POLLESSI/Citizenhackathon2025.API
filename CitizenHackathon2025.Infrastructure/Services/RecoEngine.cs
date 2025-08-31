@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using CitizenHackathon2025.Domain.Entities;
 

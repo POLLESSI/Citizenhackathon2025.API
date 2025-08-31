@@ -1,8 +1,7 @@
-﻿using System;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace CityzenHackathon2025.API.Tools
+namespace CitizenHackathon2025.API.Tools
 {
     public class DateTimeJsonConverter : JsonConverter<DateTime>
     {

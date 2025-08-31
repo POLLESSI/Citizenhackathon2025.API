@@ -1,11 +1,7 @@
-﻿using System.Threading.Tasks;
-using System.Collections.Generic;
-using Citizenhackathon2025.Domain.Entities;
-using static CitizenHackathon2025.Domain.Entities.Suggestion;
+﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.DTOs;
-using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Domain.Interfaces
+namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface IGPTRepository
     {

@@ -1,5 +1,5 @@
-﻿using Citizenhackathon2025.Application.WeatherForecast.Queries;
-using Citizenhackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using MediatR;
 

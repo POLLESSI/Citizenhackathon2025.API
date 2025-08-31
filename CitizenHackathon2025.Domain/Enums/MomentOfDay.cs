@@ -1,4 +1,4 @@
-﻿namespace CitizenHackathon2025.DTOs.Enums
+﻿namespace CitizenHackathon2025.Domain.Enums
 {
     public enum MomentOfDay
     {

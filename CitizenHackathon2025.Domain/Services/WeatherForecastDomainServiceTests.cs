@@ -1,8 +1,4 @@
-﻿
-//using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Services;
-
-namespace CitizenHackathon2025.Tests.Domain.Services;
+﻿namespace CitizenHackathon2025.Domain.Services;
 
 public class WeatherForecastDomainServiceTests
 {

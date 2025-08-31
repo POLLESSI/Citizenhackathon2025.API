@@ -1,6 +1,4 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.DTOs.DTOs;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.DTOs.UI;
 using MediatR;
 

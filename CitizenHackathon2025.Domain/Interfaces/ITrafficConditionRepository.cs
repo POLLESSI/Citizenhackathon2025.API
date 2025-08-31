@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Domain.Interfaces
+namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface ITrafficConditionRepository
     {

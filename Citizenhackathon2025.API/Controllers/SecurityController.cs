@@ -1,9 +1,6 @@
 ﻿using CitizenHackathon2025.Infrastructure.Services.Monitoring;
-using CitizenHackathon2025.DTOs.Security;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using System.Text.Json.Serialization;
+using CitizenHackathon2025.Shared.Security;
 
 namespace CitizenHackathon2025.API.Controllers
 {

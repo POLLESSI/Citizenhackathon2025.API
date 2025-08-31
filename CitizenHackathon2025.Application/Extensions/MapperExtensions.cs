@@ -1,37 +1,33 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
-using Microsoft.SqlServer.Dac.Model;
-using System.Globalization;
-using System.Security;
 
 namespace CitizenHackathon2025.Application.Extensions
 {
     public static class MapperExtensions
     {
+    #nullable disable
         // DTO -> Entity
-        public static Citizenhackathon2025.Domain.Entities.WeatherForecast MapToWeatherForecast(this WeatherForecastDTO dto)
+        public static CitizenHackathon2025.Domain.Entities.WeatherForecast MapToWeatherForecast(this WeatherForecastDTO dto)
         {
-            return new Citizenhackathon2025.Domain.Entities.WeatherForecast
+            return new CitizenHackathon2025.Domain.Entities.WeatherForecast
             {
                 DateWeather = dto.DateWeather,
-                TemperatureC = 0,
+                TemperatureC = dto.TemperatureC,
                 Summary = dto.Summary,
-                RainfallMm = 0,
-                Humidity = 0,
-                WindSpeedKmh = 0
-                // Id and Active are managed by the database
+                RainfallMm = dto.RainfallMm,
+                Humidity = dto.Humidity,
+                WindSpeedKmh = dto.WindSpeedKmh
             };
         }
 
         // Entity -> DTO
-        public static WeatherForecastDTO MapToWeatherForecastDTO(this Citizenhackathon2025.Domain.Entities.WeatherForecast entity)
+        public static WeatherForecastDTO MapToWeatherForecastDTO(this CitizenHackathon2025.Domain.Entities.WeatherForecast entity)
         {
-#nullable disable
+
             return new WeatherForecastDTO
             {
-                Id = entity.Id, // optional if API should not expose the Id
+                Id = entity.Id, 
                 DateWeather = entity.DateWeather,
                 TemperatureC = entity.TemperatureC,
                 Summary = entity.Summary,

@@ -1,13 +1,12 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace Citizenhackathon2025.Infrastructure.Services
+namespace CitizenHackathon2025.Infrastructure.Services
 {
     /// <summary>
     /// Weather data retrieval service via the OpenWeather API.

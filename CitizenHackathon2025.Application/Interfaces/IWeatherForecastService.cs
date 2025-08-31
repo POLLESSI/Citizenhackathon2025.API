@@ -1,13 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using CitizenHackathon2025.DTOs.DTOs;
-using static Citizenhackathon2025.Domain.Entities.WeatherForecast;
+﻿using CitizenHackathon2025.DTOs.DTOs;
 
-namespace Citizenhackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IWeatherForecastService
     {

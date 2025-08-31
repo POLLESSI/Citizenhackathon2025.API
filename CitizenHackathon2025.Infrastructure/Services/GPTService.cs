@@ -1,11 +1,8 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {

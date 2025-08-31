@@ -1,7 +1,5 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Domain.Interfaces
 {

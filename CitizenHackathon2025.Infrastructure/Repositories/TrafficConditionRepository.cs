@@ -1,13 +1,9 @@
-﻿using System;
-using Dapper;
-using System.Data.SqlClient;
-using Citizenhackathon2025.Domain.Interfaces;
+﻿using Dapper;
+using CitizenHackathon2025.Domain.Interfaces;
 using System.Data;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Logging;
 using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories
+namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class TrafficConditionRepository : ITrafficConditionRepository
     {

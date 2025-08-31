@@ -1,12 +1,10 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using Citizenhackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Application.Interfaces;
-using Citizenhackathon2025.Domain.Entities;
+using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    public class UserHubService : IUserHubService
+    public class UserHubService : CitizenHackathon2025.Application.Interfaces.IUserHubService
     {
         private readonly IHubContext<UserHub> _hubContext;
 

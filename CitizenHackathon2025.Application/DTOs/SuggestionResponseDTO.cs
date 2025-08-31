@@ -1,5 +1,4 @@
-﻿
-using CitizenHackathon2025.DTOs.DTOs;
+﻿using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.DTOs
 {

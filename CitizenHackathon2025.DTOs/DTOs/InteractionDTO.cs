@@ -1,5 +1,4 @@
-﻿
-namespace CitizenHackathon2025.DTOs.DTOs
+﻿namespace CitizenHackathon2025.DTOs.DTOs
 {
     public class InteractionDTO
     {

@@ -1,5 +1,4 @@
-﻿
-namespace CitizenHackathon2025.Domain.LocalBusinessRules.Invariants
+﻿namespace CitizenHackathon2025.Domain.LocalBusinessRules.Invariants
 {
     public static class WeatherForecastInvariants
     {

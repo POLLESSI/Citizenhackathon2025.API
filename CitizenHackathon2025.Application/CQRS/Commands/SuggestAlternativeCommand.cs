@@ -1,6 +1,4 @@
-﻿using CitizenHackathon2025.DTOs.DTOs;
-using MediatR;
-using CitizenHackathon2025.Domain.ValueObjects;
+﻿using MediatR;
 using CitizenHackathon2025.DTOs.UI;
 
 namespace CitizenHackathon2025.Application.CQRS.Commands

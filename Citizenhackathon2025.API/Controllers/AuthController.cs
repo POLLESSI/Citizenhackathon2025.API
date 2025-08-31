@@ -1,13 +1,9 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
-using CityzenHackathon2025.API.Tools;
+using CitizenHackathon2025.API.Tools; 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -35,6 +31,7 @@ namespace CitizenHackathon2025.API.Controllers
         // -----------------------------
         // LOGIN
         // -----------------------------
+        [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO request)
         {
@@ -59,12 +56,28 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // -----------------------------
+        // LOGOUT
+        // -----------------------------
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout([FromBody] string token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return BadRequest("Missing token");
+
+            await _refreshTokenService.InvalidateAsync(token);
+            return Ok(new { message = "Logged out successfully" });
+        }
+
+        // -----------------------------
         // REGISTER
         // -----------------------------
+        [AllowAnonymous]
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
         {
             var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, UserRole.User);
+            _logger.LogInformation("New registered user : {Email}", dto.Email);
             _logger.LogInformation("New registered user : {Email}", dto.Email);
             return Ok(userDto);
         }
@@ -72,6 +85,7 @@ namespace CitizenHackathon2025.API.Controllers
         // -----------------------------
         // REFRESH
         // -----------------------------
+        [AllowAnonymous]
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshDTO request)
         {

@@ -1,16 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Citizenhackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Entities;
 
-namespace Citizenhackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IEventService
     {
-#nullable disable
+    #nullable disable
         Task<IEnumerable<Event?>> GetLatestEventAsync();
         Task<Event> SaveEventAsync(Event @event);
         Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync();

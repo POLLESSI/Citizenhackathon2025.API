@@ -26,7 +26,7 @@ namespace CitizenHackathon2025.Application.Suggestions.Handlers
             }
             catch (Exception ex)
             {
-                _log.LogWarning("GPT externe indisponible, fallback AstroIA: {Message}", ex.Message);
+                _log.LogWarning("External GPT unavailable, fallback AstroIA: {Message}", ex.Message);
             }
 
             return baseSuggestion;

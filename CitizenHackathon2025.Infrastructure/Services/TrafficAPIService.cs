@@ -1,4 +1,4 @@
-﻿using Citizenhackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Infrastructure.Services

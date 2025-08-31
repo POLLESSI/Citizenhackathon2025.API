@@ -1,7 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel;
-
-namespace CitizenHackathon2025.DTOs.DTOs
+﻿namespace CitizenHackathon2025.DTOs.DTOs
 {
     public class TouristicPromptDTO
     {

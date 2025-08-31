@@ -1,7 +1,5 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.DTOs;
-using CitizenHackathon2025.Domain.Services;
-using CitizenHackathon2025.DTOs.Enums;
+﻿using CitizenHackathon2025.Domain.DTOs;
+using CitizenHackathon2025.Domain.Enums;
 using IAggregateSuggestionService = CitizenHackathon2025.Application.Interfaces.IAggregateSuggestionService;
 
 namespace CitizenHackathon2025.Application.Services

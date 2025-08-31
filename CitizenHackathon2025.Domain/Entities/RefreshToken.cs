@@ -1,5 +1,4 @@
-﻿using System;
-using CitizenHackathon2025.Domain.Enums;
+﻿using CitizenHackathon2025.Domain.Enums;
 
 namespace CitizenHackathon2025.Domain.Entities
 {

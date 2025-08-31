@@ -1,5 +1,4 @@
-﻿
-namespace CitizenHackathon2025.Domain.ValueObjects
+﻿namespace CitizenHackathon2025.Domain.ValueObjects
 {
     public class CrowdLevel
     {

@@ -2,7 +2,7 @@
 {
     public class CrowdInfoUIDTO
     {
-#nullable disable
+    #nullable disable
         public CrowdInfoDTO Original { get; set; }
         public string Icon { get; set; }
         public string Color { get; set; }

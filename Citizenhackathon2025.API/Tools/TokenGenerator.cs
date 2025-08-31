@@ -1,12 +1,11 @@
 ﻿using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace CityzenHackathon2025.API.Tools
+namespace CitizenHackathon2025.API.Tools 
 {
     public class TokenGenerator
     {
@@ -14,36 +13,53 @@ namespace CityzenHackathon2025.API.Tools
         private readonly IConfiguration _configuration;
         private readonly string _secretKey;
         private readonly int _tokenDuration;
+        private readonly string _issuer;
+        private readonly string? _audience;
 
         public TokenGenerator(IConfiguration configuration)
         {
             _configuration = configuration;
-            _secretKey = _configuration["JwtSettings:SecretKey"];
-            _tokenDuration = int.TryParse(_configuration["JwtSettings:TokenDurationMinutes"], out int minutes)
-                ? minutes
-                : 30; // fallback if the value is not readable
+            _secretKey = _configuration["Jwt:Secret"];
+            _tokenDuration = int.TryParse(_configuration["JwtSettings:TokenDurationMinutes"], out int minutes) ? minutes : 30;
+            _issuer = _configuration["Jwt:Issuer"] ?? "CitizenHackathon2025API";
+            _audience = _configuration["Jwt:Audience"]; 
         }
-        public string GetSecretKey()
-        {
-            return _secretKey;
-        }
+
+        public string GetSecretKey() => _secretKey;
+
         public string GenerateToken(string email, UserRole role)
         {
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha512);
 
-            string roleValue = role.ToRoleString(); // "admin", "modo", "user"
-
-            var claims = new[]
+            // ✅ role aligned with your constants (case included)
+            var roleValue = role switch
             {
-                new Claim(ClaimTypes.Role, roleValue),
+                UserRole.Admin => Roles.Admin,
+                UserRole.Modo => Roles.Modo,
+                UserRole.User => Roles.User,
+                UserRole.Guest => Roles.Guest,
+                _ => Roles.User
+            };
+
+            var claims = new List<Claim>
+            {
                 new Claim(JwtRegisteredClaimNames.Sub, email),
+                new Claim(JwtRegisteredClaimNames.Email, email),
                 new Claim(ClaimTypes.Email, email),
-                new Claim(ClaimTypes.Name, email)
+                new Claim(ClaimTypes.Name, email),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+
+                // ✅ duplicate role (historical policies compatibility + RequireRole)
+                new Claim(ClaimTypes.Role, roleValue),
+                new Claim(Claims.Role,     roleValue)
             };
 
             var jwt = new JwtSecurityToken(
+                issuer: _issuer,
+                audience: _audience,           // can remain null if ValidateAudience=false
                 claims: claims,
+                notBefore: DateTime.UtcNow,
                 expires: DateTime.UtcNow.AddMinutes(_tokenDuration),
                 signingCredentials: credentials
             );

@@ -1,5 +1,4 @@
-﻿
-namespace CitizenHackathon2025.Shared.Options
+﻿namespace CitizenHackathon2025.Shared.Options
 {
     public class OpenWeatherOptions
     {

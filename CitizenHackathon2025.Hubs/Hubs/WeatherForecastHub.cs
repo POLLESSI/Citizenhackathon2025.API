@@ -1,19 +1,18 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Diagnostics;
-using Microsoft.Extensions.Logging;
 
-
-namespace CitizeHackathon2025.Hubs.Hubs
+namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class WeatherForecastHub : Hub
     {
-#nullable disable
+    #nullable disable
         public async Task RefreshWeatherForecast(string message)
         {
             
             await Clients.All.SendAsync("NewWeatherForecast", message);
+        }
+        public async Task Notify(string message)
+        {
+            await Clients.All.SendAsync("ReceiveForecast", message);
         }
     }
 }

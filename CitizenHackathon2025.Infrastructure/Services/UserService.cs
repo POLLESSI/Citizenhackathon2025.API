@@ -1,33 +1,18 @@
-﻿using Citizenhackathon2025.Application.Common;
-using Citizenhackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
-using Citizenhackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Infrastructure.Services;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Shared.Utils;
-using Dapper;
-using Mapster;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Data;
-using System.Drawing;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    public class UserService : IUserService
+    public class UserService : CitizenHackathon2025.Application.Interfaces.IUserService
     {
-#nullable disable
+    #nullable disable
         private readonly IUserRepository _userRepository;
         private readonly IUserHubService _hubService;
         private readonly ILogger<UserService> _logger;

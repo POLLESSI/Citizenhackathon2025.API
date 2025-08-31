@@ -1,14 +1,8 @@
-﻿using CitizeHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Application.Extensions;
-using Citizenhackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Enums;
-using Citizenhackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Shared.Utils;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 
@@ -22,7 +16,7 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly IHubContext<UserHub> _hubContext;
         private readonly ILogger<UserController> _logger;
 
-        public UserController(IUserService userService, IHubContext<UserHub> hubContext, ILogger<UserController> logger)
+        public UserController(CitizenHackathon2025.Application.Interfaces.IUserService userService, IHubContext<UserHub> hubContext, ILogger<UserController> logger)
         {
             _userService = userService;
             _hubContext = hubContext;

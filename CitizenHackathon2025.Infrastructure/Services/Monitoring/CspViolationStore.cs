@@ -1,7 +1,4 @@
-﻿using CitizenHackathon2025.DTOs.Security;
-using System.Linq;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using CitizenHackathon2025.Shared.Security;
 
 namespace CitizenHackathon2025.Infrastructure.Services.Monitoring
 {

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using CitizenHackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {

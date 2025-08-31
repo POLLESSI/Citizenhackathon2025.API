@@ -1,150 +1,163 @@
-﻿using Citizenhackathon2025.Domain.Entities;
-using Citizenhackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Domain.Entities;
-using Dapper;
-using Microsoft.Data.SqlClient;
+﻿using Dapper;
 using Microsoft.Extensions.Logging;
-using Microsoft.SqlServer.Dac.Model;
-using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
-using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories
+namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class SuggestionRepository : ISuggestionRepository
     {
-    #nullable disable
-        private readonly System.Data.IDbConnection _connection;
+        private readonly IDbConnection _connection;
+        private readonly ILogger<SuggestionRepository> _logger;
 
-        public SuggestionRepository(System.Data.IDbConnection connection)
+        public SuggestionRepository(IDbConnection connection, ILogger<SuggestionRepository> logger)
         {
             _connection = connection;
+            _logger = logger;
         }
+
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync()
         {
-            try
-            {
-                const string sql = "SELECT * FROM Suggestion WHERE Active = 1";
-                var suggestions = await _connection.QueryAsync<Suggestion?>(sql);
-                return suggestions.ToList();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving latest suggestions: {ex.Message}");
-                return new List<Suggestion>();
-            }
+            const string sql = @"
+                            SELECT TOP (100) *
+                            FROM dbo.Suggestion
+                            WHERE Active = 1
+                            ORDER BY DateSuggestion DESC";
+            return await _connection.QueryAsync<Suggestion?>(sql);
         }
+
         public async Task<Suggestion?> GetByIdAsync(int id)
         {
+            const string sql = @"
+                            SELECT Id, User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason,
+                                   Active, DateDeleted, EventId, ForecastId, TrafficId, LocationName
+                            FROM dbo.Suggestion
+                            WHERE Id = @Id AND Active = 1;";
+            DynamicParameters parameters = new();
+            parameters.Add("Id", id, DbType.Int32);
+
             try
             {
-                const string sql = "SELECT Id, User_Id, DateSuggestion, OriginalPlace, SugestedAlternatives, Reason FROM Suggestions WHERE Id = @Id AND Active = 1";
-                DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@Id", id, DbType.Int64);
-
-                var suggestion = await _connection.QueryFirstOrDefaultAsync<Suggestion>(sql, parameters);
-
-                return suggestion;
+                return await _connection.QueryFirstOrDefaultAsync<Suggestion>(sql, parameters);
             }
             catch (Exception ex)
             {
-
-                Console.WriteLine($"Error getting Suggestion : {ex.ToString}");
+                _logger.LogError(ex, "Error getting Suggestion by Id={Id}", id);
                 return null;
             }
-            
         }
 
         public async Task<IEnumerable<Suggestion?>> GetSuggestionsByUserAsync(int userId)
         {
+            const string sql = @"
+                            SELECT *
+                            FROM dbo.Suggestion
+                            WHERE User_Id = @UserId AND Active = 1
+                            ORDER BY DateSuggestion DESC;";
+            DynamicParameters parameters = new();
+            parameters.Add("UserId", userId, DbType.Int32);
+
             try
             {
-                const string sql = "SELECT * FROM Suggestion WHERE User_Id = @UserId AND Active = 1";
-                var suggestions = await _connection.QueryAsync<Suggestion?>(sql, new { UserId = userId });
-                return [.. suggestions];
+                return await _connection.QueryAsync<Suggestion?>(sql, parameters);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving suggestions for user {userId}: {ex.Message}");
-                return new List<Suggestion>();
+                _logger.LogError(ex, "Error retrieving suggestions for user {UserId}", userId);
+                return Enumerable.Empty<Suggestion>();
             }
         }
 
         public async Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion)
         {
+            const string sql = @"
+                            INSERT INTO dbo.Suggestion
+                            (User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, EventId, ForecastId, TrafficId, LocationName)
+                            OUTPUT INSERTED.*
+                            VALUES (@User_Id, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason, @EventId, @ForecastId, @TrafficId, @LocationName);";
+            DynamicParameters parameters = new();
+            parameters.Add("User_Id", suggestion.User_Id, DbType.Int32);
+            parameters.Add("DateSuggestion", suggestion.DateSuggestion, DbType.DateTime2);
+            parameters.Add("OriginalPlace", suggestion.OriginalPlace, DbType.String);
+            parameters.Add("SuggestedAlternatives", suggestion.SuggestedAlternatives, DbType.String);
+            parameters.Add("Reason", suggestion.Reason, DbType.String);
+            parameters.Add("EventId", suggestion.EventId, DbType.Int32);
+            parameters.Add("ForecastId", suggestion.ForecastId, DbType.Int32);
+            parameters.Add("TrafficId", suggestion.TrafficId, DbType.Int32);
+            parameters.Add("LocationName", suggestion.LocationName, DbType.String);
+
             try
             {
-                const string sql = @"INSERT INTO Suggestion (User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason)
-                     OUTPUT INSERTED.*
-                     VALUES (@User_Id, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason)";
-                DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@User_Id", suggestion.User_Id);
-                parameters.Add("@DateSuggestion", suggestion.DateSuggestion);
-                parameters.Add("@OriginalPlace", suggestion.OriginalPlace);
-                parameters.Add("@SuggestedAlternatives", suggestion.SuggestedAlternatives);
-                parameters.Add("@Reason", suggestion.Reason);
-
-                //int rowsAffected = await _connection.ExecuteAsync(sql, parameters);
-                //return null;
-                var inserted = await _connection.QuerySingleAsync<Suggestion>(sql, parameters);
-                return inserted;
+                return await _connection.QuerySingleAsync<Suggestion>(sql, parameters);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error adding Suggestion");
+                return null!;
+            }
+        }
 
-                Console.WriteLine($"Error adding Suggestion: {ex}");
+        public Suggestion? UpdateSuggestion(Suggestion suggestion)
+        {
+            if (suggestion is null || suggestion.Id <= 0)
+                throw new ArgumentException("Invalid suggestion to update.", nameof(suggestion));
+
+            const string sql = @"
+                            UPDATE dbo.Suggestion
+                            SET User_Id = @User_Id,
+                                DateSuggestion = @DateSuggestion,
+                                OriginalPlace = @OriginalPlace,
+                                SuggestedAlternatives = @SuggestedAlternatives,
+                                Reason = @Reason,
+                                EventId = @EventId,
+                                ForecastId = @ForecastId,
+                                TrafficId = @TrafficId,
+                                LocationName = @LocationName
+                            WHERE Id = @Id AND Active = 1;";
+            DynamicParameters parameters = new();
+            parameters.Add("Id", suggestion.Id, DbType.Int32);
+            parameters.Add("User_Id", suggestion.User_Id, DbType.Int32);
+            parameters.Add("DateSuggestion", suggestion.DateSuggestion, DbType.DateTime2);
+            parameters.Add("OriginalPlace", suggestion.OriginalPlace, DbType.String);
+            parameters.Add("SuggestedAlternatives", suggestion.SuggestedAlternatives, DbType.String);
+            parameters.Add("Reason", suggestion.Reason, DbType.String);
+            parameters.Add("EventId", suggestion.EventId, DbType.Int32);
+            parameters.Add("ForecastId", suggestion.ForecastId, DbType.Int32);
+            parameters.Add("TrafficId", suggestion.TrafficId, DbType.Int32);
+            parameters.Add("LocationName", suggestion.LocationName, DbType.String);
+
+
+            try
+            {
+                var rows = _connection.Execute(sql, parameters);
+
+                return rows > 0 ? suggestion : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating suggestion Id={Id}", suggestion.Id);
                 return null;
             }
         }
-        
-        public Suggestion UpdateSuggestion(Suggestion suggestion)
-        {
-            if (suggestion == null || suggestion.Id <= 0)
-            {
-                throw new ArgumentException("Invalid suggestion to update.", nameof(suggestion));
-            }
-            try
-            {
-                string sql = "UPDATE Suggestion SET User_Id = @UserId, DateSuggestion = @DateSuggestion, OriginalPlace = @OriginalPlace, SuggestedAlternatives = @SuggestedAlternatives, Reason = @Reason WHERE Id = @Id AND Active = 1";
-                DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@Id", suggestion.Id);
-                parameters.Add("@UserId", suggestion.User_Id);
-                parameters.Add("@DateSuggestion", suggestion.DateSuggestion);
-                parameters.Add("@OriginalPlace", suggestion.OriginalPlace);
-                parameters.Add("@SuggestedAlternatives", suggestion.SuggestedAlternatives);
-                parameters.Add("@Reason", suggestion.Reason);
 
-                var affectedRows = _connection.Execute(sql, parameters);
-
-                return affectedRows > 0 ? suggestion : null;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error updating suggestion: {ex.Message}");
-            }
-            return null;
-        }
         public async Task<bool> SoftDeleteSuggestionAsync(int id)
         {
+            const string sql = @"
+                            UPDATE dbo.Suggestion
+                            SET Active = 0, DateDeleted = SYSUTCDATETIME()
+                            WHERE Id = @Id AND Active = 1;";
+            DynamicParameters parameters = new();
+            parameters.Add("Id", id, DbType.Int32);
+
             try
             {
-                const string sql = @"
-                    UPDATE Suggestion
-                    SET Active = 0,
-                        DateDeleted = GETDATE()
-                    WHERE Id = @Id AND Active = 1";
-
-                int rows = await _connection.ExecuteAsync(sql, new { Id = id });
+                var rows = await _connection.ExecuteAsync(sql, parameters);
                 return rows > 0;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error during soft delete: {ex.Message}");
+                _logger.LogError(ex, "Error during soft delete Id={Id}", id);
                 return false;
             }
         }

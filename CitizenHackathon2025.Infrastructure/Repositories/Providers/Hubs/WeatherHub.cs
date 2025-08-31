@@ -1,7 +1,7 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.SignalR;
 
-namespace Citizenhackathon2025.Infrastructure.Repositories.Providers.Hubs
+namespace CitizenHackathon2025.Infrastructure.Repositories.Providers.Hubs
 {
     public class WeatherHub : Hub
     {

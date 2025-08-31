@@ -2,7 +2,7 @@
 using System.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 
-namespace Citizenhackathon2025.Infrastructure.Persistence
+namespace CitizenHackathon2025.Infrastructure.Persistence
 {
     public class DbConnectionFactory
     {

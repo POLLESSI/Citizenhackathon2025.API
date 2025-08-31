@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace CitizenHackathon2025.DTOs.Security
+namespace CitizenHackathon2025.Shared.Security
 {
     public class CspReportModel
     {

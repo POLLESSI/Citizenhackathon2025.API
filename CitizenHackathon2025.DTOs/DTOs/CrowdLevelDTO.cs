@@ -1,4 +1,4 @@
-﻿using CitizenHackathon2025.DTOs.Enums;
+﻿using CitizenHackathon2025.Domain.Enums;
 
 namespace CitizenHackathon2025.DTOs.DTOs
 {
