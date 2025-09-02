@@ -11,34 +11,53 @@ namespace CitizenHackathon2025.API.Middlewares
         private readonly RequestDelegate _next;
         private readonly ILogger<OutZenTokenMiddleware> _logger;
         private readonly bool _allowHeaderFallback;
+        private readonly bool _requireEventId;
         private readonly JwtOptions _jwt;
 
-        public OutZenTokenMiddleware(
-            RequestDelegate next,
-            ILogger<OutZenTokenMiddleware> logger,
-            IConfiguration configuration,
-            IOptions<JwtOptions> jwtOptions)
+        [ActivatorUtilitiesConstructor]
+        public OutZenTokenMiddleware(RequestDelegate next, ILogger<OutZenTokenMiddleware> logger, IConfiguration configuration, IOptions<JwtOptions> jwtOptions)
         {
             _next = next;
             _logger = logger;
-            _jwt = jwtOptions.Value;
-
             _allowHeaderFallback = configuration.GetValue<bool>("OutZen:AllowHeaderFallback");
+            _requireEventId      = configuration.GetValue<bool>("OutZen:RequireEventId", true);
+            _jwt = jwtOptions.Value;
         }
 
         public async Task Invoke(HttpContext context)
         {
-            string? eventId = null;
-            string source = "None";
+            var path = context.Request.Path.Value ?? string.Empty;
 
-            if (context.User?.Identity?.IsAuthenticated == true)
+            // ✔️ Allowlist: never eventId required
+            if (HttpMethods.IsOptions(context.Request.Method) ||
+                path.Equals("/", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/favicon", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/health", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/api/User/login", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/api/User/register", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/api/Suggestions", StringComparison.OrdinalIgnoreCase))
             {
-                eventId = context.User.FindFirst("event_id")?.Value;
-                if (!string.IsNullOrEmpty(eventId))
-                    source = "JWT";
+                await _next(context);
+                return;
             }
 
-            if (string.IsNullOrEmpty(eventId))
+            int? evId = null;
+            string source = "None";
+
+            // 1) Claim
+            if (context.User?.Identity?.IsAuthenticated == true)
+            {
+                var claimValue = context.User.FindFirst("event_id")?.Value;
+                if (int.TryParse(claimValue, out var claimEvId))
+                {
+                    evId = claimEvId;
+                    source = "JWT";
+                }
+            }
+
+            // 2) Token in query (?access_token=)
+            if (evId is null)
             {
                 var token = context.Request.Query["access_token"].FirstOrDefault();
                 if (!string.IsNullOrEmpty(token))
@@ -64,9 +83,12 @@ namespace CitizenHackathon2025.API.Middlewares
                         };
 
                         var principal = handler.ValidateToken(token, parameters, out _);
-                        eventId = principal.FindFirst("event_id")?.Value;
-                        if (!string.IsNullOrEmpty(eventId))
-                            source = "QueryString";
+                        var claimValue = principal.FindFirst("event_id")?.Value;
+                        if (int.TryParse(claimValue, out var tokenEvId))
+                        {
+                            evId = tokenEvId;
+                            source = "QueryStringToken";
+                        }
                     }
                     catch (SecurityTokenExpiredException ex)
                     {
@@ -85,34 +107,40 @@ namespace CitizenHackathon2025.API.Middlewares
                 }
             }
 
-            if (string.IsNullOrEmpty(eventId) && _allowHeaderFallback)
+            // 3) Header (fallback)
+            if (evId is null && _allowHeaderFallback &&
+                context.Request.Headers.TryGetValue("X-OutZen-EventId", out var hdr) &&
+                int.TryParse(hdr.ToString(), out var hdrEvId))
             {
-                if (context.Request.Headers.TryGetValue("X-OutZen-EventId", out var headerEventId))
+                evId = hdrEvId;
+                source = "Header";
+            }
+
+            // 4) Simple query param
+            if (evId is null)
+            {
+                var candidate = context.Request.Query["eventId"].FirstOrDefault()
+                              ?? context.Request.Headers["X-OutZen-EventId"].FirstOrDefault();
+                if (int.TryParse(candidate, out var qEvId))
                 {
-                    eventId = headerEventId.ToString();
-                    if (!string.IsNullOrEmpty(eventId))
-                        source = "Header";
+                    evId = qEvId;
+                    source = "QueryParam/Header";
                 }
             }
 
-            if (string.IsNullOrEmpty(eventId))
+            // 5) If we require an eventId and we don't have one → 401
+            if (_requireEventId && evId is null)
             {
-                var path = context.Request.Path.Value ?? string.Empty;
-                if (path.StartsWith("/api/suggestion", StringComparison.OrdinalIgnoreCase) ||
-                    path.StartsWith("/outzenhub", StringComparison.OrdinalIgnoreCase))
-                {
-                    _logger.LogWarning("Request blocked: Missing OutZen eventId. Path={Path}", path);
-                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    await context.Response.WriteAsync("Missing OutZen eventId.");
-                    return;
-                }
-
-                _logger.LogDebug("No eventId provided. Request allowed for path {Path}", path);
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsync("Missing OutZen eventId.");
+                return;
             }
-            else
+
+            // 6) OK → store (if present) and continue
+            if (evId is not null)
             {
-                context.Items["OutZen.EventId"] = eventId;
-                _logger.LogInformation("OutZen EventId resolved: {EventId} (source: {Source})", eventId, source);
+                context.Items["OutZen.EventId"] = evId.Value;
+                _logger.LogInformation("OutZen EventId resolved: {EventId} (source: {Source})", evId, source);
             }
 
             await _next(context);

@@ -7,7 +7,6 @@ using CitizenHackathon2025.Application.Suggestions.Commands;
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Hubs.Hubs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -30,8 +29,21 @@ namespace CitizenHackathon2025.API.Controllers
             _repo = repo;
             _hub = hub;
         }
+        [HttpGet("all")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAll([FromQuery] int? userId, [FromQuery] bool all = false, CancellationToken ct = default)
+        {
+            if (userId.HasValue)
+                return Ok(await _repo.GetSuggestionsByUserAsync(userId.Value));
+
+            if (all)
+                return Ok(await _repo.GetAllSuggestionsAsync());
+
+            return Ok(await _repo.GetLatestSuggestionAsync());
+        }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> Get([FromQuery] int? userId, CancellationToken ct)
         {
             if (userId.HasValue)
@@ -48,6 +60,7 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         public async Task<IActionResult> Create([FromBody] SuggestionDTO dto, CancellationToken ct)
         {
             if (!ModelState.IsValid) return ValidationProblem(ModelState);
@@ -60,7 +73,8 @@ namespace CitizenHackathon2025.API.Controllers
                 OriginalPlace = dto.OriginalPlace,
                 SuggestedAlternatives = dto.SuggestedAlternatives,
                 Reason = dto.Reason,
-                LocationName = dto.Context // or a dedicated field if you want
+                LocationName = dto.Context, // or a dedicated field if you want
+                EventId = dto.EventId
             };
 
             var saved = await _repo.SaveSuggestionAsync(entity);

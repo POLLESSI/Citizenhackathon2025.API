@@ -8,6 +8,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class SuggestionRepository : ISuggestionRepository
     {
+    #nullable disable
         private readonly IDbConnection _connection;
         private readonly ILogger<SuggestionRepository> _logger;
 
@@ -15,6 +16,24 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             _connection = connection;
             _logger = logger;
+        }
+
+        public async Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync()
+        {
+            const string sql = @"
+                            SELECT *
+                            FROM dbo.Suggestion
+                            WHERE Active = 1
+                            ORDER BY DateSuggestion DESC;";
+            try
+            {
+                return await _connection.QueryAsync<Suggestion?>(sql);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving all suggestions");
+                return Enumerable.Empty<Suggestion>();
+            }
         }
 
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync()

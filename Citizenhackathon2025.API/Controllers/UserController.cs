@@ -1,10 +1,11 @@
-﻿using CitizenHackathon2025.Hubs.Hubs;
+﻿using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -14,12 +15,14 @@ namespace CitizenHackathon2025.API.Controllers
     {
         private readonly IUserService _userService;
         private readonly IHubContext<UserHub> _hubContext;
+        private readonly TokenGenerator _tokenGenerator;
         private readonly ILogger<UserController> _logger;
 
-        public UserController(CitizenHackathon2025.Application.Interfaces.IUserService userService, IHubContext<UserHub> hubContext, ILogger<UserController> logger)
+        public UserController(IUserService userService, IHubContext<UserHub> hubContext, TokenGenerator tokenGenerator, ILogger<UserController> logger)
         {
             _userService = userService;
             _hubContext = hubContext;
+            _tokenGenerator = tokenGenerator;
             _logger = logger;
         }
 
@@ -38,8 +41,12 @@ namespace CitizenHackathon2025.API.Controllers
                 return Unauthorized("Invalid credentials");
 
             var user = await _userService.GetUserByEmailAsync(dto.Email);
+
+            // ⚠️ Make sure you know the user's UserRoleS
+            var token = _tokenGenerator.GenerateToken(user.Email, user.Role);
+
             await _hubContext.Clients.All.SendAsync("UserLogged", user.Email);
-            return Ok("Login successful");
+            return Ok(new { token });
         }
 
         [HttpGet("active")]

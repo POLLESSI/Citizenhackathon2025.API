@@ -30,6 +30,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         public bool Active { get; set; } = true;
         public string Message { get; set; }
         public string Context { get; set; }
+        public int? EventId { get; set; }
     }
 }
 

@@ -4,6 +4,8 @@ namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface ISuggestionRepository
     {
+        Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
+        Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync();
         /// <summary>
         /// Retrieves active suggestions for a given user.
         /// </summary>
@@ -18,7 +20,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         /// <param name="id">ID of the suggestion to disable</param>
         /// <returns>True if the operation was performed, false otherwise</returns>
         Task<bool> SoftDeleteSuggestionAsync(int id);
-        Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
+        
         Task<Suggestion> SaveSuggestionAsync(Suggestion @suggestion);
         Suggestion? UpdateSuggestion(Suggestion @suggestion);
     }

@@ -68,6 +68,7 @@ internal class Program
         var configuration = builder.Configuration;
         var services = builder.Services;
         var securityEnabled = configuration.GetValue("Security:Enabled", true);
+        var require = configuration.GetValue("OutZen:RequireEventId", true);
 
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole();
@@ -244,8 +245,6 @@ internal class Program
         });
 
         // ---------- Utils & HttpClients ----------
-        /*services.AddSingleton<TokenGenerator>(); *///1 (avoid duplicating, left for compat, but watch out for duplicates)
-        /*services.AddSingleton<DbConnectionFactory>(); */// already higher (left for compat)
         services.AddSingleton<CspViolationStore>();
         services.AddSingleton<IRealTimeNotifier, RealTimeNotifier>();
         services.AddScoped<IHubNotifier, CitizenHackathon2025.Hubs.Hubs.SignalRNotifier>(); //1 already higher (left for compat)
@@ -380,6 +379,8 @@ internal class Program
             //});
         });
 
+
+
         services.AddHttpClient<ChatGptService>();
 
         // (Old hard version → we keep commented)
@@ -420,28 +421,21 @@ internal class Program
 
         SqlMapper.AddTypeHandler(new RoleTypeHandler());
 
-        // ---------- Pipeline ----------
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseDeveloperExceptionPage();
-            app.UseSwagger();
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "CitizenHackathon2025 API V1");
-                c.RoutePrefix = "swagger";
-            });
-        }
-        else
-        {
-            // Swagger disabled in production for security reasons
-            app.UseExceptionHandler("/Home/Error");
-            app.UseHsts();
-        }
+        
 
         // Test DI
         using (var scope = app.Services.CreateScope())
         {
             var test = scope.ServiceProvider.GetRequiredService<CitizenSuggestionService>();
+        }
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapGet("/", ctx =>
+            {
+                ctx.Response.Redirect("/swagger");
+                return Task.CompletedTask;
+            });
         }
 
         //if (app.Environment.IsProduction())
@@ -457,6 +451,29 @@ internal class Program
         app.UseHttpsRedirection();
         app.UseStaticFiles();
 
+        var enableSwagger = app.Configuration.GetValue<bool?>("Swagger:Enabled")
+                   ?? app.Environment.IsDevelopment();
+
+        if (enableSwagger)
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "CitizenHackathon2025 API V1");
+                c.RoutePrefix = "swagger"; // so the UI will be on /swagger
+            });
+
+            // Optional: Redirect root to Swagger in Dev
+            if (app.Environment.IsDevelopment())
+            {
+                app.MapGet("/", ctx =>
+                {
+                    ctx.Response.Redirect("/swagger");
+                    return Task.CompletedTask;
+                });
+            }
+        }
+
         // Middlewares custom
         app.UseExceptionMiddleware();
         app.UseAntiXssMiddleware();
@@ -466,18 +483,13 @@ internal class Program
 
         app.UseRouting();
 
-        // ⚠️ Must be BEFORE AuthZ to populate HttpContext.Items["OutZen.EventId"]
-        if (app.Environment.IsDevelopment() && !securityEnabled)
-        {
-            // ne pas activer OutZenTokenMiddleware en dev insecure
-        }
-        else
-        {
-            app.UseMiddleware<OutZenTokenMiddleware>();
-        }
-
         app.UseCors();
         app.UseAuthentication();
+
+        // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
+        app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
+            b => b.UseMiddleware<OutZenTokenMiddleware>());
+
         app.UseAuthorization();
 
         app.MapControllers();

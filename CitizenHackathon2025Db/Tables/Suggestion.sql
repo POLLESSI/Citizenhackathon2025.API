@@ -1,6 +1,6 @@
 ﻿CREATE TABLE [dbo].[Suggestion]
 (
-    [Id]                   INT IDENTITY(1,1) CONSTRAINT [PK_Suggestion] PRIMARY KEY,
+    [Id]                   INT IDENTITY,
     [User_Id]              INT NOT NULL,
     [DateSuggestion]       DATETIME2(0) NOT NULL CONSTRAINT [DF_Suggestion_DateSuggestion] DEFAULT (SYSUTCDATETIME()),
     [OriginalPlace]        NVARCHAR(128) NULL,
@@ -12,8 +12,9 @@
     [EventId]              INT NULL,
     [TrafficId]            INT NULL,
     [ForecastId]           INT NULL,
-   
-    [LocationName]         NVARCHAR(128) NULL,
+    [LocationName]         NVARCHAR(128) NULL
+
+    CONSTRAINT [PK_Suggestion] PRIMARY KEY ([Id]),
     CONSTRAINT [FK_Suggestion_User]            FOREIGN KEY ([User_Id])     REFERENCES [dbo].[Users]([Id]),
     CONSTRAINT [FK_Suggestion_Crowd]           FOREIGN KEY ([CrowdId])     REFERENCES [dbo].[CrowdInfo]([Id]) ON DELETE SET NULL,
     CONSTRAINT [FK_Suggestion_Event]           FOREIGN KEY ([EventId])     REFERENCES [dbo].[Event]([Id]) ON DELETE SET NULL,
