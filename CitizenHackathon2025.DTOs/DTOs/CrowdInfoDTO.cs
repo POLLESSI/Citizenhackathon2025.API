@@ -2,16 +2,14 @@
 {
     public class CrowdInfoDTO
     {
-    #nullable disable
+#nullable disable
+        public int Id { get; set; }
         public string LocationName { get; set; }
-        public string Latitude { get; set; }
-        public string Longitude { get; set; }
-        public string CrowdLevel { get; set; }
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public int CrowdLevel { get; set; }
         public DateTime Timestamp { get; set; }
 
-        public string Area { get; set; }
-        public string Icon { get; set; }
-        public string Color { get; set; } = string.Empty;
     }
 }
 

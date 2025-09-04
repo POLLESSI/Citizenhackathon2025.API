@@ -1,6 +1,8 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Domain.ValueObjects;
 using CitizenHackathon2025.DTOs.DTOs;
+using Volo.Abp.Domain.Entities;
 
 namespace CitizenHackathon2025.Application.Extensions
 {
@@ -66,45 +68,50 @@ namespace CitizenHackathon2025.Application.Extensions
             };
         }
 
-        // CrowdInfo DTO → with timestamp
-        public static CrowdInfoDTO MapToCrowdInfoWithTimestamp(this CrowdInfoDTO dto)
-        {
-            return new CrowdInfoDTO
-            {
-                LocationName = dto.LocationName,
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                CrowdLevel = dto.CrowdLevel,
-                Timestamp = DateTime.UtcNow
-            };
-        }
-        public static CrowdInfo MapToCrowdInfo(this CrowdInfoDTO dto)
-        {
-            return new CrowdInfo
-            {
-                LocationName = dto.LocationName,
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                CrowdLevel = dto.CrowdLevel,
-                Timestamp = dto.Timestamp // ou DateTime.UtcNow directly here
-            };
-        }
+        // CrowdInfo mappings (digital)
         public static CrowdInfoDTO MapToCrowdInfoDTO(this CrowdInfo entity)
         {
-            if (entity == null) return null;
-
+            if (entity is null) return null!;
             return new CrowdInfoDTO
             {
+                Id = entity.Id,
                 LocationName = entity.LocationName,
-                Latitude = entity.Latitude,
-                Longitude = entity.Longitude,
+                Latitude = (double)entity.Latitude,    // decimal -> double
+                Longitude = (double)entity.Longitude,  // decimal -> double
                 CrowdLevel = entity.CrowdLevel,
                 Timestamp = entity.Timestamp
             };
         }
 
-        // Place → DTOSugges
-        public static PlaceDTO MapToPlaceDTO(this Place entity)
+        public static CrowdInfo MapToCrowdInfo(this CrowdInfoDTO dto)
+        {
+            if (dto is null) return null!;
+            return new CrowdInfo
+            {
+                Id = dto.Id,
+                LocationName = dto.LocationName,
+                Latitude = (decimal)dto.Latitude,     // double -> decimal
+                Longitude = (decimal)dto.Longitude,   // double -> decimal
+                CrowdLevel = dto.CrowdLevel,          
+                Timestamp = dto.Timestamp
+            };
+        }
+
+        public static CrowdInfoDTO MapToCrowdInfoWithTimestamp(this CrowdInfoDTO dto)
+            => new()
+            {
+                Id = dto.Id,
+                LocationName = dto.LocationName,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                CrowdLevel = dto.CrowdLevel,
+                Timestamp = DateTime.UtcNow
+            }
+;
+
+
+// Place → DTOSugges
+public static PlaceDTO MapToPlaceDTO(this Place entity)
         {
             return new PlaceDTO
             {

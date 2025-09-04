@@ -1,32 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.66" />
-    <PackageReference Include="Mapster" Version="7.4.0" />
-    <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
-    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
-    <PackageReference Include="Microsoft.Data.Tools.Msbuild" Version="16.0.62004.28040" />
-    <PackageReference Include="OpenAI" Version="2.1.0" />
-    <PackageReference Include="PM2.Extensions.MediaR" Version="2.0.0" />
-    <PackageReference Include="Polly" Version="8.5.2" />
-    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-    <PackageReference Include="Volo.Abp.Ddd.Domain" Version="8.3.4" />
-  </ItemGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
-		<!--<ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />-->
+	  <Compile Remove="Events\**" />
+	  <Compile Remove="Extensions\**" />
+	  <EmbeddedResource Remove="Events\**" />
+	  <EmbeddedResource Remove="Extensions\**" />
+	  <None Remove="Events\**" />
+	  <None Remove="Extensions\**" />
 	</ItemGroup>
+
 	<ItemGroup>
-	  <Folder Include="Enums\" />
-	  <Folder Include="Security\" />
+		<Folder Include="Models\" />
 	</ItemGroup>
 
 </Project>

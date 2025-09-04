@@ -14,7 +14,7 @@ using System.ComponentModel.DataAnnotations;
 namespace CitizenHackathon2025.API.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("api/[controller]")]
     public class WeatherForecastController : ControllerBase
     {
         private readonly IWeatherForecastRepository _weatherRepository;

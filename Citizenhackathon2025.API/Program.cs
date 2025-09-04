@@ -403,6 +403,8 @@ internal class Program
             CitizenHackathon2025.Application.Interfaces.IUserHubService,
             CitizenHackathon2025.Infrastructure.Services.UserHubService>();
 
+
+
         // ---------- Build app ----------
         var app = builder.Build();
 
@@ -435,6 +437,28 @@ internal class Program
             {
                 ctx.Response.Redirect("/swagger");
                 return Task.CompletedTask;
+            });
+        }
+
+        if (!app.Environment.IsDevelopment())
+        {
+            app.Use(async (context, next) =>
+            {
+                var ua = context.Request.Headers["User-Agent"].ToString();
+
+                // Autorise navigateurs + outils dev
+                var allowed = new[] { "Mozilla", "Chrome", "Edge", "Safari", "curl", "Postman", "Insomnia" };
+                var ok = !string.IsNullOrWhiteSpace(ua)
+                         && allowed.Any(a => ua.Contains(a, StringComparison.OrdinalIgnoreCase));
+
+                if (!ok)
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await context.Response.WriteAsync("Forbidden - Invalid User-Agent");
+                    return;
+                }
+
+                await next();
             });
         }
 

@@ -7,7 +7,7 @@ namespace CitizenHackathon2025.Application.Mappings
     public static class WeatherForecastMappingExtensions
     {
         public static WeatherForecastDTO ToDTO(this WeatherForecast entity)
-            => entity.MapToWeatherForecastDTO();
+            => CitizenHackathon2025.Application.Extensions.MapperExtensions.MapToWeatherForecastDTO(entity);
 
         public static WeatherForecast ToEntity(this WeatherForecastDTO dto)
             => dto.MapToWeatherForecast();

@@ -9,7 +9,7 @@ BEGIN
     DECLARE @PasswordHash BINARY(64), @SecurityStamp UNIQUEIDENTIFIER;
     SET @SecurityStamp = NEWID();
 
-    -- Appelle ta fonction de hashage
+    -- Call your hash function
     SET @PasswordHash = dbo.fHasher(TRIM(@Password), @SecurityStamp);
 
     INSERT INTO [Users] (Email, PasswordHash, SecurityStamp, Role, Status, Active)

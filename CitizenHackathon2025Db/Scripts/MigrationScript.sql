@@ -30,7 +30,7 @@ BEGIN
     END;
 END;
 
--- 3️⃣ Supprimer l'ancien UNIQUE constraint s'il existe
+-- 3️⃣ Delete the old UNIQUE constraint if it exists
 IF EXISTS (
     SELECT 1
     FROM sys.objects

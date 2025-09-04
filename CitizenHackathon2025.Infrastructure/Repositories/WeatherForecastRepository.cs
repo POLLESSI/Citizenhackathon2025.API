@@ -16,15 +16,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             INSERT INTO WeatherForecast
-                                (DateWeather, TemperatureC, TemperatureF, Summary, RainfallNm, Humidity, WindSpeedKmh, Active)
+                                (DateWeather, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
                             VALUES
-                                (@DateWeather, @TemperatureC, @TemperatureF, @Summary, @RainfallNm, @Humidity, @WindSpeedKmh, 1);";
+                                (@DateWeather, @TemperatureC, @TemperatureF, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1);";
             DynamicParameters parameters = new();
             parameters.Add("DateWeather", wf.DateWeather, DbType.DateTime2);
             parameters.Add("TemperatureC", wf.TemperatureC, DbType.Int32);
             parameters.Add("TemperatureF", wf.TemperatureF, DbType.Int32); // locally calculated value (getter)
             parameters.Add("Summary", wf.Summary, DbType.String);
-            parameters.Add("RainfallNm", wf.RainfallMm, DbType.Double);    // alias Nm <-> Mm
+            parameters.Add("RainfallMm", wf.RainfallMm, DbType.Double);    // alias Nm <-> Mm
             parameters.Add("Humidity", wf.Humidity, DbType.Int32);
             parameters.Add("WindSpeedKmh", wf.WindSpeedKmh, DbType.Double);
 
@@ -37,7 +37,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             SELECT TOP(1)
                                 Id, DateWeather, TemperatureC, TemperatureF,
                                 Summary,
-                                RainfallNm AS RainfallMm,      -- alias !
+                                RainfallMm AS RainfallMm,      -- alias !
                                 Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Active = 1
@@ -62,19 +62,19 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                     TemperatureC = @TemperatureC,
                                     TemperatureF = @TemperatureF,
                                     Summary      = @Summary,
-                                    RainfallNm   = @RainfallNm,
+                                    RainfallMm   = @RainfallMm,
                                     Humidity     = @Humidity,
                                     WindSpeedKmh = @WindSpeedKmh
                             WHEN NOT MATCHED THEN
-                                INSERT (DateWeather, TemperatureC, TemperatureF, Summary, RainfallNm, Humidity, WindSpeedKmh, Active)
-                                VALUES (@DateWeather, @TemperatureC, @TemperatureF, @Summary, @RainfallNm, @Humidity, @WindSpeedKmh, 1)
+                                INSERT (DateWeather, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
+                                VALUES (@DateWeather, @TemperatureC, @TemperatureF, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1)
                             OUTPUT inserted.Id;";
             DynamicParameters parameters = new();
             parameters.Add("DateWeather", entity.DateWeather, DbType.DateTime2);
             parameters.Add("TemperatureC", entity.TemperatureC, DbType.Int32);
             parameters.Add("TemperatureF", tempF, DbType.Int32); // locally calculated value (getter)
             parameters.Add("Summary", entity.Summary, DbType.String);
-            parameters.Add("RainfallNm", entity.RainfallMm, DbType.Double);    // alias Nm <-> Mm
+            parameters.Add("RainfallMm", entity.RainfallMm, DbType.Double);    // alias Nm <-> Mm
             parameters.Add("Humidity", entity.Humidity, DbType.Int32);
             parameters.Add("WindSpeedKmh", entity.WindSpeedKmh, DbType.Double);
 
@@ -89,7 +89,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             SELECT Id, DateWeather, TemperatureC, TemperatureF, Summary,
-                                   RainfallNm AS RainfallMm, Humidity, WindSpeedKmh, Active
+                                   RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Id = @Id AND Active = 1;";
             DynamicParameters parameters = new();
@@ -102,7 +102,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             SELECT Id, DateWeather, TemperatureC, TemperatureF, Summary,
-                                   RainfallNm AS RainfallMm, Humidity, WindSpeedKmh, Active
+                                   RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Active = 1
                             ORDER BY DateWeather DESC;";
@@ -132,7 +132,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = @"
                             SELECT TOP(@Limit)
                                 Id, DateWeather, TemperatureC, TemperatureF, Summary,
-                                RainfallNm AS RainfallMm, Humidity, WindSpeedKmh, Active
+                                RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Active = 1
                             ORDER BY DateWeather DESC;";

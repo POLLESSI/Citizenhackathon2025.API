@@ -1,5 +1,4 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
-using System.Globalization;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -11,138 +10,42 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
         public CrowdInfoUIDTO EnhanceCrowdInfo(CrowdInfoDTO dto)
         {
-            int level = 0;
-            if (!int.TryParse(dto.CrowdLevel, out level))
-                level = 0;
+            var level = dto.CrowdLevel;
 
-            return new CrowdInfoUIDTO
+            var ui = new CrowdInfoUIDTO
             {
                 Original = dto,
-                Color = GetCrowdLevelColor(level),
-                Icon = GetCrowdIcon(level),
-                VisualLevel = GetCrowdLevelLabel(level)
+                Icon = GetIcon(level),
+                Color = GetColor(level),
+                VisualLevel = GetVisualLevel(level)
             };
-        }
-        /// <summary>
-        /// Gives a color based on crowd level.
-        /// </summary>
-        public string GetCrowdLevelColor(int crowdLevel)
-        {
-            return crowdLevel switch
-            {
-                <= 2 => "green",
-                <= 5 => "orange",
-                _ => "red"
-            };
-        }
-        public string GetCrowdIcon(int level)
-        {
-            return level switch
-            {
-                <= 2 => "🟢",
-                <= 5 => "🟠",
-                <= 8 => "🔴",
-                _ => "⚫"
-            };
-        }
-        public string GetCrowdLevelLabel(int level)
-        {
-            return level switch
-            {
-                <= 2 => "Low attendance",
-                <= 5 => "Moderate crowd",
-                <= 8 => "Large crowd",
-                _ => "Overcrowded area"
-            };
+
+            return ui;
         }
 
-        /// <summary>
-        /// Returns an icon representing the weather.
-        /// </summary>
-        public string GetWeatherIcon(string summary)
+        private static string GetIcon(int level)
         {
-            return summary.ToLowerInvariant() switch
-            {
-                "sunny" => "☀️",
-                "rainy" => "🌧️",
-                "stormy" => "⛈️",
-                "snowy" => "❄️",
-                "cloudy" => "☁️",
-                _ => "🌤️"
-            };
+            if (level <= 3) return "✅";
+            if (level <= 6) return "⚠️";
+            if (level <= 8) return "🔥";
+            return "⛔";
         }
 
-        /// <summary>
-        /// Adds UI metadata to a weather forecast.
-        /// </summary>
-        public WeatherForecastUIDTO EnhanceForecast(WeatherForecastDTO dto)
+        private static string GetColor(int level)
         {
-            return new WeatherForecastUIDTO
-            {
-                Original = dto,
-                Icon = GetWeatherIcon(dto.Summary),
-                DisplayDate = dto.DateWeatherFormatted,
-                TemperatureColor = GetTemperatureColor(dto.TemperatureC)
-            };
+            if (level <= 3) return "#4CAF50";   // Green
+            if (level <= 6) return "#FFC107";   // Yellow
+            if (level <= 8) return "#FF5722";   // dark orange
+            return "#D32F2F";                   // red
         }
 
-        public string GetTemperatureColor(int temperatureC)
+        private static string GetVisualLevel(int level)
         {
-            return temperatureC switch
-            {
-                <= 0 => "blue",
-                <= 15 => "teal",
-                <= 30 => "orange",
-                _ => "red"
-            };
+            if (level <= 3) return "Low";
+            if (level <= 6) return "Medium";
+            if (level <= 8) return "High";
+            return "Critical";
         }
-        /// <summary>
-        /// Returns a color based on congestion level.
-        /// </summary>
-        public string GetCongestionColor(string congestionLevel)
-        {
-            return congestionLevel?.ToUpperInvariant() switch
-            {
-                "L" => "green",     // Light
-                "M" => "orange",    // Medium
-                "H" => "red",       // High
-                _ => "gray"
-            };
-        }
-
-        /// <summary>
-        /// Returns an emoji icon based on incident type.
-        /// </summary>
-        public string GetIncidentIcon(string incidentType)
-        {
-            if (string.IsNullOrWhiteSpace(incidentType)) return "🛣️";
-
-            var type = incidentType.ToLowerInvariant();
-            return type switch
-            {
-                var s when s.Contains("accident") => "💥",
-                var s when s.Contains("construction") => "🚧",
-                var s when s.Contains("flood") => "🌊",
-                var s when s.Contains("roadblock") => "⛔",
-                var s when s.Contains("fire") => "🔥",
-                _ => "🚗"
-            };
-        }
-
-        /// <summary>
-        /// Enhances a TrafficConditionDTO with UI metadata.
-        /// </summary>
-        public TrafficConditionUIDTO EnhanceTraffic(TrafficConditionDTO dto)
-        {
-            return new TrafficConditionUIDTO
-            {
-                Original = dto,
-                Icon = GetIncidentIcon(dto.IncidentType),
-                DisplayDate = dto.DateCondition.ToString("dddd dd MMMM yyyy", CultureInfo.InvariantCulture),
-                CongestionColor = GetCongestionColor(dto.CongestionLevel)
-            };
-        }
-       
     }
 }
 public class WeatherForecastUIDTO

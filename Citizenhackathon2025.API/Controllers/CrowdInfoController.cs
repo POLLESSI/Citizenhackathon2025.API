@@ -1,10 +1,12 @@
-﻿using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using CitizenHackathon2025.DTOs.DTOs;
+using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.CrowdHubMethods;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -26,8 +28,7 @@ namespace CitizenHackathon2025.API.Controllers
         {
             var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync();
 
-            var result = crowdInfos.Select(c => c.MapToCrowdInfoDTO());
-
+            var result = crowdInfos.Select(c => c.MapToCrowdInfoDTO()).ToList();
             return Ok(result);
         }
         [HttpGet("{id:int}")]
@@ -57,16 +58,14 @@ namespace CitizenHackathon2025.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var crowdInfo = crowdInfoDTO
-                .MapToCrowdInfoWithTimestamp()
-                .MapToCrowdInfo();
+            var crowdInfo = crowdInfoDTO.MapToCrowdInfoWithTimestamp().MapToCrowdInfo();
             var savedCrowdInfo = await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
 
             if (savedCrowdInfo == null)
                 return StatusCode(500, "Error while saving");
 
-            // 👇 ici tu peux utiliser SendAsync tranquillement
-            await _hubContext.Clients.All.SendAsync("NewCrowdInfo", savedCrowdInfo.MapToCrowdInfoDTO());
+            // Notify clients
+            await _hubContext.Clients.All.SendAsync(HubEvents.ReceiveCrowdUpdate, savedCrowdInfo.MapToCrowdInfoDTO());
 
             return Ok(savedCrowdInfo.MapToCrowdInfoDTO());
         }
@@ -81,8 +80,8 @@ namespace CitizenHackathon2025.API.Controllers
             if (!deleted)
                 return NotFound($"No active attendance data found for the identifier {id}.");
 
-            // Optional: Notify SignalR clients if needed
-            await _hubContext.Clients.All.SendAsync("CrowdInfoArchived", id);
+            // Notify SignalR clients
+            await _hubContext.Clients.All.SendAsync(CrowdHubMethods.CrowdInfoArchived, id);
 
             return Ok(new { Message = $"Attendance data with ID {id} successfully archived." });
         }

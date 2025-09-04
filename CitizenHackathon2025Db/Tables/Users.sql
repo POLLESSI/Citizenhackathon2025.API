@@ -13,7 +13,6 @@
 );
 GO
 
--- Trigger de soft-delete
 CREATE TRIGGER [dbo].[OnDeleteUser]
 ON [dbo].[Users]
 INSTEAD OF DELETE

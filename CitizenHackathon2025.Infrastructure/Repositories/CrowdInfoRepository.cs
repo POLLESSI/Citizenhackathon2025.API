@@ -1,6 +1,7 @@
-﻿using CitizenHackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using Dapper;
-using CitizenHackathon2025.Domain.Entities;
+using System.Data.Common;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -26,9 +27,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
         {
-            var sql = "SELECT Id, LocationName, Latitude, Longitude, CrowdLevel, Timestamp FROM CrowdInfo WHERE Active = 1 ORDER BY LocationName DESC";
-            var result = await _connection.QueryAsync<CrowdInfo>(sql);
-            return result;
+            // sort by date desc (more relevant for timeline/map)
+            const string sql = @"SELECT Id, LocationName, Latitude, Longitude, CrowdLevel, Timestamp
+                                 FROM CrowdInfo WHERE Active = 1
+                                 ORDER BY Timestamp DESC";
+            return await _connection.QueryAsync<CrowdInfo>(sql);
         }
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id)
@@ -43,7 +46,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo)
         {
-            var sql = @"
+            const string sql = @"
                 INSERT INTO CrowdInfo (LocationName, Latitude, Longitude, CrowdLevel, Timestamp)
                 VALUES (@LocationName, @Latitude, @Longitude, @CrowdLevel, @Timestamp);
                 SELECT CAST(SCOPE_IDENTITY() as int);
@@ -53,6 +56,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@Latitude", crowdInfo.Latitude);
             parameters.Add("@Longitude", crowdInfo.Longitude);
             parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel);
+            parameters.Add("@Latitude", crowdInfo.Latitude);     // decimal
+            parameters.Add("@Longitude", crowdInfo.Longitude);   // decimal
+            parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel); // int
             parameters.Add("@Timestamp", crowdInfo.Timestamp);
 
             var id = await _connection.QuerySingleAsync<int>(sql, parameters);
@@ -60,7 +66,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return crowdInfo;
         }
 
-        public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)
+        public CrowdInfo? UpdateCrowdInfo(CrowdInfo crowdInfo)
         {
             if (crowdInfo == null || crowdInfo.Id <= 0)
             {
@@ -71,7 +77,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             try
             {
-                string sql = "UPDATE CrowdInfo SET LocationName = @LocationName, Latitude = CAST(@Latitude AS DECIMAL(8, 6)), Longitude = CAST(@Longitude AS DECIMAL(9, 6)), CrowdLevel = @CrowdLevel, Timestamp = @Timestamp WHERE Id = @Id AND Active = 1";
+                const string sql = @"UPDATE CrowdInfo
+                                     SET LocationName = @LocationName,
+                                         Latitude = @Latitude,
+                                         Longitude = @Longitude,
+                                         CrowdLevel = @CrowdLevel,
+                                         Timestamp = @Timestamp
+                                     WHERE Id = @Id AND Active = 1";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", crowdInfo.Id);
                 parameters.Add("@LocationName", crowdInfo.LocationName);

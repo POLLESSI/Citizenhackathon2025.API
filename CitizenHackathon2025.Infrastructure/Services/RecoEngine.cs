@@ -1,6 +1,7 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using CitizenHackathon2025.Domain.Entities;
+using System.Globalization;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -35,23 +36,44 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var crowds = await _crowdService.GetAllCrowdInfoAsync();
             var places = await _placeService.GetLatestPlaceAsync();
 
+            // Crowded threshold (e.g. 8/10)
+            const int crowdedThreshold = 8;
+
+            // To compare positions, we avoid strict equality: we use a proximity threshold
+            // ~ 100 m → ~ 0.001 deg ; we take 0.0005 for ~50 m
+            const decimal proximity = 0.0005m;
+
             // 🧠 Example of simple logic: avoid outdoor places if it's raining
             foreach (var place in places)
             {
-                //bool isGoodWeather = weather.TemperatureC >= 15 && weather.RainfallMm < 2;
-                bool isCrowded = crowds.Any(c =>
-                    c.Latitude == place.Latitude &&
-                    c.Longitude == place.Longitude &&
-                    c.CrowdLevel is "high" or "max");
+                // Normalize Indoor (if string)
+                var isIndoor = string.Equals(place.Indoor, "true", StringComparison.OrdinalIgnoreCase);
 
-                if (place.Indoor == "true" /*|| isGoodWeather*/)
+                // Parse lat/lon of the location if they are string
+                var hasLat = decimal.TryParse(place.Latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var placeLat);
+                var hasLon = decimal.TryParse(place.Longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var placeLon);
+
+                // Find out if there is a crowd nearby above the threshold
+                var isCrowdedNearby = false;
+                if (hasLat && hasLon)
                 {
-                    if (!isCrowded)
+                    isCrowdedNearby = crowds.Any(c =>
+                        Math.Abs(c.Latitude - placeLat) <= proximity &&
+                        Math.Abs(c.Longitude - placeLon) <= proximity &&
+                        c.CrowdLevel >= crowdedThreshold);
+                }
+
+                // Simple example: prefer indoors if it rains, avoid crowded places
+                // var isGoodWeather = weather.TemperatureC >= 15 && weather.RainfallMm < 2;
+
+                if (isIndoor /*|| isGoodWeather*/)
+                {
+                    if (!isCrowdedNearby)
                         recommendations.Add(place);
                 }
             }
 
-            _logger.LogInformation("✅ {Count} recommandations générées.", recommendations.Count);
+            _logger.LogInformation("✅ {Count} recommendations generated.", recommendations.Count);
             return recommendations;
         }
     }

@@ -8,8 +8,7 @@
 	[IncidentType] NVARCHAR(64),
 	[Active] BIT DEFAULT 1
 
-	CONSTRAINT [PK_TrafficCondition] PRIMARY KEY ([Id]),
-	--CONSTRAINT [UQ_TrafficCondition_Latitude_Longitude_DateCondition] UNIQUE ([Latitude], [Longitude], [DateCondition])
+	CONSTRAINT [PK_TrafficCondition] PRIMARY KEY ([Id])
 )
 
 GO

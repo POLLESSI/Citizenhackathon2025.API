@@ -1,14 +1,16 @@
-﻿using CitizenHackathon2025.Domain.Enums;
-
-namespace CitizenHackathon2025.DTOs.DTOs
+﻿namespace CitizenHackathon2025.DTOs.DTOs
 {
+    /// <summary>
+    /// Domain-independent DTO: no reference to Domain enums/entities.
+    /// </summary>
     public class TrafficEventDTO
     {
-        public string Id { get; set; }
-        public string Description { get; set; }
+        public int Id { get; set; } = 0;
         public double Latitude { get; set; }
         public double Longitude { get; set; }
-        public TrafficLevel Level { get; set; }
+        /// <summary>UI scale (eg: 0..5). Map from/to your Domain enum on the Application side.</summary>
+        public int Level { get; set; }
+        public string? Description { get; set; }
         public DateTime Timestamp { get; set; }
     }
 }

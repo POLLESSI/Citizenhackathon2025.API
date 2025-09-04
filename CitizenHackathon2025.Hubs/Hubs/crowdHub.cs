@@ -1,38 +1,28 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class CrowdHub : Hub
     {
         private readonly ILogger<CrowdHub> _logger;
+        public CrowdHub(ILogger<CrowdHub> logger) => _logger = logger;
 
-        public CrowdHub(ILogger<CrowdHub> logger)
-        {
-            _logger = logger;
-        }
-
-        /// <summary>
-        /// Notifies all customers that the map needs to be refreshed (generic case).
-        /// </summary>
         public async Task RefreshCrowd(string message)
         {
-            _logger.LogInformation("📢 RefreshCrowd called : {Message}", message);
-            await Clients.All.SendAsync("notifyNewCrowd", message);
+            _logger.LogInformation("RefreshCrowd: {Message}", message);
+            await Clients.All.SendAsync(CrowdHubMethods.CrowdRefreshRequested, message);
         }
 
-        /// <summary>
-        /// Sends a full CrowdInfo update to all connected clients.
-        /// </summary>
         public async Task SendCrowdUpdate(CrowdInfo crowd)
         {
             _logger.LogInformation("📡 Update Crowd sent for {Location}", crowd.LocationName);
-            await Clients.All.SendAsync("ReceiveCrowdUpdate", crowd);
+            await Clients.All.SendAsync(CrowdHubMethods.ReceiveCrowdUpdate, crowd);
         }
     }
 }
-
 
 
 

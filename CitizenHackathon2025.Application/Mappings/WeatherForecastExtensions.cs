@@ -33,10 +33,12 @@ namespace CitizenHackathon2025.Application.Mappings
         {
             return new CrowdInfoDTO
             {
-                Area = "City",
-                CrowdLevel = forecast.Humidity > 80 ? "3" : "1", // Ex: high humidity → more people in indoor areas
-                Icon = "people",
-                Color = forecast.Humidity > 80 ? "#FF0000" : "#00FF00"
+                Id = 0, 
+                LocationName = "City", 
+                Latitude = 0,          
+                Longitude = 0,
+                CrowdLevel = forecast.Humidity > 80 ? 3 : 1, 
+                Timestamp = forecast.DateWeather
             };
         }
 

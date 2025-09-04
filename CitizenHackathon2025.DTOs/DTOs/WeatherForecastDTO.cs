@@ -25,7 +25,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         }
 
         [DisplayName("Summary : ")]
-        public string Summary { get; set; } = "";
+        public string Summary { get; set; } = string.Empty;
 
         [DisplayName("Rainfall mm : ")]
         public double RainfallMm { get; set; }
@@ -47,8 +47,8 @@ namespace CitizenHackathon2025.DTOs.DTOs
         [JsonIgnore]
         public string MonthName => DateWeather.ToString("MMMM", CultureInfo.InvariantCulture);
 
-        public string IconUrl { get; set; } = ""; // ex: https://openweathermap.org/img/wn/{icon}.png
-        public string WeatherMain { get; set; } = "";
+        public string IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
+        public string WeatherMain { get; set; } = string.Empty;
         public bool IsSevere { get; set; }
         public string Description { get; set; }
     }
