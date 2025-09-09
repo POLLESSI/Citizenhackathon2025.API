@@ -30,11 +30,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
             throw new NotImplementedException();
         }
 
-        public async Task<IEnumerable<TrafficCondition>> GetLatestTrafficConditionAsync()
-        {
-            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync();
-            return trafficConditions;
-        }
         public async Task<TrafficCondition?> GetByIdAsync(int id)
         {
             return await _trafficConditionRepository.GetByIdAsync(id);
@@ -65,6 +60,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Console.WriteLine($"Error updating traffic condition : {ex}");
             }
             return null;
+        }
+
+        public async Task<IEnumerable<TrafficCondition>> GetLatestTrafficConditionAsync(CancellationToken cancellationToken)
+        {
+            // ❌ Before : _trafficConditionRepository.GetLatestTrafficConditionAsync();
+            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(cancellationToken);
+            return trafficConditions;
         }
     }
 }

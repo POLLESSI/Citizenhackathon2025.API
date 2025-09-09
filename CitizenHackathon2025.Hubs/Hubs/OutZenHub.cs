@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using CitizenHackathon2025.Hubs.Hubs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.Hubs.Hubs
@@ -11,7 +12,7 @@ namespace CitizenHackathon2025.Hubs.Hubs
             var http = Context.GetHttpContext();
             var eventId = http?.Items["OutZen.EventId"]?.ToString();
             if (!string.IsNullOrEmpty(eventId))
-                await Groups.AddToGroupAsync(Context.ConnectionId, $"event:{eventId}");
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"event-{eventId}");
 
             await base.OnConnectedAsync();
         }

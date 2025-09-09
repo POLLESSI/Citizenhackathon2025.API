@@ -8,6 +8,7 @@ using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Security;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
@@ -18,7 +19,7 @@ using CitizenHackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Options;
 using CitizenHackathon2025.API.Tools;
-using CitizenHackathon2025.Application.CQRS.Queries;
+using CitizenHackathon2025.Application.DTOs;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
@@ -129,17 +130,26 @@ internal class Program
                 {
                     OnMessageReceived = context =>
                     {
+                        // 1) Token via querystring for SignalR (WebSockets/SSE)
                         var accessToken = context.Request.Query["access_token"];
                         var path = context.HttpContext.Request.Path;
 
-                        // guard old/new routes
+                        // Keep your "guard" routes if you want, but "/hubs" is enough
                         if (!string.IsNullOrEmpty(accessToken) &&
-                            (path.StartsWithSegments("/outzenhub")
-                             || path.StartsWithSegments("/hub/outzenhub")
-                             || path.StartsWithSegments("/hubs")))
+                            (path.StartsWithSegments("/hubs")
+                             || path.StartsWithSegments("/hub/outzen") // sympathy if you keep it
+                             || path.StartsWithSegments("/aisuggestionhub")))
                         {
                             context.Token = accessToken;
                         }
+
+                        // 2) FALLBACK : token from the HttpOnly cookie (name it like yours)
+                        if (string.IsNullOrEmpty(context.Token) &&
+                            context.Request.Cookies.TryGetValue("access_token", out var cookieToken))
+                        {
+                            context.Token = cookieToken;
+                        }
+
                         return Task.CompletedTask;
                     }
                 };
@@ -296,6 +306,7 @@ internal class Program
         // ---------- MediatR ----------
         services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
         services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
+        services.AddMediatR(typeof(CitizenHackathon2025.Application.CQRS.Queries.Handlers.GetLatestTrafficConditionQueryHandler).Assembly);
 
         // NOTE: avoid building a ServiceProvider here (double container)
         // ILogger<Program> logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();
@@ -304,13 +315,11 @@ internal class Program
         // ---------- CORS ----------
         services.AddCors(options =>
         {
-            options.AddDefaultPolicy(policy =>
-            {
-                policy.WithOrigins("https://localhost:7101")
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
-                      .AllowCredentials();
-            });
+            options.AddPolicy("Dev", p =>
+                p.WithOrigins("https://localhost:7101")
+                 .AllowAnyHeader()
+                 .AllowAnyMethod()
+                 .AllowCredentials());
         });
 
         // ---------- Controllers / JSON ----------
@@ -446,7 +455,7 @@ internal class Program
             {
                 var ua = context.Request.Headers["User-Agent"].ToString();
 
-                // Autorise navigateurs + outils dev
+                // Allows browsers + dev tools
                 var allowed = new[] { "Mozilla", "Chrome", "Edge", "Safari", "curl", "Postman", "Insomnia" };
                 var ok = !string.IsNullOrWhiteSpace(ua)
                          && allowed.Any(a => ua.Contains(a, StringComparison.OrdinalIgnoreCase));
@@ -507,7 +516,7 @@ internal class Program
 
         app.UseRouting();
 
-        app.UseCors();
+        app.UseCors("Dev");
         app.UseAuthentication();
 
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
@@ -519,18 +528,55 @@ internal class Program
         app.MapControllers();
 
         // ---------- Hubs ----------
-        app.MapHub<AISuggestionHub>("/aisuggestionhub");
-        app.MapHub<CrowdHub>("/hubs/crowdHub");
-        app.MapHub<EventHub>("/hubs/eventHub");
-        app.MapHub<NotificationHub>("/hubs/notifications");
-        app.MapHub<OutZenHub>("/hub/outzenhub"); // <- consistent with JwtBearerEvents
-        app.MapHub<PlaceHub>("/hubs/placeHub");
-        app.MapHub<SuggestionHub>("/hubs/suggestionHub");
-        app.MapHub<TrafficHub>("/hubs/trafficHub");
-        app.MapHub<UpdateHub>("/hubs/updateHub");
-        app.MapHub<UserHub>("/hubs/userHub");
-        app.MapHub<WeatherForecastHub>("/hubs/weatherforecastHub");
+        var hubs = app.MapGroup("/hubs");
+        hubs.MapHub<AISuggestionHub>("/aisuggestionhub");
+        hubs.MapHub<CrowdHub>("/crowdHub").RequireAuthorization();
+        hubs.MapHub<EventHub>("/eventHub");
+        hubs.MapHub<NotificationHub>("/notifications");
+        hubs.MapHub<OutZenHub>("/outzen");
+        hubs.MapHub<PlaceHub>("/placeHub");
+        hubs.MapHub<SuggestionHub>("/suggestionHub");
+        hubs.MapHub<TrafficHub>("/trafficHub");
+        hubs.MapHub<UpdateHub>("/updateHub");
+        hubs.MapHub<UserHub>("/userHub");
+        hubs.MapHub<WeatherForecastHub>("/weatherforecastHub");
+
+
+        // (Alternative without group)
+        //app.MapHub<AISuggestionHub>("/aisuggestionhub");
+        //app.MapHub<CrowdHub>("/hubs/crowdHub");
+        //app.MapHub<EventHub>("/hubs/eventHub");
+        //app.MapHub<NotificationHub>("/hubs/notifications");
+        //app.MapHub<OutZenHub>("/hub/outzen"); // <- consistent with JwtBearerEvents
+        //app.MapHub<PlaceHub>("/hubs/placeHub");
+        //app.MapHub<SuggestionHub>("/hubs/suggestionHub");
+        //app.MapHub<TrafficHub>("/hubs/trafficHub");
+        //app.MapHub<UpdateHub>("/hubs/updateHub");
+        //app.MapHub<UserHub>("/hubs/userHub");
+        //app.MapHub<WeatherForecastHub>("/hubs/weatherforecastHub");
         //app.MapHub<CitizeHackathon2025.Hubs.Hubs.WeatherForecastHub>("/hubs/weatherforecastHub"); // (original typo)
+
+        app.MapGet("/auth/hub-token", (HttpContext http, TokenGenerator tokens) =>
+        {
+            // Variant A (simple): If your cookie carries a valid JWT, OnMessageReceived will have already accepted it.
+            // Since the endpoint is RequireAuthorization(), the user is authenticated here:
+            if (http.User?.Identity?.IsAuthenticated != true)
+                return Results.Unauthorized();
+
+            // From the authenticated identity, you issue a short-lived "hub" token (e.g. 5 mins)
+            // Adapt the TokenGenerator API to yours:
+            var hubToken = tokens.GenerateTokenFromPrincipal(http.User, expiresInMinutes: 5);
+
+            return Results.Ok(new { token = hubToken });
+        })
+        .RequireAuthorization();
+
+        app.MapGet("/trafficcondition/latest",
+            async (IMediator mediator, CancellationToken ct) =>
+            {
+                var list = await mediator.Send(new GetLatestTrafficConditionQuery(), ct);
+                return (list is null || list.Count == 0) ? Results.NotFound() : Results.Ok(list);
+            });
 
         // Small query log (as before)
         app.Use(async (context, next) =>

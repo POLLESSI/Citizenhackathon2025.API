@@ -1,5 +1,4 @@
 ﻿using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Application.CQRS.Commands;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
@@ -13,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.SqlServer.Dac.Model;
+using CitizenHackathon2025.Hubs.Hubs;
 
 namespace CitizenHackathon2025.API.Controllers
 {

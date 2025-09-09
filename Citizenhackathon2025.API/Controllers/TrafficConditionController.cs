@@ -25,9 +25,9 @@ namespace CitizenHackathon2025.API.Controllers
         }
         // 1) Endpoint to retrieve the latest in the database
         [HttpGet("latest")]
-        public async Task<IActionResult> GetLatestTrafficCondition()
+        public async Task<IActionResult> GetLatestTrafficCondition(CancellationToken ct)
         {
-            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(); // 👈 correct call
+            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(ct);
             return Ok(trafficConditions);
         }
         // 2) Endpoint for live fetch from Waze
