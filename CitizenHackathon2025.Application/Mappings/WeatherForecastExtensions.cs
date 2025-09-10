@@ -33,7 +33,7 @@ namespace CitizenHackathon2025.Application.Mappings
         {
             return new CrowdInfoDTO
             {
-                Id = 0, 
+                //Id = 0, 
                 LocationName = "City", 
                 Latitude = 0,          
                 Longitude = 0,

@@ -18,7 +18,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _http = f.CreateClient("ApiWithAuth");
         }
         public async Task<List<CrowdInfoDTO>> GetAllAsync()
-        => (await _http.GetFromJsonAsync<List<CrowdInfoDTO>>("crowdinfo/all")) ?? new();
+            => (await _http.GetFromJsonAsync<List<CrowdInfoDTO>>("crowdinfo/all")) ?? new();
 
         public async Task<CrowdInfoDTO?> GetByIdAsync(int id)
             => await _http.GetFromJsonAsync<CrowdInfoDTO>($"crowdinfo/{id}");
@@ -32,52 +32,31 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public async Task<bool> ArchiveAsync(int id)
             => (await _http.DeleteAsync($"crowdinfo/archive/{id}")).IsSuccessStatusCode;
 
-        public Task<bool> DeleteCrowdInfoAsync(int id)
-        {
-            throw new NotImplementedException();
-        }
+        // ==== Interface ICrowdInfoService (avec tokens) ====
 
-        public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
-        {
-            var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync();
-            return crowdInfos;
-        }
+        public Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default)
+            => _crowdInfoRepository.DeleteCrowdInfoAsync(id); // repo sans ct → on ignore ct ici
 
-        public Task<CrowdInfo> GetCrowdInfoByIdAsync(int id)
-        {
-            if (id <= 0)
-            {
-                throw new ArgumentException("The crowd info ID must be greater than zero.", nameof(id));
-            }
-            var crowdInfo = _crowdInfoRepository.GetCrowdInfoByIdAsync(id);
-            if (crowdInfo == null)
-            {
-                return null;
-            }
+        public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(CancellationToken ct = default)
+            => await _crowdInfoRepository.GetAllCrowdInfoAsync();
 
-            return crowdInfo;
-        }
+        public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id, CancellationToken ct = default)
+            => await _crowdInfoRepository.GetCrowdInfoByIdAsync(id);
 
-        public Task<CrowdLevelDTO> GetCrowdLevelAsync(string destination)
-        {
-            throw new NotImplementedException();
-        }
+        public Task<CrowdLevelDTO> GetCrowdLevelAsync(string destination, CancellationToken ct = default)
+            => throw new NotImplementedException();
 
-        public async Task<CrowdInfo> SaveCrowdInfoAsync(CrowdInfo crowdInfo)
-        {
-            return await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
-        }
+        public async Task<CrowdInfo> SaveCrowdInfoAsync(CrowdInfo crowdInfo, CancellationToken ct = default)
+            => await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
 
         public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)
         {
             try
             {
-                var UpdateCrowdInfo = _crowdInfoRepository.UpdateCrowdInfo(crowdInfo);
-                if (UpdateCrowdInfo == null)
-                {
+                var updated = _crowdInfoRepository.UpdateCrowdInfo(crowdInfo);
+                if (updated is null)
                     throw new ArgumentException("The event to update cannot be null.", nameof(crowdInfo));
-                }
-                return UpdateCrowdInfo;
+                return updated;
             }
             catch (System.ComponentModel.DataAnnotations.ValidationException ex)
             {

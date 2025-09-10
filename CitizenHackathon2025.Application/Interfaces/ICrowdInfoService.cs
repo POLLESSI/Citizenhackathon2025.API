@@ -5,12 +5,12 @@ namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface ICrowdInfoService
     {
-        Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo);
-        Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync();
-        Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id);
-        Task<bool> DeleteCrowdInfoAsync(int id);
-        CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo);
-        Task<CrowdLevelDTO> GetCrowdLevelAsync(string destination);
+        Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo, CancellationToken ct = default);
+        Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(CancellationToken ct = default);
+        Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id, CancellationToken ct = default);
+        Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default);
+        CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo); // sync → pas de token
+        Task<CrowdLevelDTO> GetCrowdLevelAsync(string destination, CancellationToken ct = default);
     }
 }
 

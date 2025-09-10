@@ -74,7 +74,7 @@ namespace CitizenHackathon2025.Application.Extensions
             if (entity is null) return null!;
             return new CrowdInfoDTO
             {
-                Id = entity.Id,
+                //Id = entity.Id,
                 LocationName = entity.LocationName,
                 Latitude = (double)entity.Latitude,    // decimal -> double
                 Longitude = (double)entity.Longitude,  // decimal -> double
@@ -88,7 +88,7 @@ namespace CitizenHackathon2025.Application.Extensions
             if (dto is null) return null!;
             return new CrowdInfo
             {
-                Id = dto.Id,
+                //Id = dto.Id,
                 LocationName = dto.LocationName,
                 Latitude = (decimal)dto.Latitude,     // double -> decimal
                 Longitude = (decimal)dto.Longitude,   // double -> decimal
@@ -100,7 +100,7 @@ namespace CitizenHackathon2025.Application.Extensions
         public static CrowdInfoDTO MapToCrowdInfoWithTimestamp(this CrowdInfoDTO dto)
             => new()
             {
-                Id = dto.Id,
+                //Id = dto.Id,
                 LocationName = dto.LocationName,
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,

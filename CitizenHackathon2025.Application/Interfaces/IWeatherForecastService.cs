@@ -4,18 +4,17 @@ namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IWeatherForecastService
     {
-    #nullable disable
-        Task AddAsync(WeatherForecastDTO weatherForecast);
-        Task<IEnumerable<WeatherForecastDTO?>> GetLatestWeatherForecastAsync();
-        Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO @weatherForecast);
-        Task<WeatherForecastDTO> GenerateNewForecastAsync();
-        Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit = 128);
-        Task<WeatherForecastDTO?> GetByIdAsync(int id);
-        Task<List<WeatherForecastDTO>> GetAllAsync();
-        Task<List<WeatherForecastDTO>> GetAllAsync(Domain.Entities.WeatherForecast forecast);
-        Task SendWeatherToAllClientsAsync();
-        //WeatherForecastDTO? UpdateWeatherForecast(WeatherForecastDTO weatherForecast);
-        Task<WeatherForecastDTO> GetForecastAsync(string destination);
+#nullable disable
+        Task AddAsync(WeatherForecastDTO weatherForecast, CancellationToken ct = default);
+        Task<IEnumerable<WeatherForecastDTO?>> GetLatestWeatherForecastAsync(CancellationToken ct = default);
+        Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO weatherForecast, CancellationToken ct = default);
+        Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default);
+        Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit = 128, CancellationToken ct = default);
+        Task<WeatherForecastDTO?> GetByIdAsync(int id, CancellationToken ct = default);
+        Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default);
+        Task<List<WeatherForecastDTO>> GetAllAsync(CitizenHackathon2025.Domain.Entities.WeatherForecast forecast, CancellationToken ct = default);
+        Task SendWeatherToAllClientsAsync(CancellationToken ct = default);
+        Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default);
     }
 }
 

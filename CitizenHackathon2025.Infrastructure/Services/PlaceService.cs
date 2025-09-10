@@ -7,33 +7,50 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public class PlaceService : IPlaceService
     {
 #nullable disable
-        private readonly IPlaceRepository _placeRepository;
+        private readonly IPlaceRepository _repo;
 
-        public PlaceService(IPlaceRepository placeRepository)
+        public PlaceService(IPlaceRepository repo)
         {
-            _placeRepository = placeRepository;
+            _repo = repo;
         }
 
-        public async Task<IEnumerable<Place>> GetLatestPlaceAsync()
+        public Task<Place> GetByIdAsync(int id, CancellationToken ct = default)
         {
-            var places = await _placeRepository.GetLatestPlaceAsync();
-            return places;
+            throw new NotImplementedException();
+        }
+
+        public async Task<List<Place>> GetLatestPlaceAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var items = await _repo.GetLatestPlaceAsync();
+
+            // items: IEnumerable<Place?> -> we filter the nulls, we "unannotate" with            !
+            return (items ?? Enumerable.Empty<Place?>())
+                   .Where(p => p is not null)
+                   .Select(p => p!)   // p! : Place (non-nullable)
+                   .ToList();
         }
         public async Task<Place?> GetPlaceByIdAsync(int id)
         {
-            return await _placeRepository.GetPlaceByIdAsync(id);
+            return await _repo.GetPlaceByIdAsync(id);
+        }
+
+        public Task<Place> SaveAsync(Place place, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
         }
 
         public async Task<Place> SavePlaceAsync(Place place)
         {
-            return await _placeRepository.SavePlaceAsync(place);
+            return await _repo.SavePlaceAsync(place);
         }
 
         public Place UpdatePlace(Place place)
         {
             try
             {
-                var UpdatePlace = _placeRepository.UpdatePlace(place);
+                var UpdatePlace = _repo.UpdatePlace(place);
                 if (UpdatePlace == null)
                 {
                     throw new KeyNotFoundException("Place not found for update.");

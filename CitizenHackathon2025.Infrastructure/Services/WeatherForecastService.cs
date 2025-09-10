@@ -19,47 +19,47 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _hub = hub;
         }
 
-        public Task AddAsync(WeatherForecastDTO dto)
-            => SaveWeatherForecastAsync(dto); // alias
+        public Task AddAsync(WeatherForecastDTO dto, CancellationToken ct = default)
+            => SaveWeatherForecastAsync(dto, ct);
 
-        public async Task<WeatherForecastDTO> GenerateNewForecastAsync()
+        public async Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default)
             => (await _repo.GenerateNewForecastAsync()).MapToWeatherForecastDTO();
 
-        public async Task<List<WeatherForecastDTO>> GetAllAsync()
+        public async Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default)
             => (await _repo.GetAllAsync()).Select(x => x.MapToWeatherForecastDTO()).ToList();
 
-        public Task<List<WeatherForecastDTO>> GetAllAsync(WeatherForecast _)
-            => GetAllAsync(); // no dedicated filter here
+        public Task<List<WeatherForecastDTO>> GetAllAsync(WeatherForecast _, CancellationToken ct = default)
+            => GetAllAsync(ct);
 
-        public async Task<WeatherForecastDTO?> GetByIdAsync(int id)
+        public async Task<WeatherForecastDTO?> GetByIdAsync(int id, CancellationToken ct = default)
             => (await _repo.GetByIdAsync(id))?.MapToWeatherForecastDTO();
 
-        public async Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit = 128)
+        public async Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit = 128, CancellationToken ct = default)
             => (await _repo.GetHistoryAsync(limit)).Select(x => x.MapToWeatherForecastDTO()).ToList();
 
-        public async Task<IEnumerable<WeatherForecastDTO?>> GetLatestWeatherForecastAsync()
+        public async Task<IEnumerable<WeatherForecastDTO?>> GetLatestWeatherForecastAsync(CancellationToken ct = default)
         {
             var last = await _repo.GetLatestWeatherForecastAsync();
             return last is null ? Enumerable.Empty<WeatherForecastDTO>() : new[] { last.MapToWeatherForecastDTO() };
         }
 
-        public async Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO dto)
+        public async Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO dto, CancellationToken ct = default)
         {
             var entity = dto.MapToWeatherForecast();
             var saved = await _repo.SaveOrUpdateAsync(entity);
             var res = saved.MapToWeatherForecastDTO();
-            await _hub.Clients.All.SendAsync("ReceiveForecast", res);
+            await _hub.Clients.All.SendAsync("ReceiveForecast", res, ct);
             return res;
         }
 
-        public async Task SendWeatherToAllClientsAsync()
+        public async Task SendWeatherToAllClientsAsync(CancellationToken ct = default)
         {
             var last = await _repo.GetLatestWeatherForecastAsync();
             if (last != null)
-                await _hub.Clients.All.SendAsync("ReceiveForecast", last.MapToWeatherForecastDTO());
+                await _hub.Clients.All.SendAsync("ReceiveForecast", last.MapToWeatherForecastDTO(), ct);
         }
 
-        public Task<WeatherForecastDTO> GetForecastAsync(string destination)
+        public Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default)
             => Task.FromResult(new WeatherForecastDTO { Summary = "Not wired here (use OpenWeather controller endpoint)", DateWeather = DateTime.UtcNow });
     }
 }

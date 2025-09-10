@@ -1,5 +1,5 @@
 ﻿using System.Globalization;
-using System.Threading; // <-- si pas déjà présent
+using System.Threading; 
 using CitizenHackathon2025.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using CitizenHackathon2025.Domain.Entities;
@@ -38,10 +38,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             var recommendations = new List<Place>();
 
-            var weather = await _weatherService.GetLatestWeatherForecastAsync();
+            var weather = await _weatherService.GetLatestWeatherForecastAsync(ct);
             var traffic = await _trafficService.GetLatestTrafficConditionAsync(ct); 
-            var crowds = await _crowdService.GetAllCrowdInfoAsync();               
-            var places = await _placeService.GetLatestPlaceAsync();                
+            var crowds = await _crowdService.GetAllCrowdInfoAsync(ct);               
+            var places = await _placeService.GetLatestPlaceAsync(ct);                
 
             const int crowdedThreshold = 8;
             const decimal proximity = 0.0005m;
