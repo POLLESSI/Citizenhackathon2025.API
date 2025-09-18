@@ -31,7 +31,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             return eventEntity;
         }
-        public async Task<IEnumerable<Event>> GetLatestEventAsync()
+        public async Task<IEnumerable<Event>> GetLatestEventAsync(int limit = 10, CancellationToken ct = default)
         {
             var events = await _eventRepository.GetLatestEventAsync();
             return events;
@@ -87,6 +87,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
             return await _eventRepository.ArchivePastEventsAsync();
         }
+
+        
     }
 }
 

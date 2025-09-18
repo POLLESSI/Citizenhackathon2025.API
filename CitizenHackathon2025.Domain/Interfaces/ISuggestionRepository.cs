@@ -5,7 +5,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     public interface ISuggestionRepository
     {
         Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
-        Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync();
+        Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default);
         /// <summary>
         /// Retrieves active suggestions for a given user.
         /// </summary>

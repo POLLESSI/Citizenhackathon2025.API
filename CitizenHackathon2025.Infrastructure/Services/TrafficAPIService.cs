@@ -12,18 +12,22 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _httpClient = httpClient;
         }
 
-        public Task<TrafficConditionDTO?> GetCurrentTrafficAsync(double latitude, double longitude)
+        public async Task<TrafficConditionDTO?> GetCurrentTrafficAsync(double latitude, double longitude, CancellationToken ct = default)
         {
-            // Simulates a call to Waze or other API
-            var dto = new TrafficConditionDTO
+            // MOCK EXAMPLE(typically to be removed later):
+            return new TrafficConditionDTO
             {
-                Latitude = latitude.ToString(),
-                Longitude = longitude.ToString(),
+                Latitude = (decimal)latitude,
+                Longitude = (decimal)longitude,
                 DateCondition = DateTime.UtcNow,
                 CongestionLevel = "4",
                 IncidentType = "Accident"
             };
-            return Task.FromResult<TrafficConditionDTO?>(dto); ;
+
+            // REAL CALL EXAMPLE (fictitious diagram)
+            // var url = $"traffic?lat={latitude.ToString(CultureInfo.InvariantCulture)}&lon={longitude.ToString(CultureInfo.InvariantCulture)}";
+            // var dto = await _http.GetFromJsonAsync<TrafficConditionDTO>(url, JsonDefaults.Options, ct);
+            // return dto;
         }
     }
 }

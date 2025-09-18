@@ -1,5 +1,5 @@
-﻿//using Mapster.DependencyInjection;
-//using Citizenhackathon2025.Application.Mapping;
+﻿using MapsterMapper;
+using CitizenHackathon2025.Application.Mapping;
 
 // ==================
 // Namespaces projet (⚠️ harmonized on CitizenHackathon2025)
@@ -7,6 +7,7 @@
 using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Security;
 using CitizenHackathon2025.Application.Interfaces;
+using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Domain.Entities;
@@ -37,6 +38,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Polly;
@@ -44,7 +46,7 @@ using Serilog;
 using System.Data;
 using System.Net.Http.Headers;
 using System.Text;
-//using CityzenHackathon2025.API.Tools; // (typo in the original namespace)
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
 
 // =====================================
 // Program
@@ -62,6 +64,8 @@ internal class Program
             .CreateLogger();
 
         var builder = WebApplication.CreateBuilder(args);
+        TypeAdapterConfig.GlobalSettings.Scan(AppDomain.CurrentDomain.GetAssemblies());
+        builder.Services.AddMapster();
         builder.Host.UseSerilog();
 
     
@@ -82,7 +86,7 @@ internal class Program
 
         // ---------- Options (OpenAI, OpenWeather, JWT) ----------
         services.Configure<OpenAIOptions>(configuration.GetSection("OpenAI"));
-        services.Configure<OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
+        services.Configure<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
         services.Configure<JwtOptions>(configuration.GetSection("Jwt")); // ← aligned with OutZenTokenMiddleware & JWT
 
         // Retrieving JWT options for AddJwtBearer
@@ -203,7 +207,6 @@ internal class Program
         services.AddScoped<ITrafficApiService, TrafficAPIService>();
         services.AddScoped<NotificationService>();
         services.AddScoped<OpenAiSuggestionService>();
-        services.AddScoped<OpenWeatherService>();
         services.AddScoped<TrafficConditionService>();
         services.AddScoped<WeatherSuggestionOrchestrator>();
         //services.AddScoped<IUserService, UserService>();
@@ -262,33 +265,29 @@ internal class Program
         services.AddHttpClient("Default")
             .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
 
-        // HttpClient OpenAI (key from config)
-        services.AddHttpClient<GptExternalService>(client =>
+        // HttpClient OpenAI (key from config) → IGptExternalService ↦ OpenAIGptExternalService
+        services.AddHttpClient<IGptExternalService, OpenAIGptExternalService>(client =>
         {
             var openAiKey = configuration["OpenAI:ApiKey"];
+            client.BaseAddress = new Uri(configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com");
             if (!string.IsNullOrWhiteSpace(openAiKey))
             {
                 client.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Bearer", openAiKey);
             }
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
         });
         services.AddScoped<AstroIAService>();
-        services.AddScoped<GptExternalService>();
 
         services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
         {
-            var config = sp.GetRequiredService<IConfiguration>();
-            var apiKey = config["OpenWeather:ApiKey"] ?? throw new InvalidOperationException("API key is not configured.");
-            var baseUrl = config["OpenWeather:BaseUrl"] ?? "https://api.openweathermap.org";
-            client.BaseAddress = new Uri(baseUrl);
-            // logger available if needed
+            var opt = sp.GetRequiredService<IOptions<OpenWeatherOptions>>().Value;
+            client.BaseAddress = new Uri(opt.BaseUrl ?? "https://api.openweathermap.org");
         });
-        services.AddScoped<IOpenWeatherService, OpenWeatherService>();
-        services.Configure<OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
+        // ⛔️ Do not duplicate the above record with an AddScoped
         services.AddHttpClient<OpenWeatherMapClient>();
         services.AddMemoryCache();
         services.AddScoped<MemoryCacheService>();
-        services.AddScoped<OpenAiSuggestionService>();
         services.AddScoped<WeatherSuggestionOrchestrator>();
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>(client =>
         {
@@ -296,9 +295,9 @@ internal class Program
             client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
         });
 
-        services.AddHttpClient<OpenWeatherService>()
-            .AddTransientHttpErrorPolicy(p => p.WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(2)));
-
+        //services.AddHttpClient<OpenWeatherService>()
+        //    .AddTransientHttpErrorPolicy(p => p.WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(2)));
+        // ⛔️ Unnecessary: ​​another HttpClient<OpenWeatherService> would be redundant and ambiguous
         services.AddInfrastructure();
         services.AddInfrastructureServices();
         services.AddMapster();
@@ -315,7 +314,7 @@ internal class Program
         // ---------- CORS ----------
         services.AddCors(options =>
         {
-            options.AddPolicy("Dev", p =>
+            options.AddPolicy("AllowBlazor", p =>
                 p.WithOrigins("https://localhost:7101")
                  .AllowAnyHeader()
                  .AllowAnyMethod()
@@ -390,7 +389,7 @@ internal class Program
 
 
 
-        services.AddHttpClient<ChatGptService>();
+        //services.AddHttpClient<ChatGptService>();
 
         // (Old hard version → we keep commented)
         //services.AddHttpClient<GptExternalService>(client =>
@@ -456,7 +455,7 @@ internal class Program
                 var ua = context.Request.Headers["User-Agent"].ToString();
 
                 // Allows browsers + dev tools
-                var allowed = new[] { "Mozilla", "Chrome", "Edge", "Safari", "curl", "Postman", "Insomnia" };
+                var allowed = new[] { "Mozilla", "Chrome", "Edge", "Safari", "curl", "Postman", "Insomnia", "Edge" };
                 var ok = !string.IsNullOrWhiteSpace(ua)
                          && allowed.Any(a => ua.Contains(a, StringComparison.OrdinalIgnoreCase));
 
@@ -516,7 +515,7 @@ internal class Program
 
         app.UseRouting();
 
-        app.UseCors("Dev");
+        app.UseCors("AllowBlazor");
         app.UseAuthentication();
 
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)

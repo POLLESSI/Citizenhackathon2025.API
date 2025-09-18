@@ -36,9 +36,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default)
             => _crowdInfoRepository.DeleteCrowdInfoAsync(id); // repo sans ct → on ignore ct ici
-
-        public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(CancellationToken ct = default)
-            => await _crowdInfoRepository.GetAllCrowdInfoAsync();
+        public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default)
+            => await _crowdInfoRepository.GetAllCrowdInfoAsync();    
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id, CancellationToken ct = default)
             => await _crowdInfoRepository.GetCrowdInfoByIdAsync(id);
@@ -69,6 +68,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
             return null;
         }
+
+        
     }
 }
 

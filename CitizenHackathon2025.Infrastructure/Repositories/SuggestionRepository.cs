@@ -18,22 +18,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync()
+        public Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
         {
             const string sql = @"
-                            SELECT *
-                            FROM dbo.Suggestion
-                            WHERE Active = 1
-                            ORDER BY DateSuggestion DESC;";
-            try
-            {
-                return await _connection.QueryAsync<Suggestion?>(sql);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving all suggestions");
-                return Enumerable.Empty<Suggestion>();
-            }
+        SELECT TOP(@Limit)
+            Id, User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, Active, DateDeleted,
+            EventId, ForecastId, TrafficId, LocationName
+        FROM dbo.Suggestion
+        WHERE Active = 1
+        ORDER BY DateSuggestion DESC;";
+            var cmd = new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct);
+            return _connection.QueryAsync<Suggestion>(cmd);
         }
 
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync()

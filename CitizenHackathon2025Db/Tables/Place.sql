@@ -4,7 +4,7 @@
 	[Name] NVARCHAR (64),
 	[Type] NVARCHAR (32),
 	[Indoor] BIT,
-	[Latitude] DECIMAL(8, 6),
+	[Latitude] DECIMAL(9, 6),
 	[Longitude] DECIMAL(9, 6),
 	[Capacity] INT,
 	[Tag] NVARCHAR(16),
@@ -24,6 +24,11 @@ CREATE TRIGGER [dbo].[OnDeletePlace]
 		UPDATE Place SET Active = 0
 		WHERE Id = (SELECT Id FROM deleted)
 	END
+
+GO
+
+CREATE INDEX IX_Place_Active_Id ON dbo.Place (Active, Id DESC);
+GO
 
 
 

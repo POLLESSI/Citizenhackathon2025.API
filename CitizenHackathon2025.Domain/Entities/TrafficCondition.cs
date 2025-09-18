@@ -4,8 +4,8 @@
     {
     #nullable disable
         public int Id { get; private set; }
-        public string Latitude { get; set; }
-        public string Longitude { get; set; }
+        public decimal Latitude { get; set; }
+        public decimal Longitude { get; set; }
         public DateTime DateCondition { get; set; }
         public string CongestionLevel { get; set; }
         public string IncidentType { get; set; }

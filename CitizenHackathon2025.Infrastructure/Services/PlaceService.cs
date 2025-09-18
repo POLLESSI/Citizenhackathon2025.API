@@ -19,7 +19,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             throw new NotImplementedException();
         }
 
-        public async Task<List<Place>> GetLatestPlaceAsync(CancellationToken ct = default)
+        public async Task<List<Place>> GetLatestPlaceAsync(int limit = 200, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
 
@@ -31,6 +31,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                    .Select(p => p!)   // p! : Place (non-nullable)
                    .ToList();
         }
+
         public async Task<Place?> GetPlaceByIdAsync(int id)
         {
             return await _repo.GetPlaceByIdAsync(id);

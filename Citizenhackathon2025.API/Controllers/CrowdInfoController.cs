@@ -86,10 +86,21 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(new { Message = $"Attendance data with ID {id} successfully archived." });
         }
         [HttpPut("update")]
-        public IActionResult UpdateCrowdInfo([FromBody] CrowdInfo crowdInfo)
+        public async Task<IActionResult> UpdateCrowdInfo([FromBody] CrowdInfoDTO dto)
         {
-            var result = _crowdInfoRepository.UpdateCrowdInfo(crowdInfo);
-            return result != null ? Ok(result) : NotFound();
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto.Id <= 0) return BadRequest("Missing or invalid Id.");
+
+            var entity = dto.MapToCrowdInfo();
+            var updated = _crowdInfoRepository.UpdateCrowdInfo(entity);
+            if (updated is null) return NotFound();
+
+            var updatedDto = updated.MapToCrowdInfoDTO();
+
+            // real-time push, same pattern as POST
+            await _hubContext.Clients.All.SendAsync(HubEvents.ReceiveCrowdUpdate, updated.MapToCrowdInfoDTO());
+
+            return Ok(updatedDto);
         }
     }
 }

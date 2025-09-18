@@ -64,13 +64,13 @@ namespace CitizenHackathon2025.API.Controllers
             var newEvent = new Event
             {
                 Name = dto.Name,
-                Latitude = dto.Latitude,
+                Latitude = (decimal)dto.Latitude,
                 DateEvent = dto.DateEvent,
                 IsOutdoor = dto.IsOutdoor
             };
 
             var created = await _eventRepository.CreateEventAsync(newEvent);
-            return CreatedAtAction(nameof(GetOutdoorEvents), new { id = created.Id }, created);
+            return CreatedAtAction(nameof(GetEventById), new { id = created.Id }, created);
         }
         [HttpPost("archive-expired")]
         [Authorize(Policy = "Admin")]

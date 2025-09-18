@@ -15,20 +15,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             _connection = connection;
         }
 
-        public async Task<IEnumerable<Place?>> GetLatestPlaceAsync()
+        public Task<IEnumerable<Place>> GetLatestPlaceAsync(int limit = 200, CancellationToken ct = default)
         {
-            try
-            {
-                string sql = " SELECT * FROM Place WHERE Active = 1";
-
-                var places = await _connection.QueryAsync<Place?>(sql);
-                return [.. places];
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving Place: {ex.Message}");
-                return [];
-            }
+            const string sql = @"
+                SELECT TOP(@Limit)
+                    Id, Name, Type, Indoor, Latitude, Longitude, Capacity, Tag, Active
+                FROM dbo.Place
+                WHERE Active = 1
+                ORDER BY Id DESC;";
+            return _connection.QueryAsync<Place>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
         public async Task<Place> SavePlaceAsync(Place place)

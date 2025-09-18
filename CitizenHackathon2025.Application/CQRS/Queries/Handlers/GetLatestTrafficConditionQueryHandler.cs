@@ -20,10 +20,13 @@ namespace CitizenHackathon2025.Application.CQRS.Queries.Handlers
             => _service = service;
 
         public async Task<IReadOnlyList<TrafficConditionDTO>> Handle(
-            Query request,
-            CancellationToken cancellationToken)
+    Query request,
+    CancellationToken cancellationToken)
         {
-            var items = await _service.GetLatestTrafficConditionAsync(cancellationToken);
+            var items = await _service.GetLatestTrafficConditionAsync(
+                limit: 10,                      // ✅ passe le 1er param obligatoire
+                ct: cancellationToken);
+
             if (items is null) return [];
 
             return items

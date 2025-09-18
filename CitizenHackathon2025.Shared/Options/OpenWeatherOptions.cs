@@ -1,85 +1,8 @@
 ﻿namespace CitizenHackathon2025.Shared.Options
 {
-    public class OpenWeatherOptions
+    public sealed class OpenWeatherOptions
     {
-        public string ApiKey { get; set; }
-        public string BaseUrl { get; set; } // Optionnel
+        public string ApiKey { get; set; } = "";
+        public string BaseUrl { get; set; } = "https://api.openweathermap.org";
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

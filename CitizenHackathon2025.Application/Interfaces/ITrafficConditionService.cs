@@ -7,7 +7,7 @@ namespace CitizenHackathon2025.Application.Interfaces
     public interface ITrafficConditionService
     {
     #nullable disable
-        Task<IEnumerable<TrafficCondition?>> GetLatestTrafficConditionAsync(CancellationToken cancellationToken);
+        Task<IEnumerable<TrafficCondition?>> GetLatestTrafficConditionAsync(int limit = 10, CancellationToken ct = default);
         Task<TrafficCondition?> GetByIdAsync(int id);
         Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition @trafficCondition);
         TrafficCondition? UpdateTrafficCondition(TrafficCondition @trafficCondition);

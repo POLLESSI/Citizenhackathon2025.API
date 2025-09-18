@@ -25,13 +25,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return affectedRows > 0;
         }
 
-        public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync()
+        public Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default)
         {
-            // sort by date desc (more relevant for timeline/map)
-            const string sql = @"SELECT Id, LocationName, Latitude, Longitude, CrowdLevel, Timestamp
-                                 FROM CrowdInfo WHERE Active = 1
-                                 ORDER BY Timestamp DESC";
-            return await _connection.QueryAsync<CrowdInfo>(sql);
+            const string sql = @"
+        SELECT TOP(@Limit)
+            Id, LocationName, Latitude, Longitude, CrowdLevel, [Timestamp], Active
+        FROM dbo.CrowdInfo
+        WHERE Active = 1
+        ORDER BY [Timestamp] DESC;";
+            return _connection.QueryAsync<CrowdInfo>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id)

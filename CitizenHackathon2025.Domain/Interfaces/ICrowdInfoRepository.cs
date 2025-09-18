@@ -5,7 +5,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     public interface ICrowdInfoRepository
     {
         Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo);
-        Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync();
+        Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default);
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id);
         Task<bool> DeleteCrowdInfoAsync(int id);
         CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo);

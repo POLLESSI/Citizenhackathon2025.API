@@ -15,6 +15,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync(CancellationToken ct = default)
             => await _suggestionRepository.GetLatestSuggestionAsync();
+        public Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
         public async Task<Suggestion?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             try
@@ -41,6 +45,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public Suggestion? UpdateSuggestion(Suggestion suggestion)
             => _suggestionRepository.UpdateSuggestion(suggestion);
+
+        
     }
 }
 

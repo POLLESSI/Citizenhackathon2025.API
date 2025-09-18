@@ -34,33 +34,27 @@ namespace CitizenHackathon2025.Infrastructure.Services
         /// <summary>
         /// Offers recommended alternatives based on weather, traffic and crowds.
         /// </summary>
-        public async Task<List<Place>> RecommendAlternativesAsync(CancellationToken ct = default)
+        public async Task<List<Place>> RecommendAlternativesAsync(int limit = 200, CancellationToken ct = default)
         {
             var recommendations = new List<Place>();
 
-            var weather = await _weatherService.GetLatestWeatherForecastAsync(ct);
-            var traffic = await _trafficService.GetLatestTrafficConditionAsync(ct); 
-            var crowds = await _crowdService.GetAllCrowdInfoAsync(ct);               
-            var places = await _placeService.GetLatestPlaceAsync(ct);                
+            var latestList = await _weatherService.GetLatestWeatherForecastAsync(ct);
+            var latest = latestList?.FirstOrDefault();
+            var traffic = await _trafficService.GetLatestTrafficConditionAsync(limit: 10, ct: ct);
+            var crowds = await _crowdService.GetAllCrowdInfoAsync(limit: 200, ct: ct);
+            var places = await _placeService.GetLatestPlaceAsync(limit: 200, ct: ct);
 
             const int crowdedThreshold = 8;
             const decimal proximity = 0.0005m;
 
             foreach (var place in places)
             {
-                var isIndoor = string.Equals(place.Indoor, "true", StringComparison.OrdinalIgnoreCase);
+                var isIndoor = place.Indoor; // ✅ bool direct
 
-                var hasLat = decimal.TryParse(place.Latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var placeLat);
-                var hasLon = decimal.TryParse(place.Longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var placeLon);
-
-                var isCrowdedNearby = false;
-                if (hasLat && hasLon)
-                {
-                    isCrowdedNearby = crowds.Any(c =>
-                        Math.Abs(c.Latitude - placeLat) <= proximity &&
-                        Math.Abs(c.Longitude - placeLon) <= proximity &&
-                        c.CrowdLevel >= crowdedThreshold);
-                }
+                var isCrowdedNearby = crowds.Any(c =>
+                    Math.Abs(c.Latitude - place.Latitude) <= proximity &&
+                    Math.Abs(c.Longitude - place.Longitude) <= proximity &&
+                    c.CrowdLevel >= crowdedThreshold);
 
                 if (isIndoor && !isCrowdedNearby)
                     recommendations.Add(place);

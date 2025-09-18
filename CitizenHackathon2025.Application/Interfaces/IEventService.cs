@@ -5,7 +5,7 @@ namespace CitizenHackathon2025.Application.Interfaces
     public interface IEventService
     {
     #nullable disable
-        Task<IEnumerable<Event?>> GetLatestEventAsync();
+        Task<IEnumerable<Event?>> GetLatestEventAsync(int limit = 10, CancellationToken ct = default);
         Task<Event> SaveEventAsync(Event @event);
         Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync();
         Task<Event> CreateEventAsync(Event newEvent);

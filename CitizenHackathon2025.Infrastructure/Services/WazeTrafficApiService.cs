@@ -17,8 +17,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _wazeEndpoint = config["Waze:Endpoint"];
             _authToken = config["Waze:Token"]; 
         }
-
-        public async Task<TrafficConditionDTO?> GetCurrentTrafficAsync(double latitude, double longitude)
+        public async Task<TrafficConditionDTO?> GetCurrentTrafficAsync(double latitude, double longitude, CancellationToken ct = default)
         {
             // Example URL (to be adapted according to your Waze subscription)
             var url = $"{_wazeEndpoint}/traffic?lat={latitude}&lon={longitude}&token={_authToken}";

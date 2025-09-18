@@ -6,9 +6,9 @@ namespace CitizenHackathon2025.DTOs.DTOs
     {
     #nullable disable
         [DisplayName("Latitude : ")]
-        public string Latitude { get; set; }
+        public decimal Latitude { get; set; }
         [DisplayName("Longitude : ")]
-        public string Longitude { get; set; }
+        public decimal Longitude { get; set; }
         [DisplayName("Traffic Condition Date : ")]
         public DateTime DateCondition { get; set; }
         [DisplayName("Congestion Level : ")]

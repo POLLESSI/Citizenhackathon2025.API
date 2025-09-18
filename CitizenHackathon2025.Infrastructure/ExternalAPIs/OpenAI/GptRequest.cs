@@ -1,0 +1,9 @@
+﻿namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI
+{
+    public sealed class GptRequest
+    {
+        public string Model { get; set; } = "gpt-4o-mini";
+        public GptMessage[] Messages { get; set; } = Array.Empty<GptMessage>();
+        public double Temperature { get; set; } = 0.2;
+    }
+}

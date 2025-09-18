@@ -62,10 +62,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return null;
         }
 
-        public async Task<IEnumerable<TrafficCondition>> GetLatestTrafficConditionAsync(CancellationToken cancellationToken)
-        {
-            // ❌ Before : _trafficConditionRepository.GetLatestTrafficConditionAsync();
-            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(cancellationToken);
+        public async Task<IEnumerable<TrafficCondition>> GetLatestTrafficConditionAsync(int limit = 10, CancellationToken cancellationToken = default)
+        {// ❌ Before : _trafficConditionRepository.GetLatestTrafficConditionAsync();
+            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(limit, cancellationToken); // ✅
             return trafficConditions;
         }
     }

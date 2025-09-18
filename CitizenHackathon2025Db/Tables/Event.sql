@@ -2,9 +2,9 @@
 (
 	[Id] INT IDENTITY,
     [Name] NVARCHAR(64),
-	[Latitude] DECIMAL(8, 2),
+	[Latitude] DECIMAL(9, 2),
 	[Longitude] DECIMAL(9, 3),
-	[DateEvent] DATE,
+	[DateEvent] DATETIME2(0),
 	[ExpectedCrowd] INT,
 	[IsOutdoor] BIT,
 	[Active] BIT DEFAULT 1
@@ -24,6 +24,11 @@ CREATE TRIGGER [dbo].[OnDeleteEvent]
 		WHERE Id = (SELECT Id FROM deleted)
 	END
 
+GO
+
+CREATE INDEX IX_Event_Active_DateEvent
+ON dbo.Event (Active, DateEvent DESC);
+GO
 
 
 

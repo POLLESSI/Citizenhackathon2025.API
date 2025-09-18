@@ -82,21 +82,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         }
 
 
-        public async Task<IEnumerable<Event>> GetLatestEventAsync()
+        public Task<IEnumerable<Event>> GetLatestEventAsync(int limit = 10, CancellationToken ct = default)
         {
-            try
-            {
-                string sql = " SELECT TOP 10 * FROM Event WHERE Active = 1 ORDER BY DateEvent DESC";
-
-                var events = await _connection.QueryAsync<Event?>(sql);
-                return [.. events];
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving certifications: {ex.Message}");
-                return [];
-            }
-
+            const string sql = @"
+        SELECT TOP(@Limit)
+            Id, Name, Latitude, Longitude, DateEvent, ExpectedCrowd, IsOutdoor, Active
+        FROM dbo.Event
+        WHERE Active = 1
+        ORDER BY DateEvent DESC;";
+            return _connection.QueryAsync<Event>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
         public async Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync()

@@ -14,6 +14,7 @@ namespace CitizenHackathon2025.Domain.Entities
         public bool IsActive() => Status == RefreshTokenStatus.Active && ExpiryDate > DateTime.UtcNow;
         public void Revoke() => Status = RefreshTokenStatus.Revoked;
         public void Expire() => Status = RefreshTokenStatus.Expired;
+        public bool Active { get; set; } = true;
     }
 }
 

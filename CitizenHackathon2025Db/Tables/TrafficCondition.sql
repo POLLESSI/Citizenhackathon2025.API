@@ -1,10 +1,10 @@
 ﻿CREATE TABLE [dbo].[TrafficCondition]
 (
 	[Id] INT IDENTITY,
-	[Latitude] DECIMAL(8, 2),
+	[Latitude] DECIMAL(9, 2),
 	[Longitude] DECIMAL(9, 3),
-	[DateCondition] DATE,
-	[CongestionLevel] NVARCHAR(2),
+	[DateCondition] DATETIME2(0),
+	[CongestionLevel] NVARCHAR(16),
 	[IncidentType] NVARCHAR(64),
 	[Active] BIT DEFAULT 1
 
@@ -21,7 +21,11 @@ CREATE TRIGGER [dbo].[OnDeleteTrafficCondition]
 		UPDATE TrafficCondition SET Active = 0
 		WHERE Id = (SELECT Id FROM deleted)
 	END
+GO
 
+CREATE INDEX IX_TrafficCondition_Active_DateCondition
+ON dbo.TrafficCondition (Active, DateCondition DESC);
+GO
 
 
 

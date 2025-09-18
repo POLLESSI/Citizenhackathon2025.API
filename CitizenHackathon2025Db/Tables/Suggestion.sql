@@ -22,6 +22,26 @@
     CONSTRAINT [FK_Suggestion_WeatherForecast] FOREIGN KEY ([ForecastId])  REFERENCES [dbo].[WeatherForecast]([Id]) ON DELETE SET NULL,
 );
 
+GO
+CREATE INDEX IX_Suggestion_Active_DateSuggestion
+ON dbo.Suggestion (Active, DateSuggestion DESC);
+
+GO
+CREATE TRIGGER [dbo].[OnDeleteSuggestion]
+    ON [dbo].[Suggestion]
+    INSTEAD OF DELETE
+    AS
+    BEGIN
+        UPDATE Suggestion 
+        SET Active = 0,
+            DateDeleted = SYSUTCDATETIME()
+        WHERE Id IN (SELECT Id FROM deleted)
+    END
+GO
+
+CREATE INDEX IX_Suggestion_OriginalPlace ON dbo.Suggestion (OriginalPlace);
+GO
+
 
 
 

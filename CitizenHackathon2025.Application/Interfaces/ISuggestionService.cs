@@ -25,6 +25,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         /// <returns>True if logical deletion was performed</returns>
         Task<bool> SoftDeleteSuggestionAsync(int id, CancellationToken ct = default);
         Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync(CancellationToken ct = default);
+        Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default);
         Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion, CancellationToken ct = default);
         Suggestion? UpdateSuggestion(Suggestion suggestion);
     }

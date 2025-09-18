@@ -5,7 +5,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     public interface IWeatherForecastRepository
     {
         Task AddAsync(WeatherForecast weatherForecast);
-        Task<WeatherForecast?> GetLatestWeatherForecastAsync();
+        Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default);
         Task<WeatherForecast> SaveWeatherForecastAsync(WeatherForecast forecast);
         Task<WeatherForecast> GenerateNewForecastAsync();
         Task<List<WeatherForecast>> GetHistoryAsync(int limit = 128);

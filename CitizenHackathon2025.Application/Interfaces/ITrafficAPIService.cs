@@ -7,7 +7,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         /// <summary>
         /// Retrieves traffic conditions from the Waze API (Connected Citizens).
         /// </summary>
-        Task<TrafficConditionDTO?> GetCurrentTrafficAsync(double latitude, double longitude);
+        Task<TrafficConditionDTO?> GetCurrentTrafficAsync(double latitude, double longitude, CancellationToken ct = default);
     }
 }
 

@@ -27,7 +27,7 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatestTrafficCondition(CancellationToken ct)
         {
-            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(ct);
+            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(limit: 10, ct: ct);
             return Ok(trafficConditions);
         }
         // 2) Endpoint for live fetch from Waze

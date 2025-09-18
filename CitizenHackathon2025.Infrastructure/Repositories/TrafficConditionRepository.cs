@@ -15,25 +15,16 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             _connection = connection;
         }
 
-        public async Task<IEnumerable<TrafficCondition?>> GetLatestTrafficConditionAsync(CancellationToken ct)
+        public Task<IEnumerable<TrafficCondition>> GetLatestTrafficConditionAsync(int limit = 10, CancellationToken ct = default)
         {
-            try
-            {
-                const string sql = @"
-                        SELECT TOP 10 *
-                        FROM TrafficCondition
-                        WHERE Active = 1
-                        ORDER BY DateCondition DESC";
-
-                var cmd = new CommandDefinition(sql, cancellationToken: ct);
-                var list = await _connection.QueryAsync<TrafficCondition>(cmd);
-                return list;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving Traffic Condition: {ex.Message}");
-                return Array.Empty<TrafficCondition>();
-            }
+            const string sql = @"
+        SELECT TOP(@Limit)
+            Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active
+        FROM dbo.TrafficCondition
+        WHERE Active = 1
+        ORDER BY DateCondition DESC;";
+            var cmd = new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct);
+            return _connection.QueryAsync<TrafficCondition>(cmd);
         }
         public async Task<TrafficCondition?> GetByIdAsync(int id)
         {

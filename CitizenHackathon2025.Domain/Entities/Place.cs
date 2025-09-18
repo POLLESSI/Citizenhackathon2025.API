@@ -6,10 +6,10 @@
         public int Id { get; set; }
         public string Name { get; set; }
         public string Type { get; set; }
-        public string Indoor { get; set; }
-        public string Latitude { get; set; }
-        public string Longitude { get; set; }
-        public string Capacity { get; set; }
+        public bool Indoor { get; set; }
+        public decimal Latitude { get; set; }
+        public decimal Longitude { get; set; }
+        public int Capacity { get; set; }
         public string Tag { get; set; }
         public bool Active { get; private set; } = true;
     }

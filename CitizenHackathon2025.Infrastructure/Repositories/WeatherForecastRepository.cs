@@ -31,21 +31,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             await _connection.ExecuteAsync(sql, parameters);
         }
 
-        public async Task<WeatherForecast?> GetLatestWeatherForecastAsync()
+        public Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default)
         {
             const string sql = @"
-                            SELECT TOP(1)
-                                Id, DateWeather, TemperatureC, TemperatureF,
-                                Summary,
-                                RainfallMm AS RainfallMm,      -- alias !
-                                Humidity, WindSpeedKmh, Active
-                            FROM WeatherForecast
-                            WHERE Active = 1
-                            ORDER BY DateWeather DESC;";
-            DynamicParameters parameters = new();
-            parameters.Add("Limit", 1, DbType.Int32);
-            
-            return await _connection.QueryFirstOrDefaultAsync<WeatherForecast>(sql, parameters);
+        SELECT TOP(1)
+            Id, DateWeather, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
+        FROM dbo.WeatherForecast
+        WHERE Active = 1
+        ORDER BY DateWeather DESC;";
+            return _connection.QueryFirstOrDefaultAsync<WeatherForecast>(new CommandDefinition(sql, cancellationToken: ct));
         }
 
         public async Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity)
