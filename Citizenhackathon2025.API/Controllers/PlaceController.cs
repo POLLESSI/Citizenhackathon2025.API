@@ -1,10 +1,15 @@
-﻿using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.SignalR;
+using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
+using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.PlaceHubMethods;
+
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -15,6 +20,8 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly IPlaceRepository _placeRepository;
         private readonly IHubContext<PlaceHub> _hubContext;
 
+        private const string HubMethod_ReceivePlaceUpdate = "ReceivePlaceUpdate";
+
         public PlaceController(IPlaceRepository placeRepository, IHubContext<PlaceHub> hubContext)
         {
             _placeRepository = placeRepository;
@@ -24,45 +31,50 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> GetLatestPlace()
         {
             var places = await _placeRepository.GetLatestPlaceAsync(); // 👈 correct call
-            return Ok(places);
+            var dtos = places.Select(p => p.MapToPlaceDTO()).ToList();
+            return Ok(dtos);
         }
+
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetPlaceById(int id)
         {
+            if (id <= 0) return BadRequest("The provided ID is invalid.");
+
             var place = await _placeRepository.GetPlaceByIdAsync(id); // direct call to the repo
 
-            if (place == null)
-                return NotFound($"Place with ID {id} not found.");
+            if (place is null) return NotFound($"Place with ID {id} not found.");
 
-            return Ok(place);
+            return Ok(place.MapToPlaceDTO());
         }
-        [HttpPost]
+        [HttpPost("save")]
         public async Task<IActionResult> SavePlace([FromBody] PlaceDTO dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var place = new Place
+            try
             {
-                Name = dto.Name,
-                Type = dto.Type,
-                Indoor = dto.Indoor,
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                Capacity = dto.Capacity,
-                Tag = dto.Tag,
-                //Active = true 
-            };
+                var dtoNorm = dto.MapToPlaceWithLatitude();
+                var place = dtoNorm.MapToPlace(); // DTO -> Entity
 
-            var savedPlace = await _placeRepository.SavePlaceAsync(place); // 👈 parameter correction
+                var savedPlace = await _placeRepository.SavePlaceAsync(place); // 👈 parameter correction
 
-            if (savedPlace == null)
-                return StatusCode(500, "Registration Error");
+                if (savedPlace == null)
+                    return Conflict($"An place named '{dto.Name}' at '{dtoNorm.Latitude}' already exists.");
 
-            // ✅ Real-time broadcasting
-            await _hubContext.Clients.All.SendAsync("NewPlace", savedPlace);
+                var savedDto = savedPlace.MapToPlaceDTO();
 
-            return Ok(savedPlace);
+                // ✅ Real-time broadcasting
+                await _hubContext.Clients.All.SendAsync(HubMethod_ReceivePlaceUpdate, savedPlace);
+
+                return Ok(savedPlace);
+            }
+            catch (Exception ex)
+            {
+
+                return Problem(title: "SavePlace failed", detail: ex.Message, statusCode: 500);
+            }
+
+           
         }
         [HttpPut("update")]
         public IActionResult UpdatePlace([FromBody] Place place)

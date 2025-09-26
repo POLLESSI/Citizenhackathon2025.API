@@ -8,6 +8,8 @@
         public string Response { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool Active { get; set; } = true;
+
+        public string PromptHash { get; set; }
     }
 }
 

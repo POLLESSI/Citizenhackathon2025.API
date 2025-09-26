@@ -1,8 +1,9 @@
-﻿using Dapper;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
+using Dapper;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using System.Data;
-using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Interfaces;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -21,12 +22,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
         {
             const string sql = @"
-        SELECT TOP(@Limit)
-            Id, User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, Active, DateDeleted,
-            EventId, ForecastId, TrafficId, LocationName
-        FROM dbo.Suggestion
-        WHERE Active = 1
-        ORDER BY DateSuggestion DESC;";
+                            SELECT TOP(@Limit)
+                                Id, User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, Active, DateDeleted,
+                                EventId, ForecastId, TrafficId, LocationName
+                            FROM dbo.Suggestion
+                            WHERE Active = 1
+                            ORDER BY DateSuggestion DESC;";
             var cmd = new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct);
             return _connection.QueryAsync<Suggestion>(cmd);
         }
@@ -83,7 +84,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
         }
 
-        public async Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion)
+        public async Task<Suggestion?> SaveSuggestionAsync(Suggestion suggestion, CancellationToken ct = default)
         {
             const string sql = @"
                             INSERT INTO dbo.Suggestion
@@ -103,7 +104,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             try
             {
-                return await _connection.QuerySingleAsync<Suggestion>(sql, parameters);
+                var cmd = new CommandDefinition(sql, parameters, cancellationToken: ct);
+                return await _connection.QuerySingleOrDefaultAsync<Suggestion>(cmd);
+            }
+            catch (SqlException ex) when (ex.Number is 2627 or 2601) // unique key violation
+            {
+                _logger.LogWarning(ex, "Duplicate suggestion detected for UserId={UserId} at {DateSuggestion}", suggestion.User_Id, suggestion.DateSuggestion);
+                return null; // the controller will return 409
             }
             catch (Exception ex)
             {

@@ -85,5 +85,6 @@
     <None Include="Scripts\Suggestion.Indexes.sql" />
     <None Include="Scripts\Script.PreDeployment.sql" />
     <None Include="Scripts\Script.PostDeployment.sql" />
+    <None Include="Scripts\MergeGptInteractions.sql" />
   </ItemGroup>
 </Project>

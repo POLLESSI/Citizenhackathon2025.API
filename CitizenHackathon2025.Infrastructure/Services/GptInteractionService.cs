@@ -6,19 +6,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public class GptInteractionService
     {
         private readonly IGPTRepository _gptRepository;
-        public GptInteractionService(IGPTRepository gptRepository)
+        public GptInteractionService(IGPTRepository gptRepository) => _gptRepository = gptRepository;
+
+        public Task SavePromptAsync(string prompt, string response)
         {
-            _gptRepository = gptRepository;
-        }
-        public async void SavePrompt(string prompt, string response)
-        {
-            await _gptRepository.SaveInteractionAsync(new GPTInteraction
+            // Let the DB set CreatedAt (SYSUTCDATETIME), the repo does not use it.
+            var entity = new GPTInteraction
             {
                 Prompt = prompt,
                 Response = response,
-                CreatedAt = DateTime.UtcNow
-            });
-            // ... Run command here with SqlConnection
+                // CreatedAt ignored: DB consistency
+                Active = true
+            };
+            return _gptRepository.SaveInteractionAsync(entity);
         }
     }
 }

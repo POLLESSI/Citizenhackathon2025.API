@@ -17,7 +17,9 @@
             this.Id = id;
             return this;
         }
-
+        // If you want to manipulate the state:
+        public void Activate() => this.Active = true;
+        public void Deactivate() => this.Active = false;
     }
 }
 

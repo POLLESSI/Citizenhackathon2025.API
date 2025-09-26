@@ -2,6 +2,11 @@
 using CitizenHackathon2025.Domain.Interfaces;
 using System.Data;
 using CitizenHackathon2025.Domain.Entities;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+using System.Data;
+using IDbConnection = System.Data.IDbConnection;
+
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -9,19 +14,21 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
     {
     #nullable disable
         private readonly System.Data.IDbConnection _connection;
+        private readonly ILogger<PlaceRepository> _logger;
 
-        public PlaceRepository(System.Data.IDbConnection connection)
+        public PlaceRepository(IDbConnection connection, ILogger<PlaceRepository> logger)
         {
             _connection = connection;
+            _logger = logger;
         }
 
         public Task<IEnumerable<Place>> GetLatestPlaceAsync(int limit = 200, CancellationToken ct = default)
         {
             const string sql = @"
                 SELECT TOP(@Limit)
-                    Id, Name, Type, Indoor, Latitude, Longitude, Capacity, Tag, Active
-                FROM dbo.Place
-                WHERE Active = 1
+                    [Id], [Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag], [Active]
+                FROM [Place]
+                WHERE [Active] = 1
                 ORDER BY Id DESC;";
             return _connection.QueryAsync<Place>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
@@ -30,7 +37,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             try
             {
-                string sql = "INSERT INTO Place (Name, Type, Indoor, Latitude, Longitude, Capacity, Tag)" +
+                const string sql = "INSERT INTO [Place] ([Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag])" +
                 "VALUES (@Name, @Type, @Indoor, @Latitude, @Longitude, @Capacity, @Tag)";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Name", place.Name);
@@ -55,7 +62,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             try
             {
-                const string sql = "SELECT Id, Name, Type, Indoor, Latitude, Longitude, Capacity, Tag FROM Place WHERE Id = @Id AND Active = 1";
+                const string sql = "SELECT [Id], [Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag] FROM [Place] WHERE [Id] = @Id AND Active = 1";
 
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@id", id, DbType.Int64);
@@ -83,10 +90,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             {
                 const string sql = @"
                             IF EXISTS (SELECT 1 FROM Place WHERE Name=@Name)
-                              UPDATE Place SET Type=@Type, Indoor=@Indoor, Latitude=@Latitude, Longitude=@Longitude, Capacity=@Capacity, Tag=@Tag
+                              UPDATE [Place] SET Type=@Type, Indoor=@Indoor, Latitude=@Latitude, Longitude=@Longitude, Capacity=@Capacity, Tag=@Tag
                               WHERE Name=@Name;
                             ELSE
-                              INSERT INTO Place(Name, Type, Indoor, Latitude, Longitude, Capacity, Tag, Active)
+                              INSERT INTO [Place]([Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag], [Active])
                               VALUES (@Name, @Type, @Indoor, @Latitude, @Longitude, @Capacity, @Tag, 1);";
                 DynamicParameters parameters = new DynamicParameters();
                 //parameters.Add("@Id", place.Id, DbType.Int64);

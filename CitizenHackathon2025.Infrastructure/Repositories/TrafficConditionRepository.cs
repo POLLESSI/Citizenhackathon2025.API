@@ -18,11 +18,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public Task<IEnumerable<TrafficCondition>> GetLatestTrafficConditionAsync(int limit = 10, CancellationToken ct = default)
         {
             const string sql = @"
-        SELECT TOP(@Limit)
-            Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active
-        FROM dbo.TrafficCondition
-        WHERE Active = 1
-        ORDER BY DateCondition DESC;";
+                            SELECT TOP(@Limit)
+                                Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active
+                            FROM dbo.TrafficCondition
+                            WHERE Active = 1
+                            ORDER BY DateCondition DESC;";
             var cmd = new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct);
             return _connection.QueryAsync<TrafficCondition>(cmd);
         }
@@ -30,7 +30,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             try
             {
-                const string sql = "SELECT Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType FROM TrafficConditions WHERE Id = @Id AND Active = 1";
+                const string sql = @"SELECT Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active
+                             FROM dbo.TrafficCondition
+                             WHERE Id = @Id AND Active = 1";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", id, DbType.Int64);
 
@@ -49,11 +51,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             try
             {
                 const string sql = @"
-                INSERT INTO TrafficCondition
-                (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active)
-                VALUES
-                (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType, 1);
-                SELECT CAST(SCOPE_IDENTITY() AS int)";
+                            INSERT INTO dbo.TrafficCondition
+                             (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType)   -- pas Active
+                            OUTPUT INSERTED.Id, INSERTED.Latitude, INSERTED.Longitude,
+                                   INSERTED.DateCondition, INSERTED.CongestionLevel,
+                                   INSERTED.IncidentType, INSERTED.Active
+                            VALUES (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType);";
 
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Latitude", trafficCondition.Latitude);
@@ -62,9 +65,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 parameters.Add("@CongestionLevel", trafficCondition.CongestionLevel);
                 parameters.Add("@IncidentType", trafficCondition.IncidentType);
 
-                var newId = await _connection.ExecuteScalarAsync<int>(sql, parameters);
-  
-                return trafficCondition;
+                var saved = await _connection.QuerySingleAsync<TrafficCondition>(sql, parameters);
+                return saved;
             }
             catch (Exception ex)
             {
@@ -81,13 +83,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             try
             {
                 const string sql = @"
-                UPDATE TrafficCondition
-                SET Latitude = @Latitude,
-                    Longitude = @Longitude,
-                    DateCondition = @DateCondition,
-                    CongestionLevel = @CongestionLevel,
-                    IncidentType = @IncidentType
-                WHERE Id = @Id";
+                            UPDATE dbo.TrafficCondition
+                            SET Latitude        = @Latitude,
+                                Longitude       = @Longitude,
+                                DateCondition   = @DateCondition,
+                                CongestionLevel = @CongestionLevel,
+                                IncidentType    = @IncidentType
+                            WHERE Id = @Id AND Active = 1;";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", trafficCondition.Id);
                 parameters.Add("@Latitude", trafficCondition.Latitude);

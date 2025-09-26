@@ -1,6 +1,7 @@
 ﻿using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
+using Microsoft.Extensions.Configuration;
 using Dapper;
 using System.Data;
 using System.Security.Cryptography;
@@ -12,13 +13,18 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
     {
 #nullable disable
         private readonly IDbConnection _connection;
-        /* private readonly string _apiKey = "sk-..."; */ // to inject via IConfiguration if you use it
-        // private readonly string _endpoint = "https://api.openai.com/v1/chat/completions";
-        // private readonly string _model = "gpt-4o";
-        public GptInteractionsRepository(System.Data.IDbConnection connection)
+        private readonly IConfiguration _config;
+
+        public GptInteractionsRepository(IDbConnection connection, IConfiguration config)
         {
             _connection = connection;
+            _config = config;
         }
+
+        /* private readonly string _apiKey = "sk-..."; */ // to inject via IConfiguration if you use it
+                                                          // private readonly string _endpoint = "https://api.openai.com/v1/chat/completions";
+                                                          // private readonly string _model = "gpt-4o";
+
         public async Task SaveSuggestionAsync(Suggestion suggestion)
         {
             const string sql = @"
@@ -53,37 +59,57 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                     _connection.Close();
             }
         }
-        public Task SaveInteractionAsync(GPTInteraction interaction)
+        public async Task SaveInteractionAsync(GPTInteraction interaction)
         {
-            // Hash SHA-256 hex (64 chars) du prompt pour l’UPSERT idempotent
-            var promptHash = Sha256Hex(interaction.Prompt ?? string.Empty);
+            // 1) Canonisation du prompt (évite les doublons accidentels)
+            static string NormalizePrompt(string? s)
+            {
+                if (string.IsNullOrWhiteSpace(s)) return string.Empty;
+                var t = s.Trim().Normalize(NormalizationForm.FormKC);
+                t = System.Text.RegularExpressions.Regex.Replace(t, @"\s+", " ");
+                t = t.ToLowerInvariant();
+                return t;
+            }
+
+            // 2) HMAC-SHA256 avec pepper (ne JAMAIS l’exposer)
+            static string HmacSha256Hex(string input, string secret)
+            {
+                using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+                var bytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(input));
+                var sb = new StringBuilder(bytes.Length * 2);
+                foreach (var b in bytes) sb.Append(b.ToString("x2"));
+                return sb.ToString(); // 64 hex chars
+            }
+
+            var secret = _config["Security:PromptHashPepper"];
+            if (string.IsNullOrEmpty(secret))
+                throw new InvalidOperationException("Missing Security:PromptHashPepper in configuration.");
+
+            var normalized = NormalizePrompt(interaction.Prompt);
+            var promptHash = HmacSha256Hex(normalized, secret);
 
             const string sql = @"
-                            MERGE [GptInteractions] AS t
-                            USING (SELECT @PromptHash AS PromptHash) AS s
-                            ON (t.PromptHash = s.PromptHash)
-                            WHEN MATCHED THEN
-                                UPDATE SET
-                                    Response  = @Response,
-                                    CreatedAt = SYSUTCDATETIME(),
-                                    Active    = 1
-                            WHEN NOT MATCHED THEN
-                                INSERT (Prompt, PromptHash, Response, Active)
-                                VALUES (@Prompt, @PromptHash, @Response, 1);";
-            DynamicParameters parameters = new DynamicParameters();
+                        MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
+                        USING (SELECT @PromptHash AS PromptHash) AS s
+                        ON (t.PromptHash = s.PromptHash)
+                        WHEN MATCHED THEN
+                            UPDATE SET
+                                Response  = @Response,
+                                CreatedAt = SYSUTCDATETIME(),
+                                Active    = 1
+                        WHEN NOT MATCHED THEN
+                            INSERT (Prompt, PromptHash, Response, CreatedAt, Active)
+                            VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1);";
+
+            var parameters = new DynamicParameters();
             parameters.Add("Prompt", interaction.Prompt, DbType.String);
             parameters.Add("PromptHash", promptHash, DbType.String);
             parameters.Add("Response", interaction.Response, DbType.String);
-            static string Sha256Hex(string input)
-            {
-                using var sha256 = SHA256.Create();
-                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
-                StringBuilder builder = new StringBuilder();
-                foreach (var b in bytes)
-                    builder.Append(b.ToString("x2"));
-                return builder.ToString();
-            }
-            return _connection.ExecuteAsync(sql, parameters);
+
+            // NB: we don't pass CreatedAt from the code: SQL sets it to UTC.
+            // NB2: we do not pass Active: fixed above (1).
+
+            await _connection.ExecuteAsync(sql, parameters);
         }
         public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync()
         {
@@ -106,10 +132,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByEventIdAsync(int id)
         {
             const string sql = @"
-                SELECT * FROM Suggestion
-                WHERE EventId = @Id
-                AND Active = 1
-                ORDER BY DateSuggestion DESC";
+                            SELECT * FROM Suggestion
+                            WHERE EventId = @Id
+                            AND Active = 1
+                            ORDER BY DateSuggestion DESC";
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("Id", id, DbType.Int32);
 
@@ -119,10 +145,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByForecastIdAsync(int id)
         {
             const string sql = @"
-                SELECT * FROM Suggestion
-                WHERE ForecastId = @Id
-                AND Active = 1
-                ORDER BY DateSuggestion DESC";
+                            SELECT * FROM Suggestion
+                            WHERE ForecastId = @Id
+                            AND Active = 1
+                            ORDER BY DateSuggestion DESC";
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("Id", id, DbType.Int32);
 
@@ -132,15 +158,16 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByTrafficIdAsync(int id)
         {
             const string sql = @"
-                SELECT * FROM Suggestion
-                WHERE TrafficId = @Id
-                AND Active = 1
-                ORDER BY DateSuggestion DESC";
+                            SELECT * FROM Suggestion
+                            WHERE TrafficId = @Id
+                            AND Active = 1
+                            ORDER BY DateSuggestion DESC";
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("TrafficId", id, DbType.Int32);
 
             return await _connection.QueryAsync<Suggestion>(sql, parameters);
         }
+
 
         public async Task DeleteSuggestionAsync(int id)
         {
@@ -160,15 +187,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByPlaceCrowdAsync(string placeName)
         {
             const string sql = @"
-                SELECT s.*
-                FROM Suggestion s
-                INNER JOIN CrowdInfo c ON s.OriginalPlace = c.LocationName
-                INNER JOIN Place p ON p.Name = c.LocationName
-                WHERE LOWER(p.Name) = LOWER(@PlaceName)
-                  AND s.Active = 1
-                  AND c.Active = 1
-                  AND p.Active = 1
-                ORDER BY s.DateSuggestion DESC";
+                            SELECT s.*
+                            FROM Suggestion s
+                            INNER JOIN CrowdInfo c ON s.OriginalPlace = c.LocationName
+                            INNER JOIN Place p ON p.Name = c.LocationName
+                            WHERE LOWER(p.Name) = LOWER(@PlaceName)
+                              AND s.Active = 1
+                              AND c.Active = 1
+                              AND p.Active = 1
+                            ORDER BY s.DateSuggestion DESC";
 
             var parameters = new DynamicParameters();
             parameters.Add("@PlaceName", placeName, DbType.String);
@@ -178,23 +205,23 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync(string? typeFilter = null, bool? indoorFilter = null, DateTime? sinceDate = null)
         {
-            var sql = @"
-                    SELECT 
-                        s.OriginalPlace AS PlaceName,
-                        MAX(p.Type) AS Type,
-                        MAX(p.Indoor) AS Indoor,
-                        MAX(p.Latitude) AS Latitude,
-                        MAX(p.Longitude) AS Longitude,
-                        MAX(c.CrowdLevel) AS CrowdLevel,
-                        COUNT(*) AS SuggestionCount,
-                        MAX(s.DateSuggestion) AS LastSuggestedAt
-                    FROM Suggestion s
-                    LEFT JOIN Place p ON s.OriginalPlace = p.Name AND p.Active = 1
-                    LEFT JOIN CrowdInfo c ON c.LocationName = s.OriginalPlace AND c.Active = 1
-                    WHERE s.Active = 1
-                    /**WHERE_FILTER**/
-                    GROUP BY s.OriginalPlace
-                    ORDER BY LastSuggestedAt DESC;";
+            const string sql = @"
+                            SELECT 
+                                s.OriginalPlace AS PlaceName,
+                                MAX(p.Type) AS Type,
+                                MAX(p.Indoor) AS Indoor,
+                                MAX(p.Latitude) AS Latitude,
+                                MAX(p.Longitude) AS Longitude,
+                                MAX(c.CrowdLevel) AS CrowdLevel,
+                                COUNT(*) AS SuggestionCount,
+                                MAX(s.DateSuggestion) AS LastSuggestedAt
+                            FROM Suggestion s
+                            LEFT JOIN Place p ON s.OriginalPlace = p.Name AND p.Active = 1
+                            LEFT JOIN CrowdInfo c ON c.LocationName = s.OriginalPlace AND c.Active = 1
+                            WHERE s.Active = 1
+                            /**WHERE_FILTER**/
+                            GROUP BY s.OriginalPlace
+                            ORDER BY LastSuggestedAt DESC;";
 
             var filters = new List<string>();
             var parameters = new DynamicParameters();
@@ -217,21 +244,21 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 parameters.Add("SinceDate", sinceDate.Value);
             }
 
-            if (filters.Any())
-            {
-                sql = sql.Replace("/**WHERE_FILTER**/", "AND " + string.Join(" AND ", filters));
-            }
-            else
-            {
-                sql = sql.Replace("/**WHERE_FILTER**/", "");
-            }
+            //if (filters.Any())
+            //{
+            //    sql = sql.Replace("/**WHERE_FILTER**/", "AND " + string.Join(" AND ", filters));
+            //}
+            //else
+            //{
+            //    sql = sql.Replace("/**WHERE_FILTER**/", "");
+            //}
 
             var grouped = (await _connection.QueryAsync<SuggestionGroupedByPlaceDTO>(sql, parameters)).ToList();
 
             const string suggestionSql = @"
-                    SELECT * FROM Suggestion
-                    WHERE Active = 1 AND OriginalPlace = @PlaceName
-                    ORDER BY DateSuggestion DESC";
+                                    SELECT * FROM Suggestion
+                                    WHERE Active = 1 AND OriginalPlace = @PlaceName
+                                    ORDER BY DateSuggestion DESC";
             DynamicParameters suggestionParameters = new DynamicParameters();
 
             foreach (var group in grouped)

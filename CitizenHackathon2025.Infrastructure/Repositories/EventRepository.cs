@@ -1,9 +1,10 @@
-﻿using Dapper;
-using CitizenHackathon2025.Domain.Entities;
-using System.Data;
-using Microsoft.Extensions.Logging;
-using IDbConnection = System.Data.IDbConnection;
+﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using Dapper;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+using System.Data;
+using IDbConnection = System.Data.IDbConnection;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -21,11 +22,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Event> CreateEventAsync(Event newEvent)
         {
             const string sql = @"
-            INSERT INTO [Event] 
-                ([Name], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
-            VALUES 
-                (@Name, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
-            SELECT CAST(SCOPE_IDENTITY() as int);";
+                INSERT INTO [Event] ([Name], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
+                VALUES (@Name, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
+                SELECT CAST(SCOPE_IDENTITY() as int);";
 
             try
             {
@@ -39,15 +38,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
                 var newId = await _connection.ExecuteScalarAsync<int>(sql, parameters);
 
-                newEvent.Id = newId; // Important pour retourner l'objet complété
-                newEvent.Active = true; // Puisque créé actif par défaut
+                newEvent.Id = newId; 
+                newEvent.Active = true; 
 
                 return newEvent;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error creating Event: {ex.Message}");
-                throw; // Laisse l'exception remonter pour traitement global
+                throw; 
             }
         }
 
@@ -85,11 +84,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public Task<IEnumerable<Event>> GetLatestEventAsync(int limit = 10, CancellationToken ct = default)
         {
             const string sql = @"
-        SELECT TOP(@Limit)
-            Id, Name, Latitude, Longitude, DateEvent, ExpectedCrowd, IsOutdoor, Active
-        FROM dbo.Event
-        WHERE Active = 1
-        ORDER BY DateEvent DESC;";
+                    SELECT TOP(@Limit)
+                        [Id], [Name], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active]
+                    FROM [Event]
+                    WHERE [Active] = 1
+                    ORDER BY [DateEvent] DESC;";
+
             return _connection.QueryAsync<Event>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
@@ -125,24 +125,34 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<Event> SaveEventAsync(Event @event)
         {
+            const string sql = @"
+                    INSERT INTO [Event] ([Name], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
+                    VALUES (@Name, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
+                    SELECT CAST(SCOPE_IDENTITY() as int);";
             try
             {
-                string sql = "INSERT INTO Event (Id, Name, Latitude, Longitude, DateEvent, ExpectedCrowd, IsOutdoor)" +
-                "VALUES (@Id, @Name, @Latitude, @Longitude, @DateEvent, @ExpectedCrow, @IsOutdoor)";
                 DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@Name", @event.Name);
-                parameters.Add("@Latitude", @event.Latitude);
-                parameters.Add("@Longitude", @event.Longitude);
-                parameters.Add("@DateEvent", @event.DateEvent);
-                parameters.Add("@ExpectedCrowd", @event.ExpectedCrowd);
+                parameters.Add("@Name", @event.Name, DbType.String);
+                parameters.Add("@Latitude", @event.Latitude, DbType.Decimal);
+                parameters.Add("@Longitude", @event.Longitude, DbType.Decimal);
+                parameters.Add("@DateEvent", @event.DateEvent, DbType.DateTime);
+                parameters.Add("@ExpectedCrowd", @event.ExpectedCrowd, DbType.Int32);
+                parameters.Add("@IsOutdoor", @event.IsOutdoor, DbType.Boolean);
 
-                int rowsAffected = await _connection.ExecuteAsync(sql, parameters);
+                var newId = await _connection.ExecuteScalarAsync<int>(sql, parameters);
+                @event.Id = newId;
+                @event.Active = true; 
                 return @event;
+            }
+            catch (SqlException sqlEx) when (sqlEx.Number == 2627 || sqlEx.Number == 2601) // UNIQUE constraint
+            {
+                _logger.LogWarning(sqlEx, "Duplicate (Name, DateEvent) for event {Name} @ {DateEvent}", @event.Name, @event.DateEvent);
+                return null; 
             }
             catch (Exception ex)
             {
 
-                Console.WriteLine($"Error adding certification: {ex.ToString()}");
+                _logger.LogError(ex, "Error saving Event");
                 return null;
             }
         }
@@ -151,12 +161,22 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             if (@event == null || @event.Id <= 0)
             {
-                _logger.LogWarning("Invalid event data provided for update.");
                 throw new ArgumentException("Invalid event object", nameof(@event));
             }
+
+            const string sql = @"
+                    UPDATE [Event]
+                    SET Name = @Name,
+                        Latitude = @Latitude,     
+                        Longitude = @Longitude,    
+                        DateEvent = @DateEvent,
+                        ExpectedCrowd = @ExpectedCrowd,
+                        IsOutdoor = @IsOutdoor
+                    WHERE Id = @Id AND Active = 1;";
+
             try
             {
-                string sql = "UPDATE Event SET Name = @Name, Latitude = CAST(@Latitude AS DECIMAL(8, 2)), Longitude = CAST(@Longitude AS DECIMAL(9, 3)), DateEvent = @DateEvent, ExpectecCrowd = @ExpectedCrowd, IsOutdoor = @IsOutdoor WHERE Id = @Id AND Active = 1";
+                
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", @event.Id, DbType.Int32);
                 parameters.Add("@Name", @event.Name, DbType.String);
@@ -168,30 +188,34 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
                 var affectedRows = _connection.Execute(sql, parameters);
 
-                if (affectedRows == 0)
-                {
-                    _logger.LogWarning($"No event found to update with Id {@event.Id}");
-                    return null;
-                }
-
-                _logger.LogInformation($"Event with Id {@event.Id} successfully updated.");
+                if (affectedRows == 0) return null;
+                
                 return @event;
+            }
+            catch (SqlException sqlEx) when (sqlEx.Number == 2627 || sqlEx.Number == 2601)
+            {
+                _logger.LogWarning(sqlEx, "Unique constraint violation on update for (Name, DateEvent)");
+                return null;
             }
             catch (Exception ex)
             {
 
-                _logger.LogError(ex, $"An error occurred while updating the event with Id {@event.Id}");
+                _logger.LogError(ex, $"Error updating event with Id {@event.Id}");
                 throw;
             }
         }
         public async Task<int> ArchivePastEventsAsync() 
         {
-            string sql = "UPDATE Event SET Active = 0 WHERE Active = 1 AND DateEvent < DATEADD(DAY, -2, CAST(GETDATE() AS DATE))";
+            const string sql = @"
+                        UPDATE [Event]
+                        SET [Active] = 0
+                        WHERE [Active] = 1
+                          AND [DateEvent] < DATEADD(DAY, -2, CAST(GETDATE() AS DATETIME2(0)));";
 
             try
             {
                 var affectedRows = await _connection.ExecuteAsync(sql);
-                _logger.LogInformation($"{affectedRows} event(s) archived.");
+                _logger.LogInformation("{Count} event(s) archived.", affectedRows);
                 return affectedRows;
             }
             catch (Exception ex)

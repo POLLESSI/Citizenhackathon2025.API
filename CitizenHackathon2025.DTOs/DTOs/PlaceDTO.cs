@@ -26,6 +26,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         public int Capacity { get; set; }
         [DisplayName("Tags : ")]
         public string Tag { get; set; } = "";
+        public bool Active { get; set; } = true;
     }
 }
 

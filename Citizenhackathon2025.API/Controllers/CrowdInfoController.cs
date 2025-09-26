@@ -40,7 +40,7 @@ namespace CitizenHackathon2025.API.Controllers
             var crowdInfo = await _crowdInfoRepository.GetCrowdInfoByIdAsync(id);
 
             if (crowdInfo == null)
-                return NotFound($"No traffic data found for the identifier {id}.");
+                return NotFound($"No crowd infos data found for the identifier {id}.");
 
             return Ok(crowdInfo.MapToCrowdInfoDTO());
         }
@@ -51,6 +51,13 @@ namespace CitizenHackathon2025.API.Controllers
             var filtered = all.Where(c => c.LocationName.Equals(locationName, StringComparison.OrdinalIgnoreCase));
 
             return Ok(filtered.Select(c => c.MapToCrowdInfoDTO()));
+        }
+        [HttpGet("latest")]
+        public async Task<IActionResult> GetLatest()
+        {
+            var all = await _crowdInfoRepository.GetAllCrowdInfoAsync();
+            var latest = all.OrderByDescending(c => c.Timestamp).Take(50);
+            return Ok(latest.Select(c => c.MapToCrowdInfoDTO()));
         }
         [HttpPost]
         public async Task<IActionResult> SaveCrowdInfo([FromBody] CrowdInfoDTO crowdInfoDTO)

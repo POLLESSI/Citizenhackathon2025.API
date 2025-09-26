@@ -8,7 +8,12 @@ namespace CitizenHackathon2025.Application.Extensions
 {
     public static class MapperExtensions
     {
-    #nullable disable
+#nullable disable
+        private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 2); // DECIMAL(9,2)
+        private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 3); // DECIMAL(9,3)
+        private static DateTime TruncateToSecond(DateTime dt)
+            => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond), dt.Kind);
+
         // DTO -> Entity
         public static CitizenHackathon2025.Domain.Entities.WeatherForecast MapToWeatherForecast(this WeatherForecastDTO dto)
         {
@@ -55,18 +60,42 @@ namespace CitizenHackathon2025.Application.Extensions
         }
 
         // Concrete example for an Event
+        // Entity -> DTO
         public static EventDTO MapToEventDTO(this Event entity)
-        {
-            return new EventDTO
+           => new()
+           {
+               Id = entity.Id,
+               Name = entity.Name,
+               Latitude = (double)entity.Latitude,
+               Longitude = (double)entity.Longitude,
+               DateEvent = entity.DateEvent,               
+               ExpectedCrowd = entity.ExpectedCrowd ?? 0,
+               IsOutdoor = entity.IsOutdoor
+           };
+        // DTO -> Entity
+        public static Event MapToEvent(this EventDTO dto)
+             => new()
+             {
+                 Id = dto.Id,
+                 Name = dto.Name,
+                 Latitude = RoundLat(dto.Latitude),          
+                 Longitude = RoundLon(dto.Longitude),        
+                 DateEvent = TruncateToSecond(dto.DateEvent),
+                 ExpectedCrowd = dto.ExpectedCrowd ?? 0,     
+                 IsOutdoor = dto.IsOutdoor,
+                 Active = true
+             };
+        public static EventDTO MapToEventWithDateEvent(this EventDTO dto)
+            => new()
             {
-                Name = entity.Name,
-                Latitude = (double)entity.Latitude,
-                Longitude = (double)entity.Longitude,
-                DateEvent = entity.DateEvent,
-                ExpectedCrowd = entity.ExpectedCrowd,
-                IsOutdoor = entity.IsOutdoor
+                Id = dto.Id,
+                Name = dto.Name,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateEvent = TruncateToSecond(dto.DateEvent),
+                ExpectedCrowd = dto.ExpectedCrowd,
+                IsOutdoor = dto.IsOutdoor
             };
-        }
 
         // CrowdInfo mappings (digital)
         public static CrowdInfoDTO MapToCrowdInfoDTO(this CrowdInfo entity)
@@ -107,9 +136,46 @@ namespace CitizenHackathon2025.Application.Extensions
                 CrowdLevel = dto.CrowdLevel,
                 Timestamp = DateTime.UtcNow
             }
-;
-
-
+;       // GPTInteraction → DTO
+        public static GptInteractionDTO MapToGptInteractionDTO(this GPTInteraction entity)
+        {
+            if (entity is null) return null!;
+            return new GptInteractionDTO
+            {
+                Id = entity.Id,
+                Prompt = entity.Prompt ?? string.Empty,
+                Response = entity.Response ?? string.Empty,
+                PromptHash = entity.PromptHash ?? string.Empty,
+                CreatedAt = entity.CreatedAt,
+                Active = entity.Active
+            };
+        }
+        // DTO → GPTInteraction
+        public static GPTInteraction MapToGptInteraction(this GptInteractionDTO dto)
+        {
+            if (dto is null) return null!;
+            return new GPTInteraction
+            {
+                Id = dto.Id, // if 0, the DB will assign the IDENTITY
+                Prompt = dto.Prompt,
+                Response = dto.Response,
+                PromptHash = string.IsNullOrWhiteSpace(dto.PromptHash) ? null! : dto.PromptHash,
+                CreatedAt = dto.CreatedAt == default ? DateTime.UtcNow : dto.CreatedAt,
+                Active = dto.Active
+            };
+        }
+        // DTO -> Entity partial update)
+        public static GPTInteraction UpdateFrom(this GPTInteraction entity, GptInteractionDTO dto)
+        {
+            if (entity is null || dto is null) return entity!;
+            entity.Prompt = dto.Prompt;
+            entity.Response = dto.Response;
+            if (!string.IsNullOrWhiteSpace(dto.PromptHash))
+                entity.PromptHash = dto.PromptHash;
+            // CreatedAt: generally immutable (audit)
+            entity.Active = dto.Active;
+            return entity;
+        }
         // Place → DTOSugges
         public static PlaceDTO MapToPlaceDTO(this Place entity)
         {
@@ -124,6 +190,33 @@ namespace CitizenHackathon2025.Application.Extensions
                 Tag = entity.Tag,
             };
         }
+        public static Place MapToPlace(this PlaceDTO dto)
+        {
+            return new Place
+            {
+                Name = dto.Name,
+                Type = dto.Type,
+                Indoor = dto.Indoor,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                Capacity = dto.Capacity,
+                Tag = dto.Tag
+            };
+        }
+        public static PlaceDTO MapToPlaceWithLatitude(this PlaceDTO dto)
+        {
+            return new PlaceDTO
+            {
+                Name = dto.Name,
+                Type = dto.Type,
+                Indoor = dto.Indoor,
+                Latitude = Math.Round(dto.Latitude, 2),
+                Longitude = Math.Round(dto.Longitude, 3),
+                Capacity = dto.Capacity,
+                Tag = dto.Tag
+            };
+        }
+
 
         // Suggestion → DTO
         public static SuggestionDTO MapToSuggestionDTO(this Suggestion entity)
@@ -135,6 +228,18 @@ namespace CitizenHackathon2025.Application.Extensions
                 OriginalPlace = entity.OriginalPlace,
                 SuggestedAlternatives = entity.SuggestedAlternatives,
                 Reason = entity.Reason
+            };
+        }
+        //DTO → Suggestion
+        public static Suggestion MapToSuggestion(this SuggestionDTO dto)
+        {
+            return new Suggestion
+            {
+                User_Id = dto.UserId,
+                DateSuggestion = dto.DateSuggestion,
+                OriginalPlace = dto.OriginalPlace,
+                SuggestedAlternatives = dto.SuggestedAlternatives,
+                Reason = dto.Reason
             };
         }
 
@@ -150,8 +255,61 @@ namespace CitizenHackathon2025.Application.Extensions
                 IncidentType = entity.IncidentType
             };
         }
-        public static TrafficCondition MapToTrafficCondition(this TrafficConditionUpdateDTO dto)
+        // DTO side standardization (default date + truncation)
+        public static TrafficConditionDTO Normalize(this TrafficConditionDTO dto)
+            => new TrafficConditionDTO
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dto.DateCondition == default ? DateTime.UtcNow
+                                                                  : TruncateToSecond(dto.DateCondition),
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType
+            };
+
+        // DTO -> Entity (CREATE)
+        public static TrafficCondition MapToTrafficCondition(this TrafficConditionDTO dto)
+        => new TrafficCondition
         {
+            Latitude = dto.Latitude,
+            Longitude = dto.Longitude,
+            DateCondition = dto.DateCondition,
+            CongestionLevel = dto.CongestionLevel,
+            IncidentType = dto.IncidentType,
+        };
+
+        // DTO -> Entity (UPDATE) existe déjà pour TrafficConditionUpdateDTO → OK
+
+        public static TrafficConditionDTO MapToTrafficConditionWithDateCondition(this TrafficConditionUpdateDTO dto)
+        {
+            return new TrafficConditionDTO
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dto.DateCondition,
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType
+            };
+        }
+        // ✅ Create : TrafficConditionDTO -> Entity
+        public static TrafficCondition MapToEntity(this TrafficConditionDTO dto)
+        {
+            if (dto == null) return null!;
+
+            return new TrafficCondition
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dto.DateCondition == default ? DateTime.UtcNow : dto.DateCondition,
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType
+            };
+        }
+        // ✅ Update: already exists for UpdateDTO
+        public static TrafficCondition MapToEntity(this TrafficConditionUpdateDTO dto)
+        {
+            if (dto == null) return null!;
+
             var entity = new TrafficCondition
             {
                 Latitude = dto.Latitude,
@@ -160,9 +318,10 @@ namespace CitizenHackathon2025.Application.Extensions
                 CongestionLevel = dto.CongestionLevel,
                 IncidentType = dto.IncidentType
             };
-            return entity.WithId(dto.Id);
+            return entity.WithId(dto.Id); // helper domain if you have it, otherwise pass the Id to the repo
         }
-        //Mapping vers DTO
+
+        //Mapping to DTO
         public static UserDTO UserToDTO(this Domain.Entities.Users user)
         {
             /// <summary>

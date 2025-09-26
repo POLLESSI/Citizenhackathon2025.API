@@ -1,52 +1,55 @@
-﻿using MapsterMapper;
-using CitizenHackathon2025.Application.Mapping;
-
-// ==================
+﻿// ==================
 // Namespaces projet (⚠️ harmonized on CitizenHackathon2025)
 // ==================
-using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Security;
+using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.Application.Interfaces;
-using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
 using CitizenHackathon2025.Application.CQRS.Queries;
+using CitizenHackathon2025.Application.Services;
+using CitizenHackathon2025.Application.Mapping;
+using CitizenHackathon2025.Application.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Hubs.Hubs;
+using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
+using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
+using CitizenHackathon2025.Infrastructure.Services.Monitoring;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs;
 using CitizenHackathon2025.Infrastructure.Persistence;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Infrastructure.Services;
+using CitizenHackathon2025.Infrastructure.SignalR;
+using CitizenHackathon2025.Infrastructure;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Options;
 using CitizenHackathon2025.API.Tools;
-using CitizenHackathon2025.Application.DTOs;
-using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Hubs.Services;
-using CitizenHackathon2025.Infrastructure;
-using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
-using CitizenHackathon2025.Infrastructure.Services.Monitoring;
-using CitizenHackathon2025.Infrastructure.SignalR;
-using CitizenHackathon2025.Infrastructure.UseCases;
+using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
-using Dapper;
-using Mapster;
-using MediatR;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
-using Polly;
-using Serilog;
-using System.Data;
 using System.Net.Http.Headers;
+using System.Data;
 using System.Text;
-using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
+using MapsterMapper;
+using Serilog;
+using Mapster;
+using MediatR;
+using Dapper;
+using Polly;
+
+
+
+
 
 // =====================================
 // Program
@@ -531,6 +534,7 @@ internal class Program
         hubs.MapHub<AISuggestionHub>("/aisuggestionhub");
         hubs.MapHub<CrowdHub>("/crowdHub").RequireAuthorization();
         hubs.MapHub<EventHub>("/eventHub");
+        hubs.MapHub<GPTHub>("/gptHub");
         hubs.MapHub<NotificationHub>("/notifications");
         hubs.MapHub<OutZenHub>("/outzen");
         hubs.MapHub<PlaceHub>("/placeHub");
@@ -606,6 +610,7 @@ internal class Program
         //UseSecurityHeaders(app);
 
         //app.MapControllers();
+        app.MapFallbackToFile("index.html");
 
         app.Run();
     }

@@ -1,16 +1,15 @@
-﻿using CitizenHackathon2025.Application.CQRS.Queries;
-using CitizenHackathon2025.Application.Extensions;
+﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.WeatherForecasts.Queries;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Domain.LocalBusinessRules.Validations;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Infrastructure.Repositories.Providers.Hubs;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
+using CitizenHackathon2025.Hubs.Hubs;
 using System.ComponentModel.DataAnnotations;
-
+using MediatR;
+using System.Linq;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Diagnostics;
+using Microsoft.AspNetCore.SignalR;
+using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.WeatherForecastHubMethods;
 namespace CitizenHackathon2025.API.Controllers
 {
     [ApiController]
@@ -18,13 +17,13 @@ namespace CitizenHackathon2025.API.Controllers
     public class WeatherForecastController : ControllerBase
     {
         private readonly IWeatherForecastRepository _weatherRepository;
-        private readonly IHubContext<WeatherHub> _hubContext;
-        private readonly IOpenWeatherService _owmService; // ton service OWM
+        private readonly IHubContext<WeatherForecastHub> _hubContext;
+        private readonly IOpenWeatherService _owmService; 
         private readonly IMediator _mediator;
 
         public WeatherForecastController(
             IWeatherForecastRepository weatherRepository,
-            IHubContext<WeatherHub> hubContext,
+            IHubContext<WeatherForecastHub> hubContext,
             IOpenWeatherService owmService,
             IMediator mediator)
         {
@@ -34,7 +33,20 @@ namespace CitizenHackathon2025.API.Controllers
             _mediator = mediator;
         }
 
-        // Injection manuelle (test)
+        // standard create + broadcast
+        [HttpPost]
+        public async Task<ActionResult<WeatherForecastDTO>> Create([FromBody] WeatherForecastDTO dto)
+        {
+            if (dto is null) return BadRequest();
+
+            var saved = await _weatherRepository.SaveOrUpdateAsync(dto.MapToWeatherForecast());
+            var result = saved.MapToWeatherForecastDTO();
+
+            await _hubContext.Clients.All.SendAsync("ReceiveForecast", result); // broadcast
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        }
+
+        // Manual injection (test)
         [HttpPost("manual")]
         public async Task<ActionResult<WeatherForecastDTO>> PostManual([FromBody] WeatherForecastDTO dto)
         {
@@ -49,121 +61,93 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(result);
         }
 
-        // current via OWM (existing)
-        [HttpGet("current")]
+        // generate + broadcast
+        [HttpPost("generate")]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
-        public async Task<IActionResult> GetCurrent([FromQuery] string city, CancellationToken ct = default)
+        public async Task<IActionResult> Generate(CancellationToken ct = default)
         {
-            var isValid = !string.IsNullOrWhiteSpace(city) && WeatherForecastValidator.IsCityNameValid(city);
+            // generate a random record + upsert to DB
+            var saved = await _weatherRepository.GenerateNewForecastAsync();
 
-            if (!isValid)
-            {
-                // City invalide → 200 avec fallback explicite
-                Response.Headers["X-Input-Valid"] = "false";
-                return Ok(new WeatherForecastDTO
-                {
-                    DateWeather = DateTime.UtcNow,
-                    TemperatureC = 0,
-                    Summary = "Invalid city",
-                    RainfallMm = 0.0,
-                    Humidity = 0,
-                    WindSpeedKmh = 0.0,
-                    Icon = null,
-                    IconUrl = "",
-                    WeatherMain = "",
-                    IsSevere = false,
-                    Description = "Paramètre 'city' invalide. Exemple : 'Namur'."
-                });
-            }
+            var dto = saved.MapToWeatherForecastDTO();
 
-            var current = await _mediator.Send(new GetCurrentWeatherQuery(city), ct);
-
-            if (current is null)
-            {
-                // No data → 200 with fallback
-                Response.Headers["X-Data-Source"] = "fallback";
-                return Ok(new WeatherForecastDTO
-                {
-                    DateWeather = DateTime.UtcNow,
-                    TemperatureC = 0,
-                    Summary = "No data available",
-                    RainfallMm = 0.0,
-                    Humidity = 0,
-                    WindSpeedKmh = 0.0,
-                    Icon = null,
-                    IconUrl = "",
-                    WeatherMain = "",
-                    IsSevere = false,
-                    Description = $"No current weather forecast for '{city}'."
-                });
-            }
-
-            // (Optional) SignalR side effect — comment out if you want a strictly idempotent GET
-            await _hubContext.Clients.All.SendAsync("ReceiveForecast", current, ct);
-
-            return Ok(current);
-        }
-
-        [HttpGet("history")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<WeatherForecastDTO>))]
-        public async Task<IActionResult> GetHistory([FromQuery, Range(1, 500)] int limit = 10, CancellationToken ct = default)
-        {
-            limit = Math.Clamp(limit, 1, 500);
-
-            var history = await _mediator.Send(new GetWeatherHistoryQuery(limit), ct);
-
-            // Always 200, even if empty
-            return Ok(history ?? new List<WeatherForecastDTO>());
-        }
-
-        [HttpGet("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
-        public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct = default)
-        {
-            if (id <= 0)
-            {
-                Response.Headers["X-Input-Valid"] = "false";
-                return Ok(new WeatherForecastDTO
-                {
-                    DateWeather = DateTime.UtcNow,
-                    TemperatureC = 0,
-                    Summary = "Invalid id",
-                    RainfallMm = 0.0,
-                    Humidity = 0,
-                    WindSpeedKmh = 0.0,
-                    IsSevere = false,
-                    Description = "Id must be greater than zero."
-                });
-            }
-
-            var dto = await _mediator.Send(new GetWeatherForecastByIdQuery(id), ct);
-
-            if (dto is null)
-            {
-                Response.Headers["X-Resource-Found"] = "false";
-                return Ok(new WeatherForecastDTO
-                {
-                    Id = id,
-                    DateWeather = DateTime.UtcNow,
-                    TemperatureC = 0,
-                    Summary = "Not found",
-                    RainfallMm = 0.0,
-                    Humidity = 0,
-                    WindSpeedKmh = 0.0,
-                    IsSevere = false,
-                    Description = $"Forecast with id={id} was not found."
-                });
-            }
+            // (optional) real-time broadcast
+            await _hubContext.Clients.All.SendAsync("ReceiveForecast", dto, ct);
 
             return Ok(dto);
         }
 
+        // all (existing)
         [HttpGet("all")]
-        public async Task<ActionResult<List<WeatherForecastDTO>>> GetAll()
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<WeatherForecastDTO>))]
+        public async Task<ActionResult<List<WeatherForecastDTO>>> GetAll(CancellationToken ct = default)
         {
-            var list = await _mediator.Send(new GetAllWeatherForecastsQuery());
-            return Ok(list ?? new List<WeatherForecastDTO>()); // 200 []
+            // ⚠️ Here we want EVERYTHING, so we call GetAllAsync() (not GetLatestWeatherForecastAsync)
+            var entities = await _weatherRepository.GetAllAsync();
+            var dtos = entities.Select(w => w.MapToWeatherForecastDTO()).ToList();
+            return Ok(dtos);
         }
+
+        // current via OWM (existing)
+        [HttpGet("current")]
+        public async Task<IActionResult> GetCurrent([FromQuery] string? city = null, CancellationToken ct = default)
+        {
+            var entity = await _weatherRepository.GetLatestWeatherForecastAsync(ct); 
+            if (entity is null) return Ok(Array.Empty<WeatherForecastDTO>());
+
+            return Ok(new[] { entity.MapToWeatherForecastDTO() });
+        }
+
+        // history (existing)
+        [HttpGet("history")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<WeatherForecastDTO>))]
+        public async Task<IActionResult> GetHistory([FromQuery, Range(1, 500)] int limit = 10, CancellationToken ct = default)
+        {
+            // safety terminal (in case the attribute does not apply)
+            limit = Math.Clamp(limit, 1, 500);
+
+            var entities = await _weatherRepository.GetHistoryAsync(limit);
+            var dtos = entities.Select(w => w.MapToWeatherForecastDTO()).ToList();
+
+            // Always 200, even if empty list (like EventController)
+            return Ok(dtos);
+        }
+
+        // by id (existing)
+        [HttpGet("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
+        public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct = default)
+        {
+            if (id <= 0) return BadRequest("The provided ID is invalid.");
+
+            var entity = await _weatherRepository.GetByIdAsync(id);
+            if (entity is null) return NotFound($"No events found for the ID {id}.");
+
+            return Ok(entity.MapToWeatherForecastDTO());
+        }
+
+        // update + broadcast
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
+        public async Task<IActionResult> Update(int id, [FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
+        {
+            if (id <= 0 || id != dto.Id) return BadRequest("Id mismatch.");
+
+            // DTO -> Entity 
+            var entity = dto.MapToWeatherForecast();
+
+            // Upsert 
+            var saved = await _weatherRepository.SaveOrUpdateAsync(entity);
+
+            var result = saved.MapToWeatherForecastDTO();
+
+            // Real-time broadcast (reuses the same event as elsewhere)
+            await _hubContext.Clients.All.SendAsync("ReceiveForecast", result, ct);
+
+            return Ok(result);
+        }
+
+
     }
 }
 

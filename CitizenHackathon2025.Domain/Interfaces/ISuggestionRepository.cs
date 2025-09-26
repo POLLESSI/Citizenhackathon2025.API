@@ -21,7 +21,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         /// <returns>True if the operation was performed, false otherwise</returns>
         Task<bool> SoftDeleteSuggestionAsync(int id);
         
-        Task<Suggestion> SaveSuggestionAsync(Suggestion @suggestion);
+        Task<Suggestion> SaveSuggestionAsync(Suggestion @suggestion, CancellationToken ct = default);
         Suggestion? UpdateSuggestion(Suggestion @suggestion);
     }
 }

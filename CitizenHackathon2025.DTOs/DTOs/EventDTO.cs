@@ -6,6 +6,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
     public class EventDTO
     {
     #nullable disable
+        public int Id { get; set; }
         [Required]
         [DisplayName("Event Name : ")]
         public string Name { get; set; }

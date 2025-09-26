@@ -1,29 +1,37 @@
-﻿using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Application.CQRS.Commands;
+﻿using CitizenHackathon2025.Application.CQRS.Commands;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Suggestions.Commands;
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.SqlServer.Dac.Model;
-using CitizenHackathon2025.Hubs.Hubs;
+using Volo.Abp.Domain.Entities;
+using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
+using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.SuggestionHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("suggestion")]
+    [Route("suggestions")]
     [Authorize]
     public class SuggestionsController : ControllerBase
     {
         private readonly ISuggestionRepository _repo;
         private readonly IHubContext<OutZenHub> _hub;
 
+        private const string HubMethod_ReceiveSuggestionUpdate = "ReceiveSuggestionUpdate";
         public SuggestionsController(ISuggestionRepository repo, IHubContext<OutZenHub> hub)
         {
             _repo = repo;
@@ -37,8 +45,11 @@ namespace CitizenHackathon2025.API.Controllers
                 return Ok(await _repo.GetSuggestionsByUserAsync(userId.Value));
 
             if (all)
-                return Ok(await _repo.GetAllSuggestionsAsync());
-
+            {
+                var entities = await _repo.GetAllSuggestionsAsync();
+                var dtos = entities.Select(s => s.MapToSuggestionDTO()).ToList();
+                return Ok(dtos);
+            }
             return Ok(await _repo.GetLatestSuggestionAsync());
         }
 
@@ -53,38 +64,64 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpGet("{id:int}")]
-        public async Task<IActionResult> GetById(int id, CancellationToken ct)
-        {
-            var s = await _repo.GetByIdAsync(id);
-            return s is { Active: true } ? Ok(s) : NotFound();
-        }
+    [ProducesResponseType(typeof(SuggestionDTO), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(int id, CancellationToken ct)
+    {
+        var entity = await _repo.GetByIdAsync(id);
+        if (entity is null) return NotFound();
+        return Ok(entity.MapToSuggestionDTO());
+    }
 
-        [HttpPost]
-        [AllowAnonymous]
-        public async Task<IActionResult> Create([FromBody] SuggestionDTO dto, CancellationToken ct)
-        {
-            if (!ModelState.IsValid) return ValidationProblem(ModelState);
+    [HttpPost]
+    [AllowAnonymous] 
+    [ProducesResponseType(typeof(SuggestionDTO), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Create([FromBody] SuggestionDTO dto, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
-            // Ownership: User_Id from claims if needed
-            var entity = new Suggestion
+        try
+        {
+            // 1) Minimal normalization
+            dto.OriginalPlace = dto.OriginalPlace?.Trim();
+            dto.SuggestedAlternatives = dto.SuggestedAlternatives?.Trim();
+            dto.Reason = dto.Reason?.Trim();
+            dto.Context = dto.Context?.Trim();
+
+            // 2) Default properties
+            if (dto.DateSuggestion == default)
+            dto.DateSuggestion = DateTime.UtcNow;
+
+            // 3) Mapping DTO -> Entity (only once)
+            var entity = dto.MapToSuggestion();
+
+            // 4) Persistence
+            var saved = await _repo.SaveSuggestionAsync(entity, ct);
+            if (saved is null)
             {
-                User_Id = dto.UserId,
-                DateSuggestion = dto.DateSuggestion == default ? DateTime.UtcNow : dto.DateSuggestion,
-                OriginalPlace = dto.OriginalPlace,
-                SuggestedAlternatives = dto.SuggestedAlternatives,
-                Reason = dto.Reason,
-                LocationName = dto.Context, // or a dedicated field if you want
-                EventId = dto.EventId
-            };
+                // Uniqueness conflict or other business logic (to be adapted)
+                return Conflict($"A suggestion '{dto.OriginalPlace}' at '{dto.DateSuggestion:yyyy-MM-dd HH:mm:ss}' already exists.");
+            }
 
-            var saved = await _repo.SaveSuggestionAsync(entity);
+            // 5) Possible broadcast via SignalR (optional)
+            if (saved.EventId is int evId)
+            {
+                await _hub.Clients.Group($"event:{evId}")
+                                  .SendAsync("NewSuggestion", saved.MapToSuggestionDTO(), ct);
+            }
 
-            // Send to EventId group if present
-            if (saved?.EventId is int evId)
-                await _hub.Clients.Group($"event:{evId}").SendAsync("NewSuggestion", saved, ct);
-
-            return CreatedAtAction(nameof(GetById), new { id = saved!.Id }, saved);
+            // 6) 201 Created + Location
+            var resultDto = saved.MapToSuggestionDTO();
+            return CreatedAtAction(nameof(GetById), new { id = saved.Id }, resultDto);
         }
+        catch (Exception ex)
+        {
+            return Problem(title: "SaveSuggestion failed", detail: ex.Message, statusCode: 500);
+        }
+    }
 
         [HttpPut("{id:int}")]
         public IActionResult Update(int id, [FromBody] SuggestionDTO dto)
