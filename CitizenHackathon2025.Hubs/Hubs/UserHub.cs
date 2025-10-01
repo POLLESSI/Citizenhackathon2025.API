@@ -1,12 +1,14 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class UserHub : Hub
     {
+        // Client -> Server
         public async Task NotifyUserRegistered(string email)
         {
-            await Clients.All.SendAsync("UserRegistered", email);
+            await Clients.All.SendAsync(UserHubMethods.ToClient.UserRegistered, email);
         }
     }
 }

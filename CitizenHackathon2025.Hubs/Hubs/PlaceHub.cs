@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
@@ -17,7 +19,7 @@ namespace CitizenHackathon2025.Hubs.Hubs
         public async Task RefreshPlace(string message)
         {
             _logger.LogInformation("NotifyNewPlace called");
-            await Clients.All.SendAsync("Newplace", message);
+            await Clients.All.SendAsync(PlaceHubMethods.ToClient.NewPlace, message);
         }
     }
 }

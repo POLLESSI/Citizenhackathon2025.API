@@ -83,7 +83,7 @@ namespace CitizenHackathon2025.API.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var entity = dto.MapToEntity();                // ❌ pas d’Id/Active set ici
+            var entity = dto.MapToEntity();                // ❌ no Id/Active set here
             var saved = await _trafficConditionRepository.SaveTrafficConditionAsync(entity);
 
             if (saved is null) return Problem("Insert failed");

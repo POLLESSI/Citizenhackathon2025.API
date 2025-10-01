@@ -25,6 +25,7 @@ using CitizenHackathon2025.Infrastructure;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Options;
 using CitizenHackathon2025.API.Tools;
+using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Shared.Interfaces;
@@ -40,12 +41,21 @@ using Microsoft.OpenApi.Models;
 using System.Net.Http.Headers;
 using System.Data;
 using System.Text;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+//using OpenTelemetry.Exporter.Prometheus;
+using OpenTelemetry.Instrumentation.Runtime;
+using OpenTelemetry.Instrumentation;
+using OpenTelemetry.Trace;
 using MapsterMapper;
+using Prometheus;
 using Serilog;
 using Mapster;
 using MediatR;
 using Dapper;
 using Polly;
+using CitizenHackathon2025.DTOs.DTOs;
 
 
 
@@ -60,18 +70,41 @@ internal class Program
     private static void Main(string[] args)
     {
         // ---------- Serilog ----------
+        var builder = WebApplication.CreateBuilder(args);
+
+        var resource = ResourceBuilder.CreateDefault()
+            .AddService(serviceName: "CitizenHackathon2025.API", serviceVersion: "1.0.0");
+
         Log.Logger = new LoggerConfiguration()
-            .WriteTo.Console()
-            .WriteTo.File("Logs/api-log-.txt", rollingInterval: RollingInterval.Day)
-            .Enrich.FromLogContext()
+            .Destructure.ByTransforming<LogsDTO>(x => new {
+                x.Id,
+                Sensitive = "***"
+            })
             .CreateLogger();
 
-        var builder = WebApplication.CreateBuilder(args);
         TypeAdapterConfig.GlobalSettings.Scan(AppDomain.CurrentDomain.GetAssemblies());
         builder.Services.AddMapster();
-        builder.Host.UseSerilog();
 
-    
+        // OpenTelemetry
+        builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("CitizenHackathon2025.API"))
+    .WithTracing(t => t
+        .AddAspNetCoreInstrumentation(o => o.RecordException = true)
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter(opt => opt.Endpoint = new Uri("http://localhost:4317")))
+    .WithMetrics(m => m
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation()
+    // ⚠️ PAS d’exporter Prometheus ici
+    );
+
+        builder.Host.UseSerilog((ctx, lc) => lc
+            .ReadFrom.Configuration(ctx.Configuration)
+            .Enrich.FromLogContext()
+            .Enrich.WithProperty("App", "CitizenHackathon2025.API"));
+
+
         // ---------- Basic setup ----------
         var configuration = builder.Configuration;
         var services = builder.Services;
@@ -318,7 +351,7 @@ internal class Program
         services.AddCors(options =>
         {
             options.AddPolicy("AllowBlazor", p =>
-                p.WithOrigins("https://localhost:7101")
+                p.WithOrigins("https://localhost:7101", "http://localhost:5101")
                  .AllowAnyHeader()
                  .AllowAnyMethod()
                  .AllowCredentials());
@@ -515,8 +548,11 @@ internal class Program
         app.UseSecurityHeaders();
         app.UseUserAgentFiltering();
         app.UseAuditLogging();
-
+       
         app.UseRouting();
+
+        app.UseHttpMetrics();
+        app.UseMetricServer("/metrics");
 
         app.UseCors("AllowBlazor");
         app.UseAuthentication();
@@ -531,33 +567,18 @@ internal class Program
 
         // ---------- Hubs ----------
         var hubs = app.MapGroup("/hubs");
-        hubs.MapHub<AISuggestionHub>("/aisuggestionhub");
-        hubs.MapHub<CrowdHub>("/crowdHub").RequireAuthorization();
-        hubs.MapHub<EventHub>("/eventHub");
-        hubs.MapHub<GPTHub>("/gptHub");
-        hubs.MapHub<NotificationHub>("/notifications");
-        hubs.MapHub<OutZenHub>("/outzen");
-        hubs.MapHub<PlaceHub>("/placeHub");
-        hubs.MapHub<SuggestionHub>("/suggestionHub");
-        hubs.MapHub<TrafficHub>("/trafficHub");
-        hubs.MapHub<UpdateHub>("/updateHub");
-        hubs.MapHub<UserHub>("/userHub");
-        hubs.MapHub<WeatherForecastHub>("/weatherforecastHub");
-
-
-        // (Alternative without group)
-        //app.MapHub<AISuggestionHub>("/aisuggestionhub");
-        //app.MapHub<CrowdHub>("/hubs/crowdHub");
-        //app.MapHub<EventHub>("/hubs/eventHub");
-        //app.MapHub<NotificationHub>("/hubs/notifications");
-        //app.MapHub<OutZenHub>("/hub/outzen"); // <- consistent with JwtBearerEvents
-        //app.MapHub<PlaceHub>("/hubs/placeHub");
-        //app.MapHub<SuggestionHub>("/hubs/suggestionHub");
-        //app.MapHub<TrafficHub>("/hubs/trafficHub");
-        //app.MapHub<UpdateHub>("/hubs/updateHub");
-        //app.MapHub<UserHub>("/hubs/userHub");
-        //app.MapHub<WeatherForecastHub>("/hubs/weatherforecastHub");
-        //app.MapHub<CitizeHackathon2025.Hubs.Hubs.WeatherForecastHub>("/hubs/weatherforecastHub"); // (original typo)
+        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<EventHub>(EventHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath);
+        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<UserHub>(UserHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath).RequireAuthorization();
 
         app.MapGet("/auth/hub-token", (HttpContext http, TokenGenerator tokens) =>
         {
@@ -609,7 +630,6 @@ internal class Program
         //}
         //UseSecurityHeaders(app);
 
-        //app.MapControllers();
         app.MapFallbackToFile("index.html");
 
         app.Run();

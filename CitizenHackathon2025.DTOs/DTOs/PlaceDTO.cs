@@ -6,6 +6,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
     public class PlaceDTO
     {
 #nullable disable
+        public int Id { get; set; }
         [Required]
         [DisplayName("Place Name : ")]
         public string Name { get; set; } = "";

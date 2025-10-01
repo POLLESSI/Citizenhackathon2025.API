@@ -2,7 +2,7 @@
 {
     public static class Defaults
     {
-        //public const string DefaultUserRole = Roles.User;
+        public const string DefaultUserRole = Roles.User;
         public const string DefaultStatus = "Active";
     }
 }

@@ -1,23 +1,19 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class TrafficHub : Hub
     {
-#nullable disable
-
         private readonly ILogger<TrafficHub> _logger;
-
-        public TrafficHub(ILogger<TrafficHub> logger)
-        {
-            _logger = logger;
-        }
+        public TrafficHub(ILogger<TrafficHub> logger) => _logger = logger;
 
         public async Task RefreshTraffic()
         {
             _logger.LogInformation("RefreshTraffic called");
-            await Clients.All.SendAsync("notifynewtraffic");
+            await Clients.All.SendAsync(TrafficConditionHubMethods.ToClient.NotifyNewTraffic);
         }
     }
 }

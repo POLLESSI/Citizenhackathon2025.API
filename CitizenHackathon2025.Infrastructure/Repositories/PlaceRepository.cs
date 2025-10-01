@@ -4,7 +4,6 @@ using System.Data;
 using CitizenHackathon2025.Domain.Entities;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-using System.Data;
 using IDbConnection = System.Data.IDbConnection;
 
 

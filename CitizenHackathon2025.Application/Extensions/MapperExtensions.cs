@@ -181,6 +181,7 @@ namespace CitizenHackathon2025.Application.Extensions
         {
             return new PlaceDTO
             {
+                Id = entity.Id,
                 Name = entity.Name,
                 Type = entity.Type,
                 Indoor = entity.Indoor,
@@ -194,6 +195,7 @@ namespace CitizenHackathon2025.Application.Extensions
         {
             return new Place
             {
+                Id = dto.Id,
                 Name = dto.Name,
                 Type = dto.Type,
                 Indoor = dto.Indoor,
@@ -207,6 +209,7 @@ namespace CitizenHackathon2025.Application.Extensions
         {
             return new PlaceDTO
             {
+                Id = dto.Id,
                 Name = dto.Name,
                 Type = dto.Type,
                 Indoor = dto.Indoor,
@@ -248,6 +251,7 @@ namespace CitizenHackathon2025.Application.Extensions
         {
             return new TrafficConditionDTO
             {
+                Id = entity.Id,
                 Latitude = entity.Latitude,
                 Longitude = entity.Longitude,
                 DateCondition = entity.DateCondition,
@@ -259,6 +263,7 @@ namespace CitizenHackathon2025.Application.Extensions
         public static TrafficConditionDTO Normalize(this TrafficConditionDTO dto)
             => new TrafficConditionDTO
             {
+                Id = dto.Id,
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,
                 DateCondition = dto.DateCondition == default ? DateTime.UtcNow
@@ -284,6 +289,7 @@ namespace CitizenHackathon2025.Application.Extensions
         {
             return new TrafficConditionDTO
             {
+                Id = dto.Id,
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,
                 DateCondition = dto.DateCondition,

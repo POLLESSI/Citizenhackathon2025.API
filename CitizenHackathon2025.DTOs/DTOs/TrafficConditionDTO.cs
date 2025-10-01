@@ -5,6 +5,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
     public class TrafficConditionDTO
     {
     #nullable disable
+        public int Id { get; set; }
         [DisplayName("Latitude : ")]
         public decimal Latitude { get; set; }
         [DisplayName("Longitude : ")]

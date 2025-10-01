@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Hubs.Hubs;
+﻿using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 

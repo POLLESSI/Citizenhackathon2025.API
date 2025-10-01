@@ -1,11 +1,14 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
+using System.Threading.Tasks;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class EventHub : Hub
     {
-#nullable disable
+    #nullable disable
 
         private readonly ILogger<EventHub> _logger;
 
@@ -17,7 +20,7 @@ namespace CitizenHackathon2025.Hubs.Hubs
         public async Task RefreshEvent(string message)
         {
             _logger.LogInformation("NotifyNewEvent called");
-            await Clients.All.SendAsync("NewEvent", message);
+            await Clients.All.SendAsync(EventHubMethods.ToClient.NewEvent, message);
         }
     }
 }

@@ -1,0 +1,1 @@
+﻿DELETE TOP (5000) FROM dbo.Logs WHERE TimeStamp < DATEADD(day, -30, SYSUTCDATETIME());

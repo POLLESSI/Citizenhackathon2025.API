@@ -1,7 +1,10 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using Microsoft.AspNetCore.SignalR;
+using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Extensions;
 using System.Net.Http.Json;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -11,12 +14,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
     #nullable disable
         private readonly ICrowdInfoRepository _crowdInfoRepository;
         private readonly HttpClient _http;
+        private readonly IHubContext<CrowdHub> _crowdHubContext;
 
-        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, IHttpClientFactory f)
+        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, IHttpClientFactory f, IHubContext<CrowdHub> crowdHubContext)
         {
             _crowdInfoRepository = crowdInfoRepository;
             _http = f.CreateClient("ApiWithAuth");
+            _crowdHubContext = crowdHubContext;
         }
+
         public async Task<List<CrowdInfoDTO>> GetAllAsync()
             => (await _http.GetFromJsonAsync<List<CrowdInfoDTO>>("crowdinfo/all")) ?? new();
 
@@ -26,16 +32,26 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public async Task<CrowdInfoDTO?> SaveAsync(CrowdInfoDTO dto)
         {
             var res = await _http.PostAsJsonAsync("crowdinfo", dto);
+            // NO broadcast here: API must broadcast via CrowdHub
             return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<CrowdInfoDTO>() : null;
         }
 
         public async Task<bool> ArchiveAsync(int id)
-            => (await _http.DeleteAsync($"crowdinfo/archive/{id}")).IsSuccessStatusCode;
+        {
+            var ok = (await _http.DeleteAsync($"crowdinfo/archive/{id}")).IsSuccessStatusCode;
+            // NO broadcast here: API must emit CrowdInfoArchived
+            return ok;
+        }
 
-        // ==== Interface ICrowdInfoService (avec tokens) ====
-
-        public Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default)
-            => _crowdInfoRepository.DeleteCrowdInfoAsync(id); // repo sans ct → on ignore ct ici
+        public async Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default)
+        {
+            var ok = await _crowdInfoRepository.DeleteCrowdInfoAsync(id);
+            if (ok)
+            {
+                await _crowdHubContext.BroadcastCrowdArchived(id);
+            }
+            return ok;
+        }
         public async Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default)
             => await _crowdInfoRepository.GetAllCrowdInfoAsync();    
 
@@ -46,7 +62,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
             => throw new NotImplementedException();
 
         public async Task<CrowdInfo> SaveCrowdInfoAsync(CrowdInfo crowdInfo, CancellationToken ct = default)
-            => await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
+        {
+            var saved = await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
+
+            if (saved != null)
+            {
+                // Full DTO push to clients
+                await _crowdHubContext.BroadcastCrowdUpdate(saved);
+                // Optional: generic ping
+                await _crowdHubContext.BroadcastCrowdRefreshRequested("sync");
+            }
+
+            return saved;
+        }
 
         public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)
         {
@@ -55,21 +83,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 var updated = _crowdInfoRepository.UpdateCrowdInfo(crowdInfo);
                 if (updated is null)
                     throw new ArgumentException("The event to update cannot be null.", nameof(crowdInfo));
+
+                // Release of the update
+                _ = _crowdHubContext.BroadcastCrowdUpdate(updated);
                 return updated;
             }
-            catch (System.ComponentModel.DataAnnotations.ValidationException ex)
+            catch (System.ComponentModel.DataAnnotations.ValidationException)
             {
-
                 throw;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error updating Crowd Info : {ex}");
+                return null;
             }
-            return null;
         }
-
-        
     }
 }
 

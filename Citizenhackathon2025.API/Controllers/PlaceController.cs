@@ -36,13 +36,14 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpGet("{id:int}")]
-        public async Task<IActionResult> GetPlaceById(int id)
+        public async Task<IActionResult> GetPlaceByIdAsync(int id, CancellationToken ct)
         {
-            if (id <= 0) return BadRequest("The provided ID is invalid.");
+            if (id <= 0)
+                return BadRequest("The provided ID is invalid.");
 
-            var place = await _placeRepository.GetPlaceByIdAsync(id); // direct call to the repo
-
-            if (place is null) return NotFound($"Place with ID {id} not found.");
+            var place = await _placeRepository.GetPlaceByIdAsync(id);
+            if (place is null)
+                return NotFound($"Place with ID {id} not found.");
 
             return Ok(place.MapToPlaceDTO());
         }
