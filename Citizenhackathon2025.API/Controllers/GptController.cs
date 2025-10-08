@@ -10,10 +10,8 @@ using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.API.Controllers
 {
-    [ApiController]
-
     [Route("api/[controller]")]
-    [Route("[controller]")]
+    [ApiController]
     public class GptController : ControllerBase
     {
         private readonly IGPTRepository _gptRepository;
@@ -62,50 +60,42 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpPost("ask-gpt")]
+        [Consumes("application/json")]
         public async Task<IActionResult> AskGpt([FromBody] GptPrompt prompt)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
-            if (string.IsNullOrWhiteSpace((string?)(prompt?.Content)))
+            if (string.IsNullOrWhiteSpace(prompt.Prompt))
                 return BadRequest("Prompt cannot be empty");
-            try
+
+            var generatedResponse = $"[Simulated GPT] Response to: \"{prompt.Prompt}\"";
+
+            var interaction = new GPTInteraction
             {
-                // 🔁 Mock response — to be replaced later
-                string generatedResponse = $"[Simulated GPT] Response to: \"{prompt.Content}\"";
+                Prompt = prompt.Prompt,
+                Response = generatedResponse,
+                CreatedAt = DateTime.UtcNow,
+                Active = true
+            };
 
-                // 💾 Recording in the real GptInteractions table
-                var interaction = new GPTInteraction
-                {
-                    Prompt = (string)prompt.Content,
-                    Response = generatedResponse,
-                    CreatedAt = DateTime.UtcNow,
-                    Active = true
-                };
+            await _gptRepository.SaveInteractionAsync(interaction);
 
-                await _gptRepository.SaveInteractionAsync(interaction);
-
-                // 📡 Sending via SignalR
-                await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
-                {
-                    prompt = interaction.Prompt,
-                    response = interaction.Response,
-                    createdAt = interaction.CreatedAt
-                });
-                var groupedSuggestions = await _gptRepository.GetSuggestionsGroupedByPlaceAsync(typeFilter: "Swimming area", indoorFilter: false, sinceDate: DateTime.UtcNow.AddDays(-1));
-
-                return Ok(new
-                {
-                    prompt = interaction.Prompt,
-                    response = interaction.Response,
-                    createdAt = interaction.CreatedAt,
-                    groupedSuggestions
-                });
-            }
-            catch (Exception ex)
+            await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
             {
+                prompt = interaction.Prompt,
+                response = interaction.Response,
+                createdAt = interaction.CreatedAt
+            });
 
-                return Problem(title: "Ask to GPT failed", detail: ex.Message, statusCode: 500);
-            }
-            
+            var groupedSuggestions = await _gptRepository.GetSuggestionsGroupedByPlaceAsync(
+                typeFilter: "Swimming area", indoorFilter: false, sinceDate: DateTime.UtcNow.AddDays(-1));
+
+            return Ok(new
+            {
+                prompt = interaction.Prompt,
+                response = interaction.Response,
+                createdAt = interaction.CreatedAt,
+                groupedSuggestions
+            });
         }
 
         [HttpGet("test-gpt")]

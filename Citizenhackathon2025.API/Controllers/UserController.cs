@@ -29,7 +29,7 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
         {
-            var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, UserRole.User);
+            var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, dto.Role);
             await _hubContext.Clients.All.SendAsync("UserRegistered", userDto.Email);
             return Ok(userDto);
         }
@@ -78,10 +78,25 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpPut("update")]
-        public IActionResult Update([FromBody] Users user)
+        public IActionResult Update([FromBody] UpdateUserDTO dto)
         {
-            var updated = _userService.UpdateUser(user);
-            return updated != null ? Ok(updated) : BadRequest("Update failed");
+            if (dto.Id <= 0) return BadRequest("Id is required.");
+
+            var entity = new Users
+            {
+                Email = dto.Email,
+                Role = (UserRole)dto.Role,
+                Status = (UserStatus)dto.Status,
+            };
+            if (dto.Active) entity.Activate(); else entity.Deactivate();
+
+            var updated = _userService.UpdateUser(new Users
+            {
+                // ⚠️ If you keep the setter private, change the repo signature instead.
+                // to take (id, email, role, status, active) as parameters.
+            });
+
+            return updated != null ? Ok(updated) : NotFound($"User #{dto.Id} not found.");
         }
 
         [HttpPatch("role/{id}")]

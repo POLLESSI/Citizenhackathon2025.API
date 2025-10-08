@@ -108,8 +108,19 @@ internal class Program
         // ---------- Basic setup ----------
         var configuration = builder.Configuration;
         var services = builder.Services;
+        services.AddOptions<CitizenHackathon2025.Shared.Options.SecurityOptions>()
+            .Bind(configuration.GetSection("Security"))
+            .Validate(o => !string.IsNullOrWhiteSpace(o.PromptHashPepper),
+                "Missing Security:PromptHashPepper in configuration.")
+            .ValidateOnStart();
         var securityEnabled = configuration.GetValue("Security:Enabled", true);
         var require = configuration.GetValue("OutZen:RequireEventId", true);
+
+        var pepper = configuration["Security:PromptHashPepper"];
+        if (string.IsNullOrWhiteSpace(pepper))
+        {
+            throw new InvalidOperationException("Missing Security:PromptHashPepper in configuration (startup).");
+        }
 
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole();
@@ -259,7 +270,7 @@ internal class Program
         services.AddScoped<IAIRepository, AIRepository>();
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
-        services.AddScoped<IGPTRepository, GPTRepository>();
+        //services.AddScoped<IGPTRepository, GPTRepository>();
         services.AddScoped<IGPTRepository, GptInteractionsRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
@@ -351,10 +362,11 @@ internal class Program
         services.AddCors(options =>
         {
             options.AddPolicy("AllowBlazor", p =>
-                p.WithOrigins("https://localhost:7101", "http://localhost:5101")
+                p.WithOrigins("https://localhost:7101"/*, "http://localhost:5101"*/)
                  .AllowAnyHeader()
                  .AllowAnyMethod()
-                 .AllowCredentials());
+                 .AllowCredentials()
+                 .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         });
 
         // ---------- Controllers / JSON ----------
@@ -567,18 +579,18 @@ internal class Program
 
         // ---------- Hubs ----------
         var hubs = app.MapGroup("/hubs");
-        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<EventHub>(EventHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<EventHub>(EventHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath)/*.RequireAuthorization()*/;
         hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath);
-        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<UserHub>(UserHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<UserHub>(UserHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath)/*.RequireAuthorization()*/;
 
         app.MapGet("/auth/hub-token", (HttpContext http, TokenGenerator tokens) =>
         {

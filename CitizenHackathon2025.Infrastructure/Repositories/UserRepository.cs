@@ -31,10 +31,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                         WHERE Email = @Email;";
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("@Email", email, DbType.String, size: 64);
-            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
-            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
-            parameters.Add("@Role", dbType: DbType.Int32);
-            parameters.Add("@Status", dbType: DbType.Int32);
 
             return _connection.QueryFirstOrDefaultAsync<Users>(sql, parameters);
         }
@@ -180,16 +176,16 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public Users? UpdateUser(Users user)
         {
             const string sql = @"
-                        UPDATE [Users]
-                        SET Email = @Email,
-                            Role = @Role,
-                            Status = @Status,
-                            Active = @Active
-                        WHERE Id = @Id;
+                            UPDATE [Users]
+                            SET Email=@Email, Role=@Role, Status=@Status, Active=@Active
+                            WHERE Id=@Id;
 
-                        SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash, Role, Status, Active
-                        FROM [Users]
-                        WHERE Id = @Id;";
+                            IF @@ROWCOUNT = 0
+                                RETURN;
+
+                            SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash, Role, Status, Active
+                            FROM [Users]
+                            WHERE Id=@Id;";
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("@Id", user.Id, DbType.Int32);
             parameters.Add("@Email", user.Email, DbType.String, size: 64);

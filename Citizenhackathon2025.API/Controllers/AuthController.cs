@@ -76,8 +76,7 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
         {
-            var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, UserRole.User);
-            _logger.LogInformation("New registered user : {Email}", dto.Email);
+            var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, dto.Role);
             _logger.LogInformation("New registered user : {Email}", dto.Email);
             return Ok(userDto);
         }

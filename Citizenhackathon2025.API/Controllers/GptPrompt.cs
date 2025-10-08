@@ -2,8 +2,9 @@
 {
     public class GptPrompt
     {
-    # nullable disable
-        internal readonly object Content;
+    #nullable disable
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Prompt { get; set; } = string.Empty;
     }
 }
 

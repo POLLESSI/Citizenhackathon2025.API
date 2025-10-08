@@ -16,15 +16,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             INSERT INTO WeatherForecast
-                                (DateWeather, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
+                                (DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
                             VALUES
-                                (@DateWeather, @TemperatureC, @TemperatureF, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1);";
+                                (@DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1);";
+
             DynamicParameters parameters = new();
             parameters.Add("DateWeather", wf.DateWeather, DbType.DateTime2);
+            parameters.Add("Latitude", wf.Latitude, DbType.Decimal);
+            parameters.Add("Longitude", wf.Longitude, DbType.Decimal);
             parameters.Add("TemperatureC", wf.TemperatureC, DbType.Int32);
-            parameters.Add("TemperatureF", wf.TemperatureF, DbType.Int32); // locally calculated value (getter)
             parameters.Add("Summary", wf.Summary, DbType.String);
-            parameters.Add("RainfallMm", wf.RainfallMm, DbType.Double);    // alias Nm <-> Mm
+            parameters.Add("RainfallMm", wf.RainfallMm, DbType.Double);
             parameters.Add("Humidity", wf.Humidity, DbType.Int32);
             parameters.Add("WindSpeedKmh", wf.WindSpeedKmh, DbType.Double);
 
@@ -35,7 +37,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
         SELECT TOP(1)
-            Id, DateWeather, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
+            Id, DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
         FROM dbo.WeatherForecast
         WHERE Active = 1
         ORDER BY DateWeather DESC;";
@@ -44,31 +46,31 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity)
         {
-            // Upsert based on DateWeather (unique)
-            var tempF = entity.TemperatureF;
-
             const string merge = @"
                             MERGE WeatherForecast AS t
                             USING (SELECT @DateWeather AS DateWeather) AS s
                             ON (t.DateWeather = s.DateWeather)
                             WHEN MATCHED THEN
                                 UPDATE SET
+                                    Latitude     = @Latitude,
+                                    Longitude    = @Longitude,
                                     TemperatureC = @TemperatureC,
-                                    TemperatureF = @TemperatureF,
                                     Summary      = @Summary,
                                     RainfallMm   = @RainfallMm,
                                     Humidity     = @Humidity,
                                     WindSpeedKmh = @WindSpeedKmh
                             WHEN NOT MATCHED THEN
-                                INSERT (DateWeather, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
-                                VALUES (@DateWeather, @TemperatureC, @TemperatureF, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1)
+                                INSERT (DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
+                                VALUES (@DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1)
                             OUTPUT inserted.Id;";
+
             DynamicParameters parameters = new();
             parameters.Add("DateWeather", entity.DateWeather, DbType.DateTime2);
+            parameters.Add("Latitude", entity.Latitude, DbType.Decimal);
+            parameters.Add("Longitude", entity.Longitude, DbType.Decimal);
             parameters.Add("TemperatureC", entity.TemperatureC, DbType.Int32);
-            parameters.Add("TemperatureF", tempF, DbType.Int32); // locally calculated value (getter)
             parameters.Add("Summary", entity.Summary, DbType.String);
-            parameters.Add("RainfallMm", entity.RainfallMm, DbType.Double);    // alias Nm <-> Mm
+            parameters.Add("RainfallMm", entity.RainfallMm, DbType.Double);
             parameters.Add("Humidity", entity.Humidity, DbType.Int32);
             parameters.Add("WindSpeedKmh", entity.WindSpeedKmh, DbType.Double);
 
@@ -82,7 +84,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<WeatherForecast?> GetByIdAsync(int id)
         {
             const string sql = @"
-                            SELECT Id, DateWeather, TemperatureC, TemperatureF, Summary,
+                            SELECT Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary,
                                    RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Id = @Id AND Active = 1;";
@@ -95,7 +97,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<List<WeatherForecast>> GetAllAsync()
         {
             const string sql = @"
-                            SELECT Id, DateWeather, TemperatureC, TemperatureF, Summary,
+                            SELECT Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary,
                                    RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Active = 1
@@ -125,7 +127,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             SELECT TOP(@Limit)
-                                Id, DateWeather, TemperatureC, TemperatureF, Summary,
+                                Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary,
                                 RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Active = 1

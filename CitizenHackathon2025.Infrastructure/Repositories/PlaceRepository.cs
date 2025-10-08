@@ -115,8 +115,38 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
             return null;
         }
+
+        public async Task<Place?> UpdateAsync(Place p)
+        {
+            const string sql = @"
+                            UPDATE dbo.Place
+                               SET [Name]      = @Name,
+                                   [Type]      = @Type,
+                                   [Indoor]    = @Indoor,
+                                   [Latitude]  = @Latitude,
+                                   [Longitude] = @Longitude,
+                                   [Capacity]  = @Capacity,
+                                   [Tag]       = @Tag
+                             WHERE Id = @Id AND Active = 1;
+
+                            SELECT TOP 1 *
+                              FROM dbo.Place
+                             WHERE Id = @Id AND Active = 1;
+";
+            try
+            {
+                var res = await _connection.QueryFirstOrDefaultAsync<Place>(sql, p);
+                return res; // null if not found/inactive
+            }
+            catch (SqlException ex) when (ex.Number == 2627 || ex.Number == 2601) // single violation
+            {
+                // single violation
+                throw new InvalidOperationException($"Place name '{p.Name}' already exists.", ex);
+            }
+        }
     }
 }
+
 
 
 

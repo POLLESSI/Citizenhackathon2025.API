@@ -25,6 +25,10 @@
 	  <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
+	</ItemGroup>
+
 </Project>
 
 

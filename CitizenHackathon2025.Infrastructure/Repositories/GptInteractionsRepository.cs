@@ -205,23 +205,23 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync(string? typeFilter = null, bool? indoorFilter = null, DateTime? sinceDate = null)
         {
-            const string sql = @"
+            const string baseSql = @"
                             SELECT 
                                 s.OriginalPlace AS PlaceName,
-                                MAX(p.Type) AS Type,
-                                MAX(p.Indoor) AS Indoor,
-                                MAX(p.Latitude) AS Latitude,
-                                MAX(p.Longitude) AS Longitude,
-                                MAX(c.CrowdLevel) AS CrowdLevel,
-                                COUNT(*) AS SuggestionCount,
-                                MAX(s.DateSuggestion) AS LastSuggestedAt
+                                MAX(p.Type)                         AS Type,
+                                CAST(MAX(CAST(p.Indoor AS TINYINT)) AS BIT) AS Indoor, -- FIX bit/max
+                                MAX(p.Latitude)                     AS Latitude,
+                                MAX(p.Longitude)                    AS Longitude,
+                                MAX(c.CrowdLevel)                   AS CrowdLevel,
+                                COUNT(*)                            AS SuggestionCount,
+                                MAX(s.DateSuggestion)               AS LastSuggestedAt
                             FROM Suggestion s
                             LEFT JOIN Place p ON s.OriginalPlace = p.Name AND p.Active = 1
                             LEFT JOIN CrowdInfo c ON c.LocationName = s.OriginalPlace AND c.Active = 1
                             WHERE s.Active = 1
                             /**WHERE_FILTER**/
                             GROUP BY s.OriginalPlace
-                            ORDER BY LastSuggestedAt DESC;";
+                            ORDER BY LastSuggestedAt DESC";
 
             var filters = new List<string>();
             var parameters = new DynamicParameters();
@@ -244,32 +244,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 parameters.Add("SinceDate", sinceDate.Value);
             }
 
-            //if (filters.Any())
-            //{
-            //    sql = sql.Replace("/**WHERE_FILTER**/", "AND " + string.Join(" AND ", filters));
-            //}
-            //else
-            //{
-            //    sql = sql.Replace("/**WHERE_FILTER**/", "");
-            //}
+            var whereClause = filters.Count > 0
+                ? "AND " + string.Join(" AND ", filters)
+                : string.Empty;
 
-            var grouped = (await _connection.QueryAsync<SuggestionGroupedByPlaceDTO>(sql, parameters)).ToList();
+            // ✅ mutable copy, no reassignment of a const
+            var sql = baseSql.Replace("/**WHERE_FILTER**/", whereClause);
 
-            const string suggestionSql = @"
-                                    SELECT * FROM Suggestion
-                                    WHERE Active = 1 AND OriginalPlace = @PlaceName
-                                    ORDER BY DateSuggestion DESC";
-            DynamicParameters suggestionParameters = new DynamicParameters();
-
-            foreach (var group in grouped)
-            {
-                suggestionParameters = new DynamicParameters();
-                suggestionParameters.Add("PlaceName", group.PlaceName);
-                var suggestions = await _connection.QueryAsync<Suggestion>(suggestionSql, suggestionParameters);
-                group.Suggestions = suggestions.ToList();
-            }
-
-            return grouped;
+            return await _connection.QueryAsync<SuggestionGroupedByPlaceDTO>(sql, parameters);
         }
 
         //Simulated response

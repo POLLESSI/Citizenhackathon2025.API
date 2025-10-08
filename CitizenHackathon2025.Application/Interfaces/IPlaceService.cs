@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.Interfaces
 {
@@ -9,6 +10,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<Place?> GetByIdAsync(int id, CancellationToken ct = default);
         Task<Place> SaveAsync(Place place, CancellationToken ct = default);
         Place? UpdatePlace(Place @place);
+        Task<PlaceDTO?> UpdateAsync(PlaceDTO dto);
     }
 }
 

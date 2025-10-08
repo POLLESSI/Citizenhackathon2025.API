@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using CitizenHackathon2025.Domain.Enums;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace CitizenHackathon2025.DTOs.DTOs
@@ -14,11 +15,12 @@ namespace CitizenHackathon2025.DTOs.DTOs
 
         [DisplayName("Password")]
         public string Password { get; set; } = string.Empty;
-        [Required(ErrorMessage = "Role is required.")]
-        [EnumDataType(typeof(UserDTO))]
-        [DisplayName("Role")]
+        
         /// <summary>"Admin" / "Modo" / "User" / "Guest" ...</summary>
-       public string Role { get; set; } = "User";
+        [Required(ErrorMessage = "Role is required.")]
+        [EnumDataType(typeof(UserRole))]   // ✅ enum correct
+        [DisplayName("Role")]
+        public UserRole Role { get; set; } = UserRole.User;
     }
 }
 

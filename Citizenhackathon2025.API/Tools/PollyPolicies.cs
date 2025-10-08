@@ -7,13 +7,13 @@ namespace CitizenHackathon2025.API.Tools
     {
         public static AsyncPolicyWrap<HttpResponseMessage> GetResiliencePolicy()
         {
-            // Retry 3 fois avec un délai exponentiel
+            // Retry 3 times with exponential delay
             var retryPolicy = Policy<HttpResponseMessage>
                 .Handle<HttpRequestException>()
                 .OrResult(r => !r.IsSuccessStatusCode)
                 .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
-            // Circuit breaker : ouvre le circuit après 5 échecs
+            // Circuit breaker: opens the circuit after 5 failures
             var circuitBreakerPolicy = Policy<HttpResponseMessage>
                 .Handle<HttpRequestException>()
                 .OrResult(r => !r.IsSuccessStatusCode)

@@ -1,6 +1,7 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -45,6 +46,37 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public async Task<Place> SavePlaceAsync(Place place)
         {
             return await _repo.SavePlaceAsync(place);
+        }
+
+        public async Task<PlaceDTO?> UpdateAsync(PlaceDTO dto)
+        {
+            var entity = new Place
+            {
+                Id = dto.Id,
+                Name = dto.Name,
+                Type = dto.Type,
+                Indoor = dto.Indoor,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                Capacity = dto.Capacity,
+                Tag = dto.Tag
+            };
+            var updated = await _repo.UpdateAsync(entity);
+            if (updated is null) return null;
+
+            // map back
+            return new PlaceDTO
+            {
+                Id = updated.Id,
+                Name = updated.Name,
+                Type = updated.Type,
+                Indoor = updated.Indoor,
+                Latitude = updated.Latitude,
+                Longitude = updated.Longitude,
+                Capacity = updated.Capacity,
+                Tag = updated.Tag,
+                Active = true
+            };
         }
 
         public Place UpdatePlace(Place place)

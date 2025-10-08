@@ -2,7 +2,7 @@
 (
 	[Id] INT IDENTITY,
 	[Prompt] NVARCHAR(MAX),
-	[PromptHash] NVARCHAR(64)   NOT NULL,
+	[PromptHash] NVARCHAR(64) NOT NULL UNIQUE,
 	[Response] NVARCHAR(MAX),
 	[CreatedAt] DATETIME DEFAULT GETDATE(),
 	[Active] BIT DEFAULT 1,

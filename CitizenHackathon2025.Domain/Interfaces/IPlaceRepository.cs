@@ -8,6 +8,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<Place?> GetPlaceByIdAsync(int id);
         Task<Place> SavePlaceAsync(Place @place);
         Place? UpdatePlace(Place @place);
+        Task<Place?> UpdateAsync(Place place);
     }
 }
 
