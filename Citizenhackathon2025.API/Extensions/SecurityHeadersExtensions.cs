@@ -1,19 +1,28 @@
-﻿namespace CitizenHackathon2025.API.Extensions
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+
+namespace CitizenHackathon2025.API.Extensions
 {
     public static class SecurityHeadersExtensions
     {
         public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app)
         {
-            return app.Use(async (context, next) =>
+            return app.Use(async (ctx, next) =>
             {
-                if (!context.Response.Headers.ContainsKey("X-Content-Type-Options"))
-                    context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
+                var h = ctx.Response.Headers;
+                h.TryAdd("X-Content-Type-Options", "nosniff");
+                h.TryAdd("X-Frame-Options", "DENY");
+                h.Remove("X-XSS-Protection"); // obsolete
 
-                if (!context.Response.Headers.ContainsKey("X-Frame-Options"))
-                    context.Response.Headers.Add("X-Frame-Options", "DENY");
+                h.TryAdd("Referrer-Policy", "no-referrer");
+                h.TryAdd("Permissions-Policy", "geolocation=(), microphone=(), camera=(), fullscreen=(self)");
 
-                if (!context.Response.Headers.ContainsKey("X-XSS-Protection"))
-                    context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
+                // ⚠️ Adjust connect-src (API + hubs) by approx
+                h.TryAdd("Content-Security-Policy",
+                    "default-src 'self'; " +
+                    "connect-src 'self' https://localhost:7254 wss://localhost:7254; " +
+                    "script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+                    "img-src 'self' data:; frame-ancestors 'none'");
 
                 await next();
             });

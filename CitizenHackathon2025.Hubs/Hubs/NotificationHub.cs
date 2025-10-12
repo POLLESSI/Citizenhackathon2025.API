@@ -1,7 +1,8 @@
-﻿using System.Threading.Tasks;
+﻿using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
@@ -9,6 +10,7 @@ namespace CitizenHackathon2025.Hubs.Hubs
     /// Generic notification hub (system, user, broadcast).
     /// Use NotificationHubMethods for names/paths.
     /// </summary>
+    [Authorize(Policy = "User")]
     public class NotificationHub : Hub
     {
         private readonly ILogger<NotificationHub> _logger;
@@ -41,14 +43,12 @@ namespace CitizenHackathon2025.Hubs.Hubs
         }
 
         /// <summary>Join a group (convention: userId/email, or functional group).</summary>
-        public Task JoinGroup(string group)
+        public async Task JoinGroup(string group)
         {
-            if (!string.IsNullOrWhiteSpace(group))
-            {
-                _logger.LogInformation("[NotificationHub] {Conn} joined {Group}", Context.ConnectionId, group);
-                return Groups.AddToGroupAsync(Context.ConnectionId, group);
-            }
-            return Task.CompletedTask;
+            var user = Context.User?.Identity?.Name ?? "";
+            if (!string.Equals(group, user, StringComparison.OrdinalIgnoreCase))
+                throw new HubException("Not allowed.");
+            await Groups.AddToGroupAsync(Context.ConnectionId, group);
         }
 
         /// <summary>Leave a group.</summary>

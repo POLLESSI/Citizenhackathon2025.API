@@ -18,6 +18,7 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
+using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
@@ -39,9 +40,12 @@ using Dapper;
 using Mapster;
 using MapsterMapper;
 using MediatR;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -61,11 +65,8 @@ using Serilog.Formatting.Compact;
 using System.Data;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading.RateLimiting;
 using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
-
-
-
-
 
 // =====================================
 // Program
@@ -203,38 +204,26 @@ internal class Program
                 // Accept token as querystring for SignalR (WebSockets/SSE)
                 options.Events = new JwtBearerEvents
                 {
-                    OnMessageReceived = context =>
+                    OnMessageReceived = ctx =>
                     {
-                        // 1) Token via querystring for SignalR (WebSockets/SSE)
-                        var accessToken = context.Request.Query["access_token"];
-                        var path = context.HttpContext.Request.Path;
+                        var path = ctx.HttpContext.Request.Path;
+                        var fromQuery = ctx.Request.Query["access_token"];
+                        var fromCookie = ctx.Request.Cookies.TryGetValue("access_token", out var cookie) ? cookie : null;
 
-                        // Keep your "guard" routes if you want, but "/hubs" is enough
-                        if (!string.IsNullOrEmpty(accessToken) &&
-                            (path.StartsWithSegments("/hubs")
-                             || path.StartsWithSegments("/hub/outzen") // sympathy if you keep it
-                             || path.StartsWithSegments("/aisuggestionhub")))
-                        {
-                            context.Token = accessToken;
-                        }
-
-                        // 2) FALLBACK : token from the HttpOnly cookie (name it like yours)
-                        if (string.IsNullOrEmpty(context.Token) &&
-                            context.Request.Cookies.TryGetValue("access_token", out var cookieToken))
-                        {
-                            context.Token = cookieToken;
-                        }
+                        if (path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(fromQuery))
+                            ctx.Token = fromQuery;  // OK for SignalR
+                        else if (!string.IsNullOrEmpty(fromCookie))
+                            ctx.Token = fromCookie; // Classic API (if you accept cookies)
 
                         return Task.CompletedTask;
                     }
                 };
             });
             services.AddAuthorization();
+
         }
 
         // ---------- Auth / JWT ----------
-        
-
         // // Simple variant (commented) :
         // var secretKey = builder.Configuration["JwtSettings:SecretKey"];
         // builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -286,7 +275,7 @@ internal class Program
 
         // ---------- Hubs & notifiers ----------
         services.AddScoped<IWeatherHubService, CitizenHackathon2025.Hubs.Services.WeatherHubService>();
-        services.AddScoped<IUserHubService, UserHubService>(); 
+        services.AddScoped<IUserHubService, UserHubService>();
         services.AddScoped<IHubNotifier, CitizenHackathon2025.Hubs.Hubs.SignalRNotifier>();
 
         // ---------- Repositories ----------
@@ -371,7 +360,7 @@ internal class Program
         {
             var pipelines = sp.GetRequiredService<dynamic>();
             var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
-            return new ResilienceHandler(pipelines.OpenAi, logger); 
+            return new ResilienceHandler(pipelines.OpenAi, logger);
         });
 
         services.AddSingleton(sp =>
@@ -415,19 +404,42 @@ internal class Program
         services.AddMediatR(typeof(CitizenHackathon2025.Application.CQRS.Queries.Handlers.GetLatestTrafficConditionQueryHandler).Assembly);
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ResilienceBehavior<,>));
 
-        // NOTE: avoid building a ServiceProvider here (double container)
-        // ILogger<Program> logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();
-        // logger.LogInformation("Application DI built successfully.");
+        // ---------- Anti-forgery ----------
+        services.AddAntiforgery(o =>
+        {
+            o.Cookie.Name = "XSRF-TOKEN";
+            o.Cookie.HttpOnly = false; // lisible JS pour double-submit
+            o.HeaderName = "X-XSRF-TOKEN";
+        });
+
+        // ---------- Rate Limiter (Token Bucket) ----------
+        services.AddRateLimiter(_ => _
+            .AddPolicy("per-user", http =>
+            {
+                var userId = http.User?.Identity?.Name ?? http.Connection.RemoteIpAddress?.ToString() ?? "anon";
+                return RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 100,                      // burst
+                    TokensPerPeriod = 100,                 // ✅ remplace RefillTokens
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(1), // ✅ remplace RefillPeriod
+                    AutoReplenishment = true,              // ✅ nécessaire pour refill automatique
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                });
+            }));
 
         // ---------- CORS ----------
         services.AddCors(options =>
         {
             options.AddPolicy("AllowBlazor", p =>
-                p.WithOrigins("https://localhost:7101"/*, "http://localhost:5101"*/)
-                 .AllowAnyHeader()
-                 .AllowAnyMethod()
-                 .AllowCredentials()
-                 .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+                    p.WithOrigins(
+                        "https://localhost:7101",     // dev
+                        "https://app.wallonie-en-poche.example" // prod
+                     )
+                     .AllowAnyHeader()
+                     .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                     .AllowCredentials());
+
         });
 
         // ---------- Controllers / JSON ----------
@@ -454,8 +466,18 @@ internal class Program
             });
 
         // ---------- SignalR ----------
-        services.AddSignalR(options => { options.EnableDetailedErrors = true; });
+        services.AddSignalR(o =>
+        {
+            o.EnableDetailedErrors = false;                // less information leakage
+            o.MaximumReceiveMessageSize = 64 * 1024;       // 64 KB by default
+            o.HandshakeTimeout = TimeSpan.FromSeconds(5);
+            o.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+            o.KeepAliveInterval = TimeSpan.FromSeconds(10);
+            o.AddFilter<ThrottleHubFilter>();              // ✅ global anti-flood
+        });
 
+        //services.AddHubOptions<OutZenHub>(o => { o.MaximumReceiveMessageSize = 32 * 1024; });
+        //services.AddHubOptions<GPTHub>(o => { o.MaximumReceiveMessageSize = 128 * 1024; }); // only if justified
         // ---------- Hosted Services ----------
         services.AddHostedService<EventArchiverService>();
         services.AddHostedService<WeatherService>();
@@ -496,8 +518,6 @@ internal class Program
             //});
         });
 
-
-
         //services.AddHttpClient<ChatGptService>();
 
         // (Old hard version → we keep commented)
@@ -520,8 +540,6 @@ internal class Program
             CitizenHackathon2025.Application.Interfaces.IUserHubService,
             CitizenHackathon2025.Infrastructure.Services.UserHubService>();
 
-
-
         // ---------- Build app ----------
         var app = builder.Build();
 
@@ -539,8 +557,6 @@ internal class Program
         }
 
         SqlMapper.AddTypeHandler(new RoleTypeHandler());
-
-        
 
         // Test DI
         using (var scope = app.Services.CreateScope())
@@ -583,52 +599,60 @@ internal class Program
         //{
         //    app.Use(async (context, next) =>
         //    {
-        //        context.Response.Headers["X-API-Copyright"] = "© 2025 POLLESSI / CitizenHackathon2025. Reproduction prohibited.";
-        //        await next.Invoke();
+        //        context.Response.Headers.Add("X-API-Copyright", "© 2025 POLLESSI / CitizenHackathon2025. Reproduction prohibited.");
+        //        await next();
         //    });
         //}
 
+        // ===== Pipeline =====
         app.UseSerilogRequestLogging();
         app.UseHttpsRedirection();
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHsts();
+        }
+
+        // ⬇️ Security headers (before static files)
+        app.UseSecurityHeaders();
+
         app.UseStaticFiles();
 
         var enableSwagger = app.Configuration.GetValue<bool?>("Swagger:Enabled")
                    ?? app.Environment.IsDevelopment();
 
-        if (enableSwagger)
-        {
-            app.UseSwagger();
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "CitizenHackathon2025 API V1");
-                c.RoutePrefix = "swagger"; // so the UI will be on /swagger
-            });
-
-            // Optional: Redirect root to Swagger in Dev
-            if (app.Environment.IsDevelopment())
-            {
-                app.MapGet("/", ctx =>
-                {
-                    ctx.Response.Redirect("/swagger");
-                    return Task.CompletedTask;
-                });
-            }
-        }
-
         // Middlewares custom
         app.UseExceptionMiddleware();
         app.UseAntiXssMiddleware();
-        app.UseSecurityHeaders();
+        // app.UseSecurityHeaders(); // (already called above — avoids duplication)
         app.UseUserAgentFiltering();
         app.UseAuditLogging();
-       
+
         app.UseRouting();
 
+        // Metrics
         app.UseHttpMetrics();
         app.UseMetricServer("/metrics");
 
+        // CORS
         app.UseCors("AllowBlazor");
+
+        // Auth
         app.UseAuthentication();
+
+        // Minimal middleware Anti-forgery (cookie issue on GET)
+        app.Use(async (ctx, next) =>
+        {
+            if (HttpMethods.IsGet(ctx.Request.Method))
+            {
+                var af = ctx.RequestServices.GetRequiredService<IAntiforgery>();
+                var tokens = af.GetAndStoreTokens(ctx);
+                ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions { HttpOnly = false, Secure = true, SameSite = SameSiteMode.None });
+            }
+            await next();
+        });
+
+        // Rate Limiter
+        app.UseRateLimiter();
 
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
         app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
@@ -636,22 +660,33 @@ internal class Program
 
         app.UseAuthorization();
 
-        app.MapControllers();
+        // Routes API (with rate limiting by group)
+        app.MapGroup("/api")
+           .RequireRateLimiting("per-user")
+           .MapControllers();
+
+        // (If you have other controllers outside /api, uncomment the line below)
+        // app.MapControllers();
 
         // ---------- Hubs ----------
-        var hubs = app.MapGroup("/hubs");
-        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<EventHub>(EventHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath)/*.RequireAuthorization()*/;
+        var hubs = app.MapGroup("/hubs").RequireAuthorization(); // ✅ all protected by default
+
+        // Mapped Hubs (inherit from Authorize)
+        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath);
+        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath);
+        hubs.MapHub<EventHub>(EventHubMethods.HubPath);
+        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath);
         hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath);
-        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<UserHub>(UserHubMethods.HubPath)/*.RequireAuthorization()*/;
-        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath)/*.RequireAuthorization()*/;
+        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath, o =>
+        {
+            o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents; // 🎯 specific OutZen
+        });
+        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath);
+        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath);
+        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath);
+        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath);
+        hubs.MapHub<UserHub>(UserHubMethods.HubPath);
+        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath);
 
         app.MapGet("/auth/hub-token", (HttpContext http, TokenGenerator tokens) =>
         {
@@ -702,6 +737,23 @@ internal class Program
         //    });
         //}
         //UseSecurityHeaders(app);
+
+        // Swagger (according to your configuration)
+        if (enableSwagger)
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "CitizenHackathon2025 API V1"); });
+
+            if (!app.Environment.IsDevelopment())
+                app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/swagger"),
+                    b => b.Use(async (ctx, next) =>
+                    {
+                        var auth = ctx.Request.Headers.Authorization.ToString();
+                        if (auth != "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("user:strong-pass")))
+                        { ctx.Response.StatusCode = 401; ctx.Response.Headers["WWW-Authenticate"] = "Basic realm=\"docs\""; return; }
+                        await next();
+                    }));
+        }
 
         app.MapFallbackToFile("index.html");
 

@@ -9,8 +9,8 @@ namespace CitizenHackathon2025.Application.Extensions
     public static class MapperExtensions
     {
 #nullable disable
-        private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 2); // DECIMAL(9,2)
-        private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 3); // DECIMAL(9,3)
+        private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 2); 
+        private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 3); 
         private static DateTime TruncateToSecond(DateTime dt)
             => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond), dt.Kind);
 

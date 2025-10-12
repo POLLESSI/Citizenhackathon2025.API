@@ -1,7 +1,9 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using System.Text.RegularExpressions;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
@@ -27,11 +29,10 @@ namespace CitizenHackathon2025.Hubs.Hubs
         // ✅ Join / Leave explicit
         public async Task JoinEventGroup(string eventId)
         {
-            if (!string.IsNullOrEmpty(eventId))
-            {
-                await Groups.AddToGroupAsync(Context.ConnectionId, $"event-{eventId}");
-                Console.WriteLine($"[OutZenHub] {Context.ConnectionId} joined event-{eventId}");
-            }
+            if (string.IsNullOrWhiteSpace(eventId) || eventId.Length > 64 || !Regex.IsMatch(eventId, @"^[a-zA-Z0-9\-]+$"))
+                throw new HubException("Invalid event id.");
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, OutZenHubMethods.Groups.BuildEventGroup(eventId));
         }
 
         public async Task LeaveEventGroup(string eventId)
