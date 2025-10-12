@@ -7,7 +7,7 @@ namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class SuggestionHub : Hub
     {
-#nullable disable
+    #nullable disable
 
         private readonly ILogger<SuggestionHub> _logger;
         public SuggestionHub(ILogger<SuggestionHub> logger) => _logger = logger;

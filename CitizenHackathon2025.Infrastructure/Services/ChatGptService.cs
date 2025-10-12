@@ -1,9 +1,13 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Shared.Observability;
+using CitizenHackathon2025.Shared.Resilience;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly;
 using Polly.CircuitBreaker;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -11,73 +15,86 @@ namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class ChatGptService : IAIService
     {
-    #nullable disable
+#nullable disable
         private readonly HttpClient _httpClient;
-        private readonly IGptInteractionRepository _repository;
+        private readonly IGptInteractionRepository _repo;
         private readonly ILogger<ChatGptService> _logger;
+        private readonly ResiliencePipeline<HttpResponseMessage> _pipeline; // v8
         private readonly string _apiKey;
 
-        public ChatGptService(IOptions<OpenAIOptions> options, HttpClient httpClient, IGptInteractionRepository repository, ILogger<ChatGptService> logger)
+        public ChatGptService(
+            IOptions<OpenAIOptions> options,
+            HttpClient httpClient,
+            IGptInteractionRepository repo,
+            ILogger<ChatGptService> logger,
+            /* inject pipelines holder */ dynamic pipelines)
         {
-            var apiKey = options.Value.ApiKey;
             _httpClient = httpClient;
-            _repository = repository;
+            _repo = repo;
             _logger = logger;
-            _apiKey = apiKey;
+            _apiKey = options.Value.ApiKey;
+            _pipeline = pipelines.OpenAi; // "openai" pipeline
         }
 
         private async Task<string> SendPromptAsync(string systemMessage, string userInput)
         {
-            var requestBody = new
+            var body = new
             {
                 model = "gpt-4o",
-                messages = new[]
-                {
-                    new { role = "system", content = systemMessage },
-                    new { role = "user", content = userInput }
-                },
+                messages = new[] { new { role = "system", content = systemMessage }, new { role = "user", content = userInput } },
                 temperature = 0.2
             };
-
-            var requestJson = JsonSerializer.Serialize(requestBody);
-
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
+            var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
             {
-                Content = new StringContent(requestJson, Encoding.UTF8, "application/json")
+                Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
             };
-            request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
 
-            HttpResponseMessage response = null; 
+            var (ctx, corr) = ObservabilityContext.Create(
+                service: _httpClient.BaseAddress?.Host ?? "api.openai.com",
+                operation: "POST /v1/chat/completions",
+                userId: Thread.CurrentPrincipal?.Identity?.Name);
 
+            HttpResponseMessage resp;
             try
             {
-                response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-
+                resp = await Resilience.ExecuteLoggedAsync(
+                    _pipeline,
+                    ct => new ValueTask<HttpResponseMessage>(_httpClient.SendAsync(req, ct)), // <- wrap Task => ValueTask
+                    ctx,
+                    _logger,
+                    "openai");
             }
             catch (BrokenCircuitException ex)
             {
-
-                _logger.LogError("Open Circuit Breaker: {Message}", ex.Message);
+                _logger.LogError(ex, "OpenAI circuit open corr={CorrelationId}", corr);
+                await _repo.SaveInteractionAsync(userInput, "CIRCUIT_OPEN", DateTime.UtcNow);
+                _logger.LogWarning("GPT meta {@Meta}", new { correlationId = corr, policy = "openai", error = "circuit_open" });
                 return "Service temporarily unavailable. Please try again later.";
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error calling OpenAI API: {Message}", ex.Message);
-                return "An error occurred while communicating with the AI ​​service.";
+                _logger.LogError(ex, "OpenAI call error corr={CorrelationId}", corr);
+                await _repo.SaveInteractionAsync(userInput, "ERROR", DateTime.UtcNow);
+                _logger.LogError(ex, "GPT meta {@Meta}", new { correlationId = corr, policy = "openai", error = ex.GetType().Name });
+                return "An error occurred while communicating with the AI service.";
             }
 
-            using var stream = await response.Content.ReadAsStreamAsync();
+            using var stream = await resp.Content.ReadAsStreamAsync();
             using var doc = await JsonDocument.ParseAsync(stream);
-            var content = doc.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
+            var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
 
-            await _repository.SaveInteractionAsync(userInput, content, DateTime.Now);
+            await _repo.SaveInteractionAsync(userInput, content, DateTime.UtcNow);
+            _logger.LogInformation("GPT meta {@Meta}", new
+            {
+                correlationId = corr,
+                policy = "openai",
+                status = (int)resp.StatusCode,
+                promptChars = userInput?.Length ?? 0,
+                responseChars = content?.Length ?? 0
+            });
 
-            return content;
+            return content ?? "";
         }
 
 

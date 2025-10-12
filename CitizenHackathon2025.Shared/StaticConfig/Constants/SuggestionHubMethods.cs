@@ -2,29 +2,29 @@
 
 namespace CitizenHackathon2025.Shared.StaticConfig.Constants
 {
-    /// <summary>Constantes partagées pour le SuggestionHub (SignalR).</summary>
+    /// <summary>Shared constants for SuggestionHub (SignalR).</summary>
     public static class SuggestionHubMethods
     {
-        /// <summary>Chemin du hub (doit matcher le MapHub côté API).</summary>
+        /// <summary>Hub path (must match the MapHub on the API side).</summary>
         public const string HubPath = "/hubs/suggestionHub";
 
-        /// <summary>Événements envoyés par le serveur vers les clients.</summary>
+        /// <summary>Events sent by the server to clients.</summary>
         public static class ToClient
         {
-            /// <summary>Ping de rafraîchissement (sans payload).</summary>
+            /// <summary>Refresh ping (no payload).</summary>
             public const string NewSuggestion = "NewSuggestion";
 
-            /// <summary>Suggestion envoyée (payload SuggestionDTO).</summary>
+            /// <summary>Suggestion sent (SuggestionDTO payload).</summary>
             public const string ReceiveSuggestion = "ReceiveSuggestion";
         }
 
-        /// <summary>Méthodes invoquées par les clients sur le hub.</summary>
+        /// <summary>Methods invoked by clients on the hub.</summary>
         public static class FromClient
         {
-            /// <summary>Demande de ping (sans argument).</summary>
+            /// <summary>Ping request (no arguments).</summary>
             public const string RefreshSuggestion = "RefreshSuggestion";
 
-            /// <summary>Envoi d’une suggestion (payload SuggestionDTO).</summary>
+            /// <summary>Sending a suggestion (SuggestionDTO payload).</summary>
             public const string SendSuggestion = "SendSuggestion";
         }
     }

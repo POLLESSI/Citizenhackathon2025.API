@@ -34,8 +34,8 @@
         public static class FromClient
         {
             /// <summary>
-            /// Demande au serveur de pousser une notification de rafraîchissement.
-            /// Signature hub: Task RefreshEvent(string message)
+            /// Asks the server to push a refresh notification.
+            /// Hub signature: Task RefreshEvent(string message)
             /// </summary>
             public const string RefreshEvent = "RefreshEvent";
         }

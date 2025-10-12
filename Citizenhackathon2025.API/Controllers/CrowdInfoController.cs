@@ -72,7 +72,7 @@ namespace CitizenHackathon2025.API.Controllers
                 return StatusCode(500, "Error while saving");
 
             // Notify clients
-            await _hubContext.Clients.All.SendAsync(HubEvents.ReceiveCrowdUpdate, savedCrowdInfo.MapToCrowdInfoDTO());
+            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.ReceiveCrowdUpdate, savedCrowdInfo.MapToCrowdInfoDTO());
 
             return Ok(savedCrowdInfo.MapToCrowdInfoDTO());
         }
@@ -88,7 +88,7 @@ namespace CitizenHackathon2025.API.Controllers
                 return NotFound($"No active attendance data found for the identifier {id}.");
 
             // Notify SignalR clients
-            await _hubContext.Clients.All.SendAsync(CrowdHubMethods.CrowdInfoArchived, id);
+            await _hubContext.Clients.All.SendAsync(CrowdHubMethods.ToClient.CrowdInfoArchived, id);
 
             return Ok(new { Message = $"Attendance data with ID {id} successfully archived." });
         }
@@ -105,7 +105,7 @@ namespace CitizenHackathon2025.API.Controllers
             var updatedDto = updated.MapToCrowdInfoDTO();
 
             // real-time push, same pattern as POST
-            await _hubContext.Clients.All.SendAsync(HubEvents.ReceiveCrowdUpdate, updated.MapToCrowdInfoDTO());
+            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.ReceiveCrowdUpdate, updated.MapToCrowdInfoDTO());
 
             return Ok(updatedDto);
         }

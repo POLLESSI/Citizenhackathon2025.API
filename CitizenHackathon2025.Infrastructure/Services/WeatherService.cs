@@ -1,8 +1,8 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Hubs.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Hubs.Services;
 using Polly;
 using Polly.Wrap;
 
@@ -10,40 +10,17 @@ namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class WeatherService : BackgroundService
     {
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IServiceProvider _sp;
         private readonly ILogger<WeatherService> _logger;
-        private readonly AsyncPolicyWrap _resiliencePolicy;
-        private Timer _timer;
-        private readonly string[] _summaries = new[] {"Sunny", "Cloudy", "Rainy", "Stormy", "Snowy", "Foggy"};
-        private readonly Random _rng = new();
+        private readonly AsyncPolicyWrap _policy;   
 
-        public WeatherService(IServiceProvider serviceProvider, ILogger<WeatherService> logger, AsyncPolicyWrap resiliencePolicy)
+        public WeatherService(IServiceProvider serviceProvider,
+                              ILogger<WeatherService> logger,
+                              AsyncPolicyWrap resiliencePolicy)
         {
-            _serviceProvider = serviceProvider;
+            _sp = serviceProvider;
             _logger = logger;
-            var retryPolicy = Policy.Handle<Exception>()
-            .WaitAndRetryAsync(
-                retryCount: 3,
-                sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                onRetry: (ex, delay, retryCount, ctx) =>
-                {
-                    logger.LogWarning(ex, $"[WeatherService] Retry {retryCount} after {delay.TotalSeconds}s");
-                });
-
-            var circuitBreakerPolicy = Policy.Handle<Exception>()
-                .CircuitBreakerAsync(
-                    exceptionsAllowedBeforeBreaking: 3,
-                    durationOfBreak: TimeSpan.FromMinutes(1),
-                    onBreak: (ex, breakDelay) =>
-                    {
-                        logger.LogWarning($"[WeatherService] Circuit open for {breakDelay.TotalSeconds}s due to {ex.Message}");
-                    },
-                    onReset: () =>
-                    {
-                        logger.LogInformation("[WeatherService] Circuit closed. Normal operations resumed.");
-                    });
-
-            _resiliencePolicy = resiliencePolicy;
+            _policy = resiliencePolicy ?? throw new ArgumentNullException(nameof(resiliencePolicy));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -54,10 +31,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 try
                 {
-                    await _resiliencePolicy.ExecuteAsync(async () =>
+                    await _policy.ExecuteAsync(async () =>
                     {
-                        using var scope = _serviceProvider.CreateScope();
-
+                        using var scope = _sp.CreateScope();
                         var forecastService = scope.ServiceProvider.GetRequiredService<IWeatherForecastService>();
                         var hubService = scope.ServiceProvider.GetRequiredService<IWeatherHubService>();
 
@@ -67,44 +43,20 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         _logger.LogInformation("New forecast broadcasted successfully.");
                     });
                 }
-
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "[WeatherService] A critical error occurred even after retries.");
-                    
                 }
 
-                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
-
+                // cadence
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
+                }
+                catch (OperationCanceledException) { /* shutdown */ }
             }
+
             _logger.LogInformation("WeatherService stopped.");
-        }
-        public async Task<Task> StartAsync(CancellationToken cancellationToken)
-        {
-            _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
-            return Task.CompletedTask;
-        }
-        private async void DoWork(object state)
-        {
-            using var scope = _serviceProvider.CreateScope();
-            var forecastService = scope.ServiceProvider.GetRequiredService<IWeatherForecastService>();
-
-            try
-            {
-                await forecastService.SendWeatherToAllClientsAsync();
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine($"[WeatherService] Error: {ex.Message}");
-            }
-
-            // TODO: exploit weather data here
-        }
-        public new Task StopAsync(CancellationToken cancellationToken)
-        {
-            _timer?.Change(Timeout.Infinite, 0);
-            return Task.CompletedTask;
         }
     }
 }

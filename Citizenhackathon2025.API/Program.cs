@@ -1,61 +1,67 @@
 ﻿// ==================
 // Namespaces projet (⚠️ harmonized on CitizenHackathon2025)
 // ==================
-using CitizenHackathon2025.API.Security;
+using CitizenHackathon2025.API.Extensions;
+using CitizenHackathon2025.API.Hubs.Serilog.Sinks;
 using CitizenHackathon2025.API.Middlewares;
-using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.API.Options;
+using CitizenHackathon2025.API.Security;
+using CitizenHackathon2025.API.Tools;
+using CitizenHackathon2025.Application.Behaviors;
 using CitizenHackathon2025.Application.CQRS.Queries;
-using CitizenHackathon2025.Application.Services;
-using CitizenHackathon2025.Application.Mapping;
 using CitizenHackathon2025.Application.DTOs;
+using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Mapping;
+using CitizenHackathon2025.Application.Services;
+using CitizenHackathon2025.Application.WeatherForecasts.Queries;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
-using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
+using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Extensions;
+using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Hubs.Services;
+using CitizenHackathon2025.Infrastructure;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
-using CitizenHackathon2025.Infrastructure.Services.Monitoring;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
 using CitizenHackathon2025.Infrastructure.Persistence;
 using CitizenHackathon2025.Infrastructure.Repositories;
-using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Infrastructure.Services;
+using CitizenHackathon2025.Infrastructure.Services.Monitoring;
 using CitizenHackathon2025.Infrastructure.SignalR;
-using CitizenHackathon2025.Infrastructure;
-using CitizenHackathon2025.API.Extensions;
-using CitizenHackathon2025.API.Options;
-using CitizenHackathon2025.API.Tools;
-using CitizenHackathon2025.Hubs.Extensions;
-using CitizenHackathon2025.Hubs.Services;
-using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
+using CitizenHackathon2025.Shared.Notifications;
+using CitizenHackathon2025.Shared.Resilience;
 using CitizenHackathon2025.Shared.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Dapper;
+using Mapster;
+using MapsterMapper;
+using MediatR;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System.Net.Http.Headers;
-using System.Data;
-using System.Text;
 using OpenTelemetry;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
+using OpenTelemetry.Instrumentation;
 //using OpenTelemetry.Exporter.Prometheus;
 using OpenTelemetry.Instrumentation.Runtime;
-using OpenTelemetry.Instrumentation;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using MapsterMapper;
+using Polly;
+using Polly.Wrap;
 using Prometheus;
 using Serilog;
-using Mapster;
-using MediatR;
-using Dapper;
-using Polly;
-using CitizenHackathon2025.DTOs.DTOs;
+using Serilog.Formatting.Compact;
+using System.Data;
+using System.Net.Http.Headers;
+using System.Text;
+using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
 
 
 
@@ -87,23 +93,41 @@ internal class Program
 
         // OpenTelemetry
         builder.Services.AddOpenTelemetry()
-    .ConfigureResource(r => r.AddService("CitizenHackathon2025.API"))
-    .WithTracing(t => t
-        .AddAspNetCoreInstrumentation(o => o.RecordException = true)
-        .AddHttpClientInstrumentation()
-        .AddOtlpExporter(opt => opt.Endpoint = new Uri("http://localhost:4317")))
-    .WithMetrics(m => m
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddRuntimeInstrumentation()
-    // ⚠️ PAS d’exporter Prometheus ici
-    );
+            .ConfigureResource(r => r.AddService("CitizenHackathon2025.API"))
+            .WithTracing(t => t
+                .AddAspNetCoreInstrumentation(o => o.RecordException = true)
+                .AddHttpClientInstrumentation()
+                .AddOtlpExporter(opt => opt.Endpoint = new Uri("http://localhost:4317")))
+            .WithMetrics(m => m
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation()
+            // ⚠️ NO export Prometheus here
+            );
 
-        builder.Host.UseSerilog((ctx, lc) => lc
-            .ReadFrom.Configuration(ctx.Configuration)
-            .Enrich.FromLogContext()
-            .Enrich.WithProperty("App", "CitizenHackathon2025.API"));
+        builder.Host.UseSerilog((ctx, lc) =>
+        {
+            lc.ReadFrom.Configuration(ctx.Configuration)
+              .Enrich.FromLogContext()
+              .Enrich.WithProperty("App", "CitizenHackathon2025.API");
 
+            var cs = ctx.Configuration["EventHubs:ConnectionString"];
+            if (!string.IsNullOrWhiteSpace(cs))
+            {
+                var opt = new AzureEventHubOptions
+                {
+                    ConnectionString = cs,
+                    EventHubName = ctx.Configuration["EventHubs:EventHubName"],
+                    BatchSizeLimit = ctx.Configuration.GetValue("EventHubs:BatchSizeLimit", 100),
+                    Period = TimeSpan.FromSeconds(ctx.Configuration.GetValue("EventHubs:PeriodSeconds", 2)),
+                    PartitionKeyResolver = e =>
+                        (e.Properties.TryGetValue("CorrelationId", out var cid) ? $"{e.Level}-{cid}" : e.Level.ToString())
+                };
+
+                lc.WriteTo.AzureEventHub(opt, new CompactJsonFormatter());
+            }
+        });
+        builder.Logging.ClearProviders();
 
         // ---------- Basic setup ----------
         var configuration = builder.Configuration;
@@ -277,31 +301,50 @@ internal class Program
         services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
+        services.AddSingleton<INotifierAdmin, NotifierAdmin>();
 
         // ---------- Polly : Retry + Circuit Breaker ----------
         services.AddSingleton(sp =>
         {
-            var log = sp.GetRequiredService<ILogger<WeatherService>>();
+            var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Polly");
+            var notifier = sp.GetRequiredService<INotifierAdmin>(); // <- injects the notifier
 
-            var retryPolicy = Policy
+            return new
+            {
+                OpenAi = Resilience.BuildHttpPipeline(log, notifier, "openai", retry: 3, breakerFailures: 5, openSeconds: 30, timeoutSeconds: 25),
+                Weather = Resilience.BuildHttpPipeline(log, notifier, "openweather", retry: 2, breakerFailures: 4, openSeconds: 20, timeoutSeconds: 8),
+                Traffic = Resilience.BuildHttpPipeline(log, notifier, "trafficapi", retry: 3, breakerFailures: 5, openSeconds: 30, timeoutSeconds: 10),
+            };
+        });
+
+        // Specific policy for OpenWeatherService (used in WeatherService)
+        services.AddSingleton<AsyncPolicyWrap>(sp =>
+        {
+            var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("WeatherPolicy");
+
+            var retry = Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(
-                    3,
-                    attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                    onRetry: (ex, delay, count, ctx) =>
-                    {
-                        log.LogWarning(ex, $"Retry {count} after {delay.TotalSeconds}s");
-                    });
+                    retryCount: 3,
+                    sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+                    onRetry: (ex, delay, attempt, ctx) =>
+                        log.LogWarning(ex, "[WeatherService] Retry {Attempt} after {Delay}s", attempt, delay.TotalSeconds));
 
-            var circuitBreaker = Policy
+            var breaker = Policy
                 .Handle<Exception>()
                 .CircuitBreakerAsync(
-                    3,
-                    TimeSpan.FromMinutes(1),
-                    onBreak: (ex, delay) => log.LogWarning($"Circuit opened: {ex.Message}"),
-                    onReset: () => log.LogInformation("Circuit reset."));
+                    exceptionsAllowedBeforeBreaking: 3,
+                    durationOfBreak: TimeSpan.FromMinutes(1),
+                    onBreak: (ex, breakDelay) =>
+                        log.LogWarning("[WeatherService] Circuit open for {Delay}s due to {Message}", breakDelay.TotalSeconds, ex.Message),
+                    onReset: () =>
+                        log.LogInformation("[WeatherService] Circuit closed. Normal operations resumed."));
 
-            return Policy.WrapAsync(retryPolicy, circuitBreaker);
+            // (optional) non-generic timeout
+            // var timeout = Policy.TimeoutAsync(20);
+
+            // Compose what you use in WeatherService
+            return Policy.WrapAsync(retry, breaker /*, timeout */);
         });
 
         // ---------- Utils & HttpClients ----------
@@ -313,7 +356,7 @@ internal class Program
             .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
 
         // HttpClient OpenAI (key from config) → IGptExternalService ↦ OpenAIGptExternalService
-        services.AddHttpClient<IGptExternalService, OpenAIGptExternalService>(client =>
+        services.AddHttpClient<IGptExternalService>(client =>
         {
             var openAiKey = configuration["OpenAI:ApiKey"];
             client.BaseAddress = new Uri(configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com");
@@ -323,7 +366,21 @@ internal class Program
                     new AuthenticationHeaderValue("Bearer", openAiKey);
             }
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+        })
+        .AddHttpMessageHandler(sp =>
+        {
+            var pipelines = sp.GetRequiredService<dynamic>();
+            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
+            return new ResilienceHandler(pipelines.OpenAi, logger); 
         });
+
+        services.AddSingleton(sp =>
+        {
+            var lf = sp.GetRequiredService<ILoggerFactory>();
+            var log = lf.CreateLogger("PollyPoliciesV7");
+            return PollyPoliciesV7.Build("openai", log);
+        });
+
         services.AddScoped<AstroIAService>();
 
         services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
@@ -336,9 +393,12 @@ internal class Program
         services.AddMemoryCache();
         services.AddScoped<MemoryCacheService>();
         services.AddScoped<WeatherSuggestionOrchestrator>();
-        services.AddHttpClient<ITrafficApiService, TrafficAPIService>(client =>
+        services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
         {
-            client.BaseAddress = new Uri("https://api.waze.com/..."); // TODO: actual URL base
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = cfg["TrafficApi:BaseUrl"];
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+                client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
             client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
         });
 
@@ -353,6 +413,7 @@ internal class Program
         services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
         services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
         services.AddMediatR(typeof(CitizenHackathon2025.Application.CQRS.Queries.Handlers.GetLatestTrafficConditionQueryHandler).Assembly);
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ResilienceBehavior<,>));
 
         // NOTE: avoid building a ServiceProvider here (double container)
         // ILogger<Program> logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();

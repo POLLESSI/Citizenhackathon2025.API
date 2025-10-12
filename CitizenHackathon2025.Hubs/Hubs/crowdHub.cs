@@ -13,13 +13,13 @@ namespace CitizenHackathon2025.Hubs.Hubs
         public async Task RefreshCrowd(string message)
         {
             _logger.LogInformation("RefreshCrowd: {Message}", message);
-            await Clients.All.SendAsync(CrowdHubMethods.CrowdRefreshRequested, message);
+            await Clients.All.SendAsync(CrowdHubMethods.ToClient.NewCrowdInfo, message);
         }
 
         public async Task SendCrowdUpdate(CrowdInfo crowd)
         {
             _logger.LogInformation("📡 Update Crowd sent for {Location}", crowd.LocationName);
-            await Clients.All.SendAsync(CrowdHubMethods.ReceiveCrowdUpdate, crowd);
+            await Clients.All.SendAsync(CrowdHubMethods.ToClient.ReceiveCrowdUpdate, crowd);
         }
     }
 }
