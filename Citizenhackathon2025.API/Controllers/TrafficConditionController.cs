@@ -6,11 +6,13 @@ using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.TrafficConditionHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [Route("api/[controller]")]
     [ApiController]
     public class TrafficConditionController : ControllerBase

@@ -1,9 +1,11 @@
 ﻿using CitizenHackathon2025.Infrastructure.Services.Monitoring;
-using Microsoft.AspNetCore.Mvc;
 using CitizenHackathon2025.Shared.Security;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [ApiController]
     [Route("csp-report")]
     public class SecurityController : ControllerBase
@@ -17,8 +19,13 @@ namespace CitizenHackathon2025.API.Controllers
             _store = store;
         }
 
+        // GET /csp-report/health  ✅ no body on a GET
         [HttpGet("health")]
-        public async Task<IActionResult> ReceiveCspViolation([FromBody] CspReportModel model)
+        public IActionResult Health() => Ok(new { status = "ok" });
+
+        // POST /csp-report        ✅ the spec expects a POST with body
+        [HttpPost]
+        public IActionResult ReceiveCspViolation([FromBody] CspReportModel model)
         {
             if (model?.Report is not null)
             {
@@ -26,23 +33,15 @@ namespace CitizenHackathon2025.API.Controllers
                     model.Report.ViolatedDirective,
                     model.Report.BlockedUri);
 
-                _store.Add(model.Report); 
+                _store.Add(model.Report);
             }
-
             return Ok();
         }
 
         [HttpGet("all")]
-        public IActionResult GetAllReports()
-        {
-            return Ok(_store.GetAll());
-        }
+        public IActionResult GetAllReports() => Ok(_store.GetAll());
 
         [HttpDelete("clear")]
-        public IActionResult ClearAll()
-        {
-            _store.Clear();
-            return NoContent();
-        }
+        public IActionResult ClearAll() { _store.Clear(); return NoContent(); }
     }
 }

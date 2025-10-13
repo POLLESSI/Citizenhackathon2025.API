@@ -3,15 +3,17 @@ using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
-using System.ComponentModel.DataAnnotations;
 using MediatR;
-using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.WeatherForecastHubMethods;
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [ApiController]
     [Route("api/[controller]")]
     public class WeatherForecastController : ControllerBase

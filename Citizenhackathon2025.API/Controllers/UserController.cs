@@ -5,10 +5,12 @@ using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [Route("api/[controller]")]
     [ApiController]
     public class UserController : ControllerBase

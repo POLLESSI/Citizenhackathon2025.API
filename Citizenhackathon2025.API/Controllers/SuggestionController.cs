@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.SqlServer.Dac.Model;
 using Volo.Abp.Domain.Entities;
@@ -21,6 +22,7 @@ using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.SuggestionH
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]

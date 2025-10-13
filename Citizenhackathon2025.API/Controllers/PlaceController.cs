@@ -8,12 +8,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.PlaceHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [ApiController]
     [Route("api/[controller]")] // => /api/Place
     public class PlaceController : ControllerBase

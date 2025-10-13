@@ -1,15 +1,17 @@
-﻿using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Hubs.Hubs;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.AspNetCore.Authorization;
-using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
+using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.GptInteractionHubMethods;
-using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [Route("api/[controller]")]
     [ApiController]
     public class GptController : ControllerBase

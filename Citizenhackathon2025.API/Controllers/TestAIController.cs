@@ -1,12 +1,13 @@
-﻿using CitizenHackathon2025.Hubs.Hubs;
+﻿using CitizenHackathon2025.API.Models;
 using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.API.Models;
+using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.API.Controllers
 {
-
+    [EnableRateLimiting("per-user")]
     [ApiController]
     [Route("api/[controller]")]
     public class TestAIController : ControllerBase
@@ -29,7 +30,7 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> SuggestAI([FromBody] SuggestAIRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Prompt))
-                return BadRequest("Prompt manquant.");
+                return BadRequest("Missing prompt.");
 
             var suggestion = await _aiService.SuggestAlternativeWithWeatherAsync(request.Prompt);
 

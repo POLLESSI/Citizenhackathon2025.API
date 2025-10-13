@@ -1,8 +1,10 @@
 ﻿using CitizenHackathon2025.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [Route("api/[controller]")]
     [ApiController]
     public class AiController : ControllerBase

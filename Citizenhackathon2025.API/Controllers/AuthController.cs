@@ -1,12 +1,14 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.API.Tools; 
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.API.Tools; 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase

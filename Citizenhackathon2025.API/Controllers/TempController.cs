@@ -1,11 +1,13 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Extensions;
+﻿using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Interfaces;
-using Microsoft.AspNetCore.Mvc;
 using CitizenHackathon2025.DTOs.DTOs;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CitizenHackathon2025.API.Controllers
 {
+    [EnableRateLimiting("per-user")]
     [Route("api/[controller]")]
     [ApiController]
     public class TempController : ControllerBase

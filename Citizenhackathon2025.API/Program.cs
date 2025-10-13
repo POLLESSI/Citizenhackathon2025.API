@@ -408,7 +408,7 @@ internal class Program
         services.AddAntiforgery(o =>
         {
             o.Cookie.Name = "XSRF-TOKEN";
-            o.Cookie.HttpOnly = false; // lisible JS pour double-submit
+            o.Cookie.HttpOnly = false; // readable JS for double-submit
             o.HeaderName = "X-XSRF-TOKEN";
         });
 
@@ -420,9 +420,9 @@ internal class Program
                 return RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
                 {
                     TokenLimit = 100,                      // burst
-                    TokensPerPeriod = 100,                 // ✅ remplace RefillTokens
-                    ReplenishmentPeriod = TimeSpan.FromMinutes(1), // ✅ remplace RefillPeriod
-                    AutoReplenishment = true,              // ✅ nécessaire pour refill automatique
+                    TokensPerPeriod = 100,                 // ✅ replaces RefillTokens
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(1), // ✅ replaces RefillPeriod
+                    AutoReplenishment = true,              // ✅ required for automatic refill
                     QueueLimit = 0,
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst
                 });
@@ -516,6 +516,8 @@ internal class Program
             //    Version = "v1",
             //    Description = "© 2025 POLLESSI / CitizenHackathon2025 — Protected private API. Any attempt at usurpation or unauthorized use will be prosecuted."
             //});
+            // ✅ Prevents ID collisions (nested types, homonyms, etc.)
+            c.CustomSchemaIds(t => t.FullName!.Replace("+", "."));
         });
 
         //services.AddHttpClient<ChatGptService>();
@@ -572,37 +574,43 @@ internal class Program
                 return Task.CompletedTask;
             });
         }
-
-        if (!app.Environment.IsDevelopment())
+        // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
+        if (!app.Environment.IsDevelopment() && app.Configuration.GetValue("OutZen:RequireEventId", true))
         {
-            app.Use(async (context, next) =>
-            {
-                var ua = context.Request.Headers["User-Agent"].ToString();
-
-                // Allows browsers + dev tools
-                var allowed = new[] { "Mozilla", "Chrome", "Edge", "Safari", "curl", "Postman", "Insomnia", "Edge" };
-                var ok = !string.IsNullOrWhiteSpace(ua)
-                         && allowed.Any(a => ua.Contains(a, StringComparison.OrdinalIgnoreCase));
-
-                if (!ok)
-                {
-                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    await context.Response.WriteAsync("Forbidden - Invalid User-Agent");
-                    return;
-                }
-
-                await next();
-            });
+            app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
+                b => b.UseMiddleware<OutZenTokenMiddleware>());
         }
 
-        //if (app.Environment.IsProduction())
+        //if (!app.Environment.IsDevelopment())
         //{
         //    app.Use(async (context, next) =>
         //    {
-        //        context.Response.Headers.Add("X-API-Copyright", "© 2025 POLLESSI / CitizenHackathon2025. Reproduction prohibited.");
+        //        var ua = context.Request.Headers["User-Agent"].ToString();
+
+        //        // Allows browsers + dev tools
+        //        var allowed = new[] { "Mozilla", "Chrome", "Edge", "Safari", "curl", "Postman", "Insomnia", "Edge" };
+        //        var ok = !string.IsNullOrWhiteSpace(ua)
+        //                 && allowed.Any(a => ua.Contains(a, StringComparison.OrdinalIgnoreCase));
+
+        //        if (!ok)
+        //        {
+        //            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        //            await context.Response.WriteAsync("Forbidden - Invalid User-Agent");
+        //            return;
+        //        }
+
         //        await next();
         //    });
         //}
+
+        if (app.Environment.IsProduction())
+        {
+            app.Use(async (context, next) =>
+            {
+                context.Response.Headers.Add("X-API-Copyright", "© 2025 POLLESSI / CitizenHackathon2025. Reproduction prohibited.");
+                await next();
+            });
+        }
 
         // ===== Pipeline =====
         app.UseSerilogRequestLogging();
@@ -655,18 +663,18 @@ internal class Program
         app.UseRateLimiter();
 
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
-        app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
-            b => b.UseMiddleware<OutZenTokenMiddleware>());
+        //app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
+        //    b => b.UseMiddleware<OutZenTokenMiddleware>());
 
         app.UseAuthorization();
 
-        // Routes API (with rate limiting by group)
-        app.MapGroup("/api")
-           .RequireRateLimiting("per-user")
-           .MapControllers();
+        // Routes API (with rate limiting by group) for production
+        //app.MapGroup("/api")
+        //   .RequireRateLimiting("per-user")
+        //   .MapControllers();
 
         // (If you have other controllers outside /api, uncomment the line below)
-        // app.MapControllers();
+        app.MapControllers();
 
         // ---------- Hubs ----------
         var hubs = app.MapGroup("/hubs").RequireAuthorization(); // ✅ all protected by default
@@ -687,6 +695,12 @@ internal class Program
         hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath);
         hubs.MapHub<UserHub>(UserHubMethods.HubPath);
         hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath);
+
+        //app.MapGet("/csp-report/health", () => Results.Ok(new { status = "ok" }))
+        //    .WithMetadata(new Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute { IgnoreApi = true });
+
+        app.MapGet("/_diag/routes", (EndpointDataSource es) =>
+            Results.Ok(es.Endpoints.Select(e => e.DisplayName)));
 
         app.MapGet("/auth/hub-token", (HttpContext http, TokenGenerator tokens) =>
         {
@@ -709,7 +723,7 @@ internal class Program
                 var list = await mediator.Send(new GetLatestTrafficConditionQuery(), ct);
                 return (list is null || list.Count == 0) ? Results.NotFound() : Results.Ok(list);
             });
-
+        
         // Small query log (as before)
         app.Use(async (context, next) =>
         {
