@@ -16,6 +16,7 @@
 	  <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
 	  <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
 	  <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.16" />
+	  <PackageReference Include="Microsoft.Data.SqlClient.AlwaysEncrypted.AzureKeyVaultProvider" Version="6.1.2" />
 	  <PackageReference Include="Microsoft.Data.Tools.Msbuild" Version="16.0.62004.28040" />
 	  <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="8.0.16" />
 	  <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />

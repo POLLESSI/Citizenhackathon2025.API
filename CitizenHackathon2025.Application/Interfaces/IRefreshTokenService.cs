@@ -13,12 +13,12 @@ namespace CitizenHackathon2025.Application.Interfaces
         /// <summary>
         /// Checks that a refresh token is valid (exists, not expired, not revoked, active status).
         /// </summary>
-        Task<bool> ValidateAsync(string token);
+        Task<bool> ValidateAsync(string token, string email);
 
         /// <summary>
         /// Invalidates a refresh token (revoked).
         /// </summary>
-        Task InvalidateAsync(string token);
+        Task InvalidateAsync(string token, string email);
 
         /// <summary>
         /// Explicitly marks a refresh token as expired.
@@ -33,7 +33,11 @@ namespace CitizenHackathon2025.Application.Interfaces
         /// <summary>
         /// Returns the current status of a refresh token.
         /// </summary>
-        Task<RefreshTokenStatus> GetStatusAsync(string token);
+        Task<RefreshTokenStatus> GetStatusAsync(string token, string email);
+
+        // 🔐 (hash/salt)
+        //Task<IEnumerable<RefreshToken>> GetActiveByEmailAsync(string email);
+        //Task AddHashedAsync(string email, DateTime expiryDate, byte[] tokenHash, byte[] tokenSalt);
     }
 }
 

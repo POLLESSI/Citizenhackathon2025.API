@@ -10,7 +10,9 @@
 	[Active] BIT DEFAULT 1
 
 	CONSTRAINT [PK_Event] PRIMARY KEY ([Id]),
-	CONSTRAINT [UQ_Event_Name_DateEvent] UNIQUE ([Name], [DateEvent])
+	CONSTRAINT [UQ_Event_Name_DateEvent] UNIQUE ([Name], [DateEvent]),
+	CONSTRAINT CK_Event_Lat CHECK (Latitude  BETWEEN -90  AND 90),
+	CONSTRAINT CK_Event_Lon CHECK (Longitude BETWEEN -180 AND 180)
 )
 
 GO
@@ -21,7 +23,7 @@ CREATE TRIGGER [dbo].[OnDeleteEvent]
 	AS
 	BEGIN
 		UPDATE Event SET Active = 0
-		WHERE Id = (SELECT Id FROM deleted)
+		WHERE Id IN (SELECT Id FROM deleted)
 	END
 
 GO

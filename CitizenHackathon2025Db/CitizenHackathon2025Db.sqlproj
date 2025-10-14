@@ -88,5 +88,6 @@
     <None Include="Scripts\Script.PostDeployment.sql" />
     <None Include="Scripts\MergeGptInteractions.sql" />
     <None Include="Scripts\DeleteLogs.sql" />
+    <None Include="Scripts\DevScript.sql" />
   </ItemGroup>
 </Project>

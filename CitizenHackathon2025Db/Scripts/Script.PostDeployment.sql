@@ -40,3 +40,23 @@ IF OBJECT_ID(N'dbo.OnDeleteWeatherForecast', N'TR') IS NULL
               JOIN deleted d ON d.Id = WF.Id;
           END');
 GO
+
+ALTER TABLE [dbo].[RefreshTokens]
+  ADD TokenHash VARBINARY(32) NULL,
+      TokenSalt VARBINARY(16) NULL;
+
+UPDATE rt
+SET
+  TokenSalt = CRYPT_GEN_RANDOM(16),
+  TokenHash = HASHBYTES('SHA2_256',
+              CONVERT(varbinary(8000), rt.Token, 0) + TokenSalt)
+FROM dbo.RefreshTokens AS rt
+WHERE rt.TokenHash IS NULL;
+
+ALTER TABLE [dbo].[RefreshTokens]
+  ALTER COLUMN TokenSalt VARBINARY(16) NOT NULL;
+ALTER TABLE [dbo].[RefreshTokens]
+  ALTER COLUMN TokenHash VARBINARY(32) NOT NULL;
+
+-- Optional, once the code is deployed :
+-- ALTER TABLE [dbo].[RefreshTokens] DROP COLUMN Token;

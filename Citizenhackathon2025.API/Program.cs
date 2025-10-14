@@ -43,10 +43,12 @@ using MediatR;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient.AlwaysEncrypted.AzureKeyVaultProvider;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -57,6 +59,7 @@ using OpenTelemetry.Instrumentation.Runtime;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Azure.Identity;
 using Polly;
 using Polly.Wrap;
 using Prometheus;
@@ -91,6 +94,12 @@ internal class Program
 
         TypeAdapterConfig.GlobalSettings.Scan(AppDomain.CurrentDomain.GetAssemblies());
         builder.Services.AddMapster();
+
+        var akvProvider = new SqlColumnEncryptionAzureKeyVaultProvider(new DefaultAzureCredential());
+        SqlConnection.RegisterColumnEncryptionKeyStoreProviders(new Dictionary<string, SqlColumnEncryptionKeyStoreProvider>
+            {
+                { SqlColumnEncryptionAzureKeyVaultProvider.ProviderName, akvProvider }
+            });
 
         // OpenTelemetry
         builder.Services.AddOpenTelemetry()
@@ -129,6 +138,10 @@ internal class Program
             }
         });
         builder.Logging.ClearProviders();
+
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "dpkeys")))
+            .SetApplicationName("CitizenHackathon2025");
 
         // ---------- Basic setup ----------
         var configuration = builder.Configuration;
@@ -656,6 +669,15 @@ internal class Program
                 var tokens = af.GetAndStoreTokens(ctx);
                 ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions { HttpOnly = false, Secure = true, SameSite = SameSiteMode.None });
             }
+            await next();
+        });
+
+        app.Use(async (ctx, next) =>
+        {
+            var h = ctx.Request.Headers;
+            h.Remove("Authorization");
+            h.Remove("Cookie");
+            h.Remove("Set-Cookie");
             await next();
         });
 

@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.API.Tools; 
+﻿using System.Security.Claims;
+using CitizenHackathon2025.API.Tools; 
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -64,10 +65,11 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> Logout([FromBody] string token)
         {
-            if (string.IsNullOrEmpty(token))
-                return BadRequest("Missing token");
+            var email = GetEmailFromPrincipal(User);
+            if (string.IsNullOrWhiteSpace(email))
+                return Unauthorized(new { Message = "No email in principal" });
 
-            await _refreshTokenService.InvalidateAsync(token);
+            await _refreshTokenService.InvalidateAsync(token, email);
             return Ok(new { message = "Logged out successfully" });
         }
 
@@ -90,24 +92,31 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshDTO request)
         {
-            var isValid = await _refreshTokenService.ValidateAsync(request.RefreshToken);
-            if (!isValid)
-                return Unauthorized(new { Message = "Invalid or expired refresh token" });
-
             var user = await _userService.GetUserByIdAsync(request.UserId);
             if (user == null)
                 return Unauthorized(new { Message = "User not found" });
 
+            var isValid = await _refreshTokenService.ValidateAsync(request.RefreshToken, user.Email);
+            if (!isValid)
+                return Unauthorized(new { Message = "Invalid or expired refresh token" });
+
             var newAccessToken = _tokenGenerator.GenerateToken(user.Email, user.Role);
             var newRefreshToken = await _refreshTokenService.GenerateAsync(user.Email);
 
-            await _refreshTokenService.InvalidateAsync(request.RefreshToken);
+            // Revoke old RT by comparing hash(token||salt) on service side
+            await _refreshTokenService.InvalidateAsync(request.RefreshToken, user.Email);
 
             return Ok(new
             {
                 AccessToken = newAccessToken,
-                RefreshToken = newRefreshToken
+                RefreshToken = newRefreshToken   // if object => return .Token
             });
+        }
+        private string? GetEmailFromPrincipal(ClaimsPrincipal user)
+        {
+            return user?.FindFirst(ClaimTypes.Email)?.Value
+                ?? user?.FindFirst("email")?.Value
+                ?? user?.Identity?.Name;
         }
     }
 }

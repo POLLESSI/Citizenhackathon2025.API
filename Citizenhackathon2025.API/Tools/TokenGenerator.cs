@@ -20,7 +20,7 @@ namespace CitizenHackathon2025.API.Tools
         {
             _configuration = configuration;
             _secretKey = _configuration["Jwt:Secret"];
-            _tokenDuration = int.TryParse(_configuration["JwtSettings:TokenDurationMinutes"], out int minutes) ? minutes : 30;
+            _tokenDuration = int.TryParse(_configuration["Jwt:TokenDurationMinutes"], out int minutes) ? minutes : 30;
             _issuer = _configuration["Jwt:Issuer"] ?? "CitizenHackathon2025API";
             _audience = _configuration["Jwt:Audience"]; 
         }

@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Azure.Messaging.EventHubs;
 using Azure.Messaging.EventHubs.Producer;
-// ⚠️ NE PAS référencer Microsoft.AspNetCore.Mvc.Diagnostics
+// ⚠️ DO NOT reference Microsoft.AspNetCore.Mvc.Diagnostics
 using Serilog.Events;
 using Serilog.Formatting;
 using Serilog.Formatting.Compact;
@@ -14,7 +14,7 @@ using Serilog.Sinks.PeriodicBatching;
 namespace CitizenHackathon2025.API.Hubs.Serilog.Sinks
 {
     /// <summary>
-    /// Serilog sink → Azure Event Hubs par lots (SDK EH v5, .NET 6/8).
+    /// Serilog sink → Azure Event Hubs in batches (SDK EH v5, .NET 6/8).
     /// </summary>
     public sealed class AzureEventHubSink : PeriodicBatchingSink
     {
@@ -23,13 +23,13 @@ namespace CitizenHackathon2025.API.Hubs.Serilog.Sinks
         private readonly Func<LogEvent, string?>? _partitionKeyResolver;
 
         public AzureEventHubSink(AzureEventHubOptions options, ITextFormatter? formatter = null)
-            // NOTE: si tu es en PeriodicBatching v3.x, utilise le ctor avec PeriodicBatchingSinkOptions*
+            // NOTE: If you are using PeriodicBatching v3.x, use the ctor with PeriodicBatchingSinkOptions*
             : base(Math.Max(1, options.BatchSizeLimit), options.Period)
         {
             if (string.IsNullOrWhiteSpace(options.ConnectionString))
                 throw new ArgumentException("AzureEventHub: Missing ConnectionString.", nameof(options.ConnectionString));
 
-            // Validation locale de base (sans ctx)
+            // Basic local validation (without ctx)
             var parsed = EventHubsConnectionStringProperties.Parse(options.ConnectionString);
             if (parsed.Endpoint == null || string.IsNullOrWhiteSpace(parsed.Endpoint.Host))
                 throw new ArgumentException("AzureEventHub: Endpoint host missing in ConnectionString.");
@@ -74,7 +74,7 @@ namespace CitizenHackathon2025.API.Hubs.Serilog.Sinks
 
                         if (!batch.TryAdd(ed))
                         {
-                            // Événement > capacité d’un batch → envoi isolé
+                            // Event > batch capacity → isolated sending
                             await _producer.SendAsync(new[] { ed }).ConfigureAwait(false);
                         }
                     }

@@ -19,7 +19,7 @@ CREATE TRIGGER [dbo].[OnDeleteTrafficCondition]
 	AS
 	BEGIN
 		UPDATE TrafficCondition SET Active = 0
-		WHERE Id = (SELECT Id FROM deleted)
+		WHERE Id IN (SELECT Id FROM deleted)
 	END
 GO
 

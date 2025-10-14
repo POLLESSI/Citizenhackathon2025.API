@@ -22,7 +22,7 @@ CREATE TRIGGER [dbo].[OnDeletePlace]
 	AS
 	BEGIN
 		UPDATE Place SET Active = 0
-		WHERE Id = (SELECT Id FROM deleted)
+		WHERE Id IN (SELECT Id FROM deleted)
 	END
 
 GO

@@ -1,32 +1,29 @@
 ﻿CREATE TABLE [dbo].[RefreshTokens]
 (
-    [Id] INT IDENTITY PRIMARY KEY,
-    [Token] NVARCHAR(128) NOT NULL UNIQUE,
-    [Email] NVARCHAR(256) NOT NULL,
-    [ExpiryDate] DATETIME2 NOT NULL,
-    [IsRevoked] BIT NOT NULL DEFAULT 0,  -- kept for historical compatibility
-    [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-    [Status] INT NOT NULL DEFAULT 1      -- 1=Active, 2=Revoked, 3=Expired
+    [Id]           INT IDENTITY PRIMARY KEY,
+    [Token]        NVARCHAR(128) NOT NULL UNIQUE,   -- (optional: to be deleted after migration)
+    [Email]        NVARCHAR(256) NOT NULL,
+    [ExpiryDate]   DATETIME2      NOT NULL,
+    [IsRevoked]    BIT            NOT NULL DEFAULT 0,
+    [CreatedAt]    DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+    [Status]       INT            NOT NULL DEFAULT 1,   -- 1=Active, 2=Revoked, 3=Expired
+    [TokenHash]    VARBINARY(32)  NULL,                 -- ✅ added
+    [TokenSalt]    VARBINARY(16)  NULL                  -- ✅ added
 );
 GO
 
--- Index to quickly retrieve tokens by email
-CREATE INDEX IX_RefreshTokens_Email ON [dbo].[RefreshTokens](Email);
+-- if you need to find it quickly by email/CreatedAt (the normal case)
+CREATE INDEX IX_RefreshTokens_Email_Active
+ON dbo.RefreshTokens(Email, Status, ExpiryDate DESC, CreatedAt DESC);
 GO
 
--- =============================================
--- Optional trigger: prevent hard deletes (soft delete approach)
--- =============================================
--- This ensures historical data is preserved.
--- Instead of deleting, mark token as revoked.
 CREATE TRIGGER [dbo].[OnDeleteRefreshTokens]
 ON [dbo].[RefreshTokens]
 INSTEAD OF DELETE
 AS
 BEGIN
     UPDATE [dbo].[RefreshTokens]
-    SET Status = 2,        -- Revoked
-        IsRevoked = 1
+    SET Status = 2, IsRevoked = 1
     WHERE Id IN (SELECT Id FROM deleted);
 END;
 GO
