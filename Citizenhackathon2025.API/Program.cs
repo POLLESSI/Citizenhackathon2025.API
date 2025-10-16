@@ -1,6 +1,7 @@
 ﻿// ==================
 // Namespaces projet (⚠️ harmonized on CitizenHackathon2025)
 // ==================
+using Azure.Identity;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Hubs.Serilog.Sinks;
 using CitizenHackathon2025.API.Middlewares;
@@ -12,6 +13,7 @@ using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.DTOs;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Mapping;
+using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
 using CitizenHackathon2025.Domain.Entities;
@@ -43,6 +45,7 @@ using MediatR;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc;
@@ -54,12 +57,10 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using OpenTelemetry;
 using OpenTelemetry.Instrumentation;
-//using OpenTelemetry.Exporter.Prometheus;
 using OpenTelemetry.Instrumentation.Runtime;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using Azure.Identity;
 using Polly;
 using Polly.Wrap;
 using Prometheus;
@@ -221,12 +222,12 @@ internal class Program
                     {
                         var path = ctx.HttpContext.Request.Path;
                         var fromQuery = ctx.Request.Query["access_token"];
-                        var fromCookie = ctx.Request.Cookies.TryGetValue("access_token", out var cookie) ? cookie : null;
+                        var fromCookie = ctx.Request.Cookies.TryGetValue(Cookies.JwtTokenName, out var cookie) ? cookie : null;
 
                         if (path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(fromQuery))
-                            ctx.Token = fromQuery;  // OK for SignalR
+                            ctx.Token = fromQuery; 
                         else if (!string.IsNullOrEmpty(fromCookie))
-                            ctx.Token = fromCookie; // Classic API (if you accept cookies)
+                            ctx.Token = fromCookie; 
 
                         return Task.CompletedTask;
                     }
@@ -282,13 +283,11 @@ internal class Program
         services.AddScoped<OpenAiSuggestionService>();
         services.AddScoped<TrafficConditionService>();
         services.AddScoped<WeatherSuggestionOrchestrator>();
-        //services.AddScoped<IUserService, UserService>();
         services.AddScoped<IUserHubService, UserHubService>();
         services.AddScoped<IWeatherForecastService, WeatherForecastService>();
 
         // ---------- Hubs & notifiers ----------
         services.AddScoped<IWeatherHubService, CitizenHackathon2025.Hubs.Services.WeatherHubService>();
-        services.AddScoped<IUserHubService, UserHubService>();
         services.AddScoped<IHubNotifier, CitizenHackathon2025.Hubs.Hubs.SignalRNotifier>();
 
         // ---------- Repositories ----------
@@ -296,7 +295,6 @@ internal class Program
         services.AddScoped<IAIRepository, AIRepository>();
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
-        //services.AddScoped<IGPTRepository, GPTRepository>();
         services.AddScoped<IGPTRepository, GptInteractionsRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
@@ -309,7 +307,7 @@ internal class Program
         services.AddSingleton(sp =>
         {
             var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Polly");
-            var notifier = sp.GetRequiredService<INotifierAdmin>(); // <- injects the notifier
+            var notifier = sp.GetRequiredService<INotifierAdmin>(); 
 
             return new
             {
@@ -352,7 +350,6 @@ internal class Program
         // ---------- Utils & HttpClients ----------
         services.AddSingleton<CspViolationStore>();
         services.AddSingleton<IRealTimeNotifier, RealTimeNotifier>();
-        services.AddScoped<IHubNotifier, CitizenHackathon2025.Hubs.Hubs.SignalRNotifier>(); //1 already higher (left for compat)
         services.AddHttpClient();
         services.AddHttpClient("Default")
             .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
@@ -390,6 +387,7 @@ internal class Program
             var opt = sp.GetRequiredService<IOptions<OpenWeatherOptions>>().Value;
             client.BaseAddress = new Uri(opt.BaseUrl ?? "https://api.openweathermap.org");
         });
+
         // ⛔️ Do not duplicate the above record with an AddScoped
         services.AddHttpClient<OpenWeatherMapClient>();
         services.AddMemoryCache();
@@ -409,14 +407,16 @@ internal class Program
         // ⛔️ Unnecessary: ​​another HttpClient<OpenWeatherService> would be redundant and ambiguous
         services.AddInfrastructure();
         services.AddInfrastructureServices();
-        services.AddMapster();
+        //services.AddMapster();
 
         // ---------- MediatR ----------
         services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
         services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
         services.AddMediatR(typeof(CitizenHackathon2025.Application.CQRS.Queries.Handlers.GetLatestTrafficConditionQueryHandler).Assembly);
+
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ResilienceBehavior<,>));
 
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         // ---------- Anti-forgery ----------
         services.AddAntiforgery(o =>
         {
@@ -432,10 +432,10 @@ internal class Program
                 var userId = http.User?.Identity?.Name ?? http.Connection.RemoteIpAddress?.ToString() ?? "anon";
                 return RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = 100,                      // burst
-                    TokensPerPeriod = 100,                 // ✅ replaces RefillTokens
-                    ReplenishmentPeriod = TimeSpan.FromMinutes(1), // ✅ replaces RefillPeriod
-                    AutoReplenishment = true,              // ✅ required for automatic refill
+                    TokenLimit = 100,                      
+                    TokensPerPeriod = 100,                 
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(1), 
+                    AutoReplenishment = true,              
                     QueueLimit = 0,
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst
                 });
@@ -571,8 +571,6 @@ internal class Program
                 CitizenHackathon2025.Application.Interfaces.IUserHubService>();
         }
 
-        SqlMapper.AddTypeHandler(new RoleTypeHandler());
-
         // Test DI
         using (var scope = app.Services.CreateScope())
         {
@@ -626,37 +624,86 @@ internal class Program
         }
 
         // ===== Pipeline =====
-        app.UseSerilogRequestLogging();
-        app.UseHttpsRedirection();
-        if (!app.Environment.IsDevelopment())
-        {
-            app.UseHsts();
-        }
-
-        // ⬇️ Security headers (before static files)
-        app.UseSecurityHeaders();
-
-        app.UseStaticFiles();
-
         var enableSwagger = app.Configuration.GetValue<bool?>("Swagger:Enabled")
                    ?? app.Environment.IsDevelopment();
 
         // Middlewares custom
         app.UseExceptionMiddleware();
-        app.UseAntiXssMiddleware();
-        // app.UseSecurityHeaders(); // (already called above — avoids duplication)
-        app.UseUserAgentFiltering();
-        app.UseAuditLogging();
-
+        //app.UseAntiXssMiddleware();
+        // ⬇️ Security headers (before static files)
+        app.UseSecurityHeaders(); // (already called above — avoids duplication)
+        app.UseHttpsRedirection();
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHsts();
+            app.UseUserAgentFiltering();
+        }
+        
+        
+        app.UseStaticFiles();
         app.UseRouting();
 
         // Metrics
         app.UseHttpMetrics();
-        app.UseMetricServer("/metrics");
 
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseMetricServer("/metrics"); // free in development
+
+            // More flexible CSP for Swagger only (dev)
+
+            app.UseWhen(
+                ctx => ctx.Request.Path.StartsWithSegments("/swagger", StringComparison.OrdinalIgnoreCase),
+                branch =>
+                {
+                    branch.Use(async (ctx, next) =>
+                    {
+                        var h = ctx.Response.Headers;
+
+                        // Prevents the CSP placed above from winning
+                        h.Remove("Content-Security-Policy");
+
+                        // Allows Swagger inline/eval scripts + Hot Reload WebSocket
+                        h.Append("Content-Security-Policy",
+                            "default-src 'self'; " +
+                            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                            "style-src 'self' 'unsafe-inline'; " +
+                            "img-src 'self' data:; " +
+                            "font-src 'self' data:; " +
+                            "connect-src 'self' https://localhost:7254 wss://localhost:7254 wss://localhost:44319; " +
+                            "frame-ancestors 'none'; " +
+                            "base-uri 'self'; " +
+                            "form-action 'self'");
+
+                        await next();
+                    });
+                });
+        }
+        else
+        {
+            // ⬅️ Forces the “branching middleware” overload: Action<IApplicationBuilder>
+            app.Map("/metrics", (IApplicationBuilder metricsApp) =>
+            {
+                metricsApp.Use(async (context, next) =>
+                {
+                    var remoteIp = context.Connection.RemoteIpAddress;
+                    var fromLocal = remoteIp != null && System.Net.IPAddress.IsLoopback(remoteIp); // ✅ static call
+
+                    if (!fromLocal)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        await context.Response.WriteAsync("Forbidden");
+                        return; // ✅ completes this middleware well
+                    }
+
+                    await next(); // ✅ we continue the chain if authorized
+                });
+
+                metricsApp.UseMetricServer(); // ✅ extension on IApplicationBuilder
+            });
+        }
         // CORS
         app.UseCors("AllowBlazor");
-
         // Auth
         app.UseAuthentication();
 
@@ -672,29 +719,33 @@ internal class Program
             await next();
         });
 
-        app.Use(async (ctx, next) =>
-        {
-            var h = ctx.Request.Headers;
-            h.Remove("Authorization");
-            h.Remove("Cookie");
-            h.Remove("Set-Cookie");
-            await next();
-        });
-
-        // Rate Limiter
-        app.UseRateLimiter();
-
+        //app.Use(async (ctx, next) =>
+        //{
+        //    var h = ctx.Request.Headers;
+        //    //h.Remove("Authorization");
+        //    h.Remove("Cookie");
+        //    h.Remove("Set-Cookie");
+        //    await next();
+        //});
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
         //app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
         //    b => b.UseMiddleware<OutZenTokenMiddleware>());
 
         app.UseAuthorization();
+        // Rate Limiter
+        app.UseRateLimiter();
 
         // Routes API (with rate limiting by group) for production
         //app.MapGroup("/api")
         //   .RequireRateLimiting("per-user")
         //   .MapControllers();
-
+        if (app.Environment.IsDevelopment())
+        {
+            // ⚠️ éviter de bloquer Postman en dev
+            //app.UseUserAgentFiltering(); // <- désactiver en DEV
+        }
+        app.UseAuditLogging();
+        app.UseSerilogRequestLogging();
         // (If you have other controllers outside /api, uncomment the line below)
         app.MapControllers();
 
