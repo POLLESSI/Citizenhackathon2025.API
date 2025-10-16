@@ -17,13 +17,16 @@
         {
             var claims = new[]
             {
-            new Claim(ClaimTypes.NameIdentifier, "dev"),
-            new Claim(ClaimTypes.Name, "Developer"),
-            new Claim(ClaimTypes.Role, "Admin"),
-            new Claim(ClaimTypes.Role, "Developer"),
-        };
-            var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "Dev"));
-            var ticket = new AuthenticationTicket(principal, "Dev");
+                new Claim(ClaimTypes.NameIdentifier, "dev"),
+                new Claim(ClaimTypes.Name, "dev-admin"),
+                new Claim("display_name", "Developer"),
+                new Claim(ClaimTypes.Role, "Admin"),
+                new Claim(ClaimTypes.Role, "Developer"),
+            };
+            var identity = new ClaimsIdentity(claims, Scheme.Name);
+            var principal = new ClaimsPrincipal(identity);
+            var ticket = new AuthenticationTicket(principal, Scheme.Name);
+
             return Task.FromResult(AuthenticateResult.Success(ticket));
         }
     }

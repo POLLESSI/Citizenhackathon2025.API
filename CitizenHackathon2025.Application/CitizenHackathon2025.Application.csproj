@@ -16,6 +16,7 @@
     <PackageReference Include="Mapster" Version="7.4.0" />
     <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.21" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.16" />
     <PackageReference Include="Microsoft.Data.Tools.Msbuild" Version="16.0.62004.28040" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

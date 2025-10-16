@@ -16,6 +16,7 @@ using CitizenHackathon2025.Application.Mapping;
 using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.Domain.Abstractions;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -68,6 +69,7 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using System.Data;
 using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
@@ -148,18 +150,19 @@ internal class Program
         var configuration = builder.Configuration;
         var services = builder.Services;
         services.AddOptions<CitizenHackathon2025.Shared.Options.SecurityOptions>()
-            .Bind(configuration.GetSection("Security"))
-            .Validate(o => !string.IsNullOrWhiteSpace(o.PromptHashPepper),
-                "Missing Security:PromptHashPepper in configuration.")
-            .ValidateOnStart();
+             .Bind(configuration.GetSection("Security"))
+             .Validate(o => !o.Enabled || !string.IsNullOrWhiteSpace(o.PromptHashPepper),
+                       "Missing Security:PromptHashPepper in configuration.")
+             .ValidateOnStart();
         var securityEnabled = configuration.GetValue("Security:Enabled", true);
         var require = configuration.GetValue("OutZen:RequireEventId", true);
 
-        var pepper = configuration["Security:PromptHashPepper"];
-        if (string.IsNullOrWhiteSpace(pepper))
-        {
-            throw new InvalidOperationException("Missing Security:PromptHashPepper in configuration (startup).");
-        }
+        // Remove this in DEV (or make it conditional) :
+        //var pepper = configuration["Security:PromptHashPepper"];
+        //if (string.IsNullOrWhiteSpace(pepper))
+        //{
+        //    throw new InvalidOperationException("Missing Security:PromptHashPepper in configuration (startup).");
+        //}
 
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole();
@@ -180,14 +183,14 @@ internal class Program
 
         if (builder.Environment.IsDevelopment() && !securityEnabled)
         {
-            services.AddAuthentication(options =>
+            services.AddAuthentication(o =>
             {
-                options.DefaultAuthenticateScheme = "Dev";
-                options.DefaultChallengeScheme = "Dev";
+                o.DefaultAuthenticateScheme = "Dev";
+                o.DefaultChallengeScheme = "Dev";
             })
-           .AddScheme<AuthenticationSchemeOptions, CitizenHackathon2025.API.Security.DevAuthHandler>(
-               "Dev", _ => { });
-            services.AddAuthorization();
+            .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>("Dev", _ => { });
+
+            services.AddAuthorization(o => o.AddPolicy("Admin", p => p.RequireRole("Admin")));
         }
         else
         {
@@ -266,6 +269,7 @@ internal class Program
         services.AddScoped<IAIService, AIService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
         services.AddScoped<CrowdInfoService>();
+        services.AddScoped<ICrowdAdvisoryService, CrowdAdvisoryService>();
         services.AddScoped<CitizenSuggestionService>();
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IGeoService, GeoService>();
@@ -294,6 +298,7 @@ internal class Program
         services.AddScoped<IAggregateSuggestionService, AstroIAService>();
         services.AddScoped<IAIRepository, AIRepository>();
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
+        services.AddScoped<ICrowdCalendarRepository, CrowdCalendarRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGPTRepository, GptInteractionsRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
@@ -301,7 +306,10 @@ internal class Program
         services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
+
+        // ----------- Singletons -------------
         services.AddSingleton<INotifierAdmin, NotifierAdmin>();
+        services.AddSingleton<ITimeZoneConverter, DefaultTimeZoneConverter>();
 
         // ---------- Polly : Retry + Circuit Breaker ----------
         services.AddSingleton(sp =>
@@ -358,7 +366,9 @@ internal class Program
         services.AddHttpClient<IGptExternalService>(client =>
         {
             var openAiKey = configuration["OpenAI:ApiKey"];
-            client.BaseAddress = new Uri(configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com");
+            client.BaseAddress = new Uri(configuration["OpenAI:BaseUrl"]
+                             ?? configuration["OpenAI:ApiUrl"]
+                             ?? "https://api.openai.com");
             if (!string.IsNullOrWhiteSpace(openAiKey))
             {
                 client.DefaultRequestHeaders.Authorization =
@@ -440,7 +450,6 @@ internal class Program
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst
                 });
             }));
-
         // ---------- CORS ----------
         services.AddCors(options =>
         {
@@ -492,8 +501,10 @@ internal class Program
         //services.AddHubOptions<OutZenHub>(o => { o.MaximumReceiveMessageSize = 32 * 1024; });
         //services.AddHubOptions<GPTHub>(o => { o.MaximumReceiveMessageSize = 128 * 1024; }); // only if justified
         // ---------- Hosted Services ----------
+        services.AddHostedService<MorningCrowdAdvisoryHostedService>();
         services.AddHostedService<EventArchiverService>();
         services.AddHostedService<WeatherService>();
+
 
         // ---------- Autorisation ----------
         services.AddAuthorization(o =>
@@ -502,6 +513,11 @@ internal class Program
             o.AddPolicy("Modo", p => p.RequireRole(Roles.Admin, Roles.Modo));
             o.AddPolicy("User", p => p.RequireRole(Roles.User));
             o.AddPolicy("Guest", p => p.RequireRole(Roles.Guest));
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
         });
 
         // ---------- Swagger ----------
@@ -555,6 +571,12 @@ internal class Program
             CitizenHackathon2025.Application.Interfaces.IUserHubService,
             CitizenHackathon2025.Infrastructure.Services.UserHubService>();
 
+        #if DEBUG
+        services.AddRazorPages().AddRazorRuntimeCompilation();
+        #else
+        services.AddRazorPages();
+        #endif
+
         // ---------- Build app ----------
         var app = builder.Build();
 
@@ -584,6 +606,18 @@ internal class Program
                 ctx.Response.Redirect("/swagger");
                 return Task.CompletedTask;
             });
+
+            app.MapGet("/whoami", (HttpContext ctx) =>
+            {
+                var user = ctx.User;
+                return Results.Json(new
+                {
+                    Authenticated = user?.Identity?.IsAuthenticated ?? false,
+                    Name = user?.Identity?.Name,
+                    Roles = user?.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToArray(),
+                    Claims = user?.Claims.Select(c => new { c.Type, c.Value }).ToArray()
+                });
+            }).RequireAuthorization(); // must pass with DevAuth
         }
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
         if (!app.Environment.IsDevelopment() && app.Configuration.GetValue("OutZen:RequireEventId", true))
@@ -631,7 +665,7 @@ internal class Program
         app.UseExceptionMiddleware();
         //app.UseAntiXssMiddleware();
         // ⬇️ Security headers (before static files)
-        app.UseSecurityHeaders(); // (already called above — avoids duplication)
+        app.UseSecurityHeaders(); 
         app.UseHttpsRedirection();
         if (!app.Environment.IsDevelopment())
         {
@@ -741,11 +775,13 @@ internal class Program
         //   .MapControllers();
         if (app.Environment.IsDevelopment())
         {
-            // ⚠️ éviter de bloquer Postman en dev
+            // ⚠️ avoid blocking Postman in dev
             //app.UseUserAgentFiltering(); // <- désactiver en DEV
         }
         app.UseAuditLogging();
         app.UseSerilogRequestLogging();
+
+        app.MapRazorPages();
         // (If you have other controllers outside /api, uncomment the line below)
         app.MapControllers();
 
@@ -796,7 +832,7 @@ internal class Program
                 var list = await mediator.Send(new GetLatestTrafficConditionQuery(), ct);
                 return (list is null || list.Count == 0) ? Results.NotFound() : Results.Ok(list);
             });
-        
+       
         // Small query log (as before)
         app.Use(async (context, next) =>
         {

@@ -78,6 +78,8 @@
     <Build Include="Programmability\Procedures\spAuth\sqlUserRegister.sql" />
     <Build Include="Tables\RefreshTokens.sql" />
     <Build Include="Tables\Logs.sql" />
+    <Build Include="Tables\CrowdCalendar.sql" />
+    <Build Include="Programmability\Procedures\CrowdCalendar_Upsert.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
