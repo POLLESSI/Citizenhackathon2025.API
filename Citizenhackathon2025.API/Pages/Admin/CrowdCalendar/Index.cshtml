@@ -4,67 +4,193 @@
     ViewData["Title"] = "Crowd Calendar - Admin";
 }
 
-<h1>Crowd Calendar</h1>
+<div class="card">
+    <h2>Crowd Calendar <span class="muted">(Admin)</span></h2>
+    <form method="get" class="mb-3">
+        <div>
+            <label>From</label>
+            <input asp-for="From" type="date" />
+            <label>To</label>
+            <input asp-for="To" type="date" />
+            <label>Region</label>
+            <input asp-for="Region" />
+            <button type="submit">Filter</button>
+        </div>
+    </form>
 
-<form method="get" class="mb-3">
-    <div>
-        <label>From</label>
-        <input asp-for="From" type="date" />
-        <label>To</label>
-        <input asp-for="To" type="date" />
-        <label>Region</label>
-        <input asp-for="Region" />
-        <button type="submit">Filter</button>
-    </div>
-</form>
-
-<table>
-    <thead>
-        <tr>
-            <th>Date (UTC)</th>
-            <th>Region</th>
-            <th>PlaceId</th>
-            <th>Event</th>
-            <th>Level</th>
-            <th>Confidence</th>
-            <th>Start</th>
-            <th>End</th>
-            <th>Lead(h)</th>
-            <th>Active</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var it in Model.Items)
-        {
+    <table>
+        <thead>
             <tr>
-                <td>@it.DateUtc.ToString("yyyy-MM-dd")</td>
-                <td>@it.RegionCode</td>
-                <td>@it.PlaceId</td>
-                <td>@it.EventName</td>
-                <td>@it.ExpectedLevel</td>
-                <td>@it.Confidence</td>
-                <td>@it.StartLocalTime</td>
-                <td>@it.EndLocalTime</td>
-                <td>@it.LeadHours</td>
-                <td>@it.Active</td>
-                <td>
-                    @if (it.Active)
-                    {
-                        <form method="post" asp-page-handler="Delete">
-                            <input type="hidden" name="id" value="@it.Id" />
-                            <button type="submit">Soft delete</button>
-                        </form>
-                    }
-                    else
-                    {
-                        <form method="post" asp-page-handler="Restore">
-                            <input type="hidden" name="id" value="@it.Id" />
-                            <button type="submit">Restore</button>
-                        </form>
-                    }
-                </td>
+                <th>Date (UTC)</th>
+                <th>Region</th>
+                <th>PlaceId</th>
+                <th>Event</th>
+                <th>Level</th>
+                <th>Confidence</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Lead(h)</th>
+                <th>Active</th>
+                <th></th>
             </tr>
-        }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @foreach (var it in Model.Items)
+            {
+                <tr>
+                    <td>@it.DateUtc.ToString("yyyy-MM-dd")</td>
+                    <td>@it.RegionCode</td>
+                    <td>@it.PlaceId</td>
+                    <td>@it.EventName</td>
+                    <td>
+                        <span class="badge @(it.ExpectedLevel >= CitizenHackathon2025.Domain.Enums.CrowdLevelEnum.High ? "warn" : "ok")">
+                            @it.ExpectedLevel
+                        </span>
+                    </td>
+                    <td>@it.Confidence</td>
+                    <td>@it.StartLocalTime</td>
+                    <td>@it.EndLocalTime</td>
+                    <td>@it.LeadHours</td>
+                    <td>@(it.Active ? "Yes" : "No")</td>
+                    <td class="actions">
+                        <a class="btn" href="/Admin/CrowdCalendar/Edit?id=@it.Id">Edit</a>
+                        @if (it.Active)
+                        {
+                            <form method="post" asp-page-handler="Delete" style="display:inline">
+                                <input type="hidden" name="id" value="@it.Id" />
+                                <button class="btn danger" type="submit">Disable</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form method="post" asp-page-handler="Restore" style="display:inline">
+                                <input type="hidden" name="id" value="@it.Id" />
+                                <button class="btn ok" type="submit">Restore</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                @* // Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved. *@

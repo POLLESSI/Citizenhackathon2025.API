@@ -39,10 +39,120 @@ CREATE TRIGGER [dbo].[OnDeleteCrowdCalendar]
 
 GO
 
--- Unicité logique par jour/région/(place) sur les lignes actives
--- (permet des doublons historiques si Active=0)
+-- Logical uniqueness per day/region/(place) on active lines
+-- (allows historical duplicates if Active=0)
 CREATE UNIQUE INDEX UX_CrowdCalendar_DateRegionPlace_Active
 ON dbo.CrowdCalendar(DateUtc, RegionCode, PlaceId, Active)
 WHERE Active = 1;
 
 GO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

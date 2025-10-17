@@ -23,6 +23,23 @@ namespace CitizenHackathon2025.API.Controllers
             _repo = repo;
             _advisories = advisories;
         }
+        // GET api/crowd/calendar/all
+        [HttpGet("calendar/all")]
+        #if DEBUG
+        [AllowAnonymous]
+        #endif
+        public async Task<IActionResult> GetAll()
+        {
+            var items = await _repo.ListAsync(
+                fromUtc: null,
+                toUtc: null,
+                region: null,
+                placeId: null,
+                active: null   
+            );
+
+            return Ok(items);
+        }
 
         // ---- Advisory “read-only”  ----
         [HttpGet("advisories")]
@@ -108,3 +125,111 @@ namespace CitizenHackathon2025.API.Controllers
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

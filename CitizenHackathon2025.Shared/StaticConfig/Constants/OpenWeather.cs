@@ -4,7 +4,7 @@
     {
         public const string ApiBaseUrl = "https://api.openweathermap.org/data/2.5/";
         public const string Units = "metric";
-        public const string Language = "fr";
+        public const string Language = "en";
     }
 }
 

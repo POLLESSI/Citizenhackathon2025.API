@@ -13,8 +13,21 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<List<WeatherForecast>> GetAllAsync();
         //WeatetherForecast? UpdateWeatherForecast(WeatherForecast weatherForecast);
         Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity);
+        Task<WeatherForecast> InsertAsync(WeatherForecast forecast, CancellationToken cancellationToken);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

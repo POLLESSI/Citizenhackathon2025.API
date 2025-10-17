@@ -21,6 +21,17 @@ CREATE INDEX IX_WeatherForecast_Active_DateWeather
 ON dbo.WeatherForecast (Active, DateWeather DESC);
 GO
 
+CREATE TRIGGER [dbo].[OnDeleteWeatherForecast]
+ON [dbo].[WeatherForecast]
+INSTEAD OF DELETE
+AS
+BEGIN
+    UPDATE [dbo].[WeatherForecast]
+    SET Active = 0
+    WHERE Id IN (SELECT Id FROM deleted);
+    
+END;
+GO
 
 
 

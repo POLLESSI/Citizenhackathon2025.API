@@ -1,4 +1,8 @@
-﻿namespace CitizenHackathon2025.Domain.Entities
+﻿using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Domain.ValueObjects;
+using System;
+
+namespace CitizenHackathon2025.Domain.Entities
 {
     public class WeatherForecast
     {
@@ -12,6 +16,8 @@
         public double RainfallMm { get; set; }
         public int Humidity { get; set; }
         public double WindSpeedKmh { get; set; }
+        public WeatherType WeatherType { get; set; }
+        public SeverityLevel Severity { get; set; }
         public bool Active { get; private set; } = true;
     }
     // DEPRECATED: Migrer to WeatherForecast DDD

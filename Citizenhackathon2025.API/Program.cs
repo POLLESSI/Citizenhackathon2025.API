@@ -88,6 +88,8 @@ internal class Program
         var resource = ResourceBuilder.CreateDefault()
             .AddService(serviceName: "CitizenHackathon2025.API", serviceVersion: "1.0.0");
 
+        AzureEventHub.ConfigureSerilog(builder.Configuration);
+
         Log.Logger = new LoggerConfiguration()
             .Destructure.ByTransforming<LogsDTO>(x => new {
                 x.Id,
@@ -96,6 +98,10 @@ internal class Program
             .CreateLogger();
 
         TypeAdapterConfig.GlobalSettings.Scan(AppDomain.CurrentDomain.GetAssemblies());
+
+        // (Optional) Self-test at startup
+        builder.Services.AddEventHubSelfTest(builder.Configuration);
+
         builder.Services.AddMapster();
 
         var akvProvider = new SqlColumnEncryptionAzureKeyVaultProvider(new DefaultAzureCredential());
@@ -145,6 +151,11 @@ internal class Program
         builder.Services.AddDataProtection()
             .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "dpkeys")))
             .SetApplicationName("CitizenHackathon2025");
+        builder.Services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(
+            builder.Configuration.GetSection("CrowdAdvisory"));
+        builder.Services.AddHostedService<MorningCrowdAdvisoryHostedService>();
+
+        builder.Host.UseSerilog();
 
         // ---------- Basic setup ----------
         var configuration = builder.Configuration;
@@ -188,9 +199,9 @@ internal class Program
                 o.DefaultAuthenticateScheme = "Dev";
                 o.DefaultChallengeScheme = "Dev";
             })
-            .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>("Dev", _ => { });
+            .AddScheme<AuthenticationSchemeOptions, CitizenHackathon2025.API.Security.DevAuthHandler>("Dev", _ => { });
 
-            services.AddAuthorization(o => o.AddPolicy("Admin", p => p.RequireRole("Admin")));
+            services.AddAuthorization();
         }
         else
         {
@@ -509,7 +520,7 @@ internal class Program
         // ---------- Autorisation ----------
         services.AddAuthorization(o =>
         {
-            o.AddPolicy("Admin", p => p.RequireRole(Roles.Admin));
+            o.AddPolicy("Admin", p => p.RequireRole(Roles.Admin, "Admin", "ADMIN", "Developer"));
             o.AddPolicy("Modo", p => p.RequireRole(Roles.Admin, Roles.Modo));
             o.AddPolicy("User", p => p.RequireRole(Roles.User));
             o.AddPolicy("Guest", p => p.RequireRole(Roles.Guest));
@@ -572,9 +583,17 @@ internal class Program
             CitizenHackathon2025.Infrastructure.Services.UserHubService>();
 
         #if DEBUG
-        services.AddRazorPages().AddRazorRuntimeCompilation();
+            services
+                .AddRazorPages(options =>
+                {
+                    options.Conventions.AuthorizeFolder("/Admin", "Admin");
+                })
+                .AddRazorRuntimeCompilation();
         #else
-        services.AddRazorPages();
+            services.AddRazorPages(options =>
+            {
+                options.Conventions.AuthorizeFolder("/Admin", "Admin");
+            });
         #endif
 
         // ---------- Build app ----------
@@ -597,27 +616,6 @@ internal class Program
         using (var scope = app.Services.CreateScope())
         {
             var test = scope.ServiceProvider.GetRequiredService<CitizenSuggestionService>();
-        }
-
-        if (app.Environment.IsDevelopment())
-        {
-            app.MapGet("/", ctx =>
-            {
-                ctx.Response.Redirect("/swagger");
-                return Task.CompletedTask;
-            });
-
-            app.MapGet("/whoami", (HttpContext ctx) =>
-            {
-                var user = ctx.User;
-                return Results.Json(new
-                {
-                    Authenticated = user?.Identity?.IsAuthenticated ?? false,
-                    Name = user?.Identity?.Name,
-                    Roles = user?.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToArray(),
-                    Claims = user?.Claims.Select(c => new { c.Type, c.Value }).ToArray()
-                });
-            }).RequireAuthorization(); // must pass with DevAuth
         }
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
         if (!app.Environment.IsDevelopment() && app.Configuration.GetValue("OutZen:RequireEventId", true))
@@ -766,6 +764,27 @@ internal class Program
         //    b => b.UseMiddleware<OutZenTokenMiddleware>());
 
         app.UseAuthorization();
+
+        if (app.Environment.IsDevelopment())
+        {
+            //app.MapGet("/", ctx =>
+            //{
+            //    ctx.Response.Redirect("/swagger");
+            //    return Task.CompletedTask;
+            //});
+
+            app.MapGet("/_whoami", (HttpContext ctx) =>
+            {
+                var u = ctx.User;
+                return Results.Json(new
+                {
+                    Authenticated = u.Identity?.IsAuthenticated,
+                    Name = u.Identity?.Name,
+                    Roles = u.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToArray()
+                });
+            }).RequireAuthorization(); // must return 200 + your roles
+        }
+
         // Rate Limiter
         app.UseRateLimiter();
 
@@ -790,6 +809,10 @@ internal class Program
 
         // Mapped Hubs (inherit from Authorize)
         hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath);
+        hubs.MapCrowdCalendarHub(o =>
+        {
+            o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
+        });
         hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath);
         hubs.MapHub<EventHub>(EventHubMethods.HubPath);
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath);
@@ -832,7 +855,9 @@ internal class Program
                 var list = await mediator.Send(new GetLatestTrafficConditionQuery(), ct);
                 return (list is null || list.Count == 0) ? Results.NotFound() : Results.Ok(list);
             });
-       
+
+        app.MapGet("/", () => "OK");
+
         // Small query log (as before)
         app.Use(async (context, next) =>
         {
@@ -883,6 +908,14 @@ internal class Program
         app.Run();
     }
 }
+
+
+
+
+
+
+
+
 
 
 
