@@ -1,16 +1,22 @@
-﻿using System.Data;
-using Dapper;
-using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using Dapper;
+using Microsoft.Extensions.Logging;
+using System.Data;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class WeatherForecastRepository : IWeatherForecastRepository
     {
         private readonly IDbConnection _connection;
+        private readonly ILogger<EventRepository> _logger;
         private readonly Random _rng = new();
 
-        public WeatherForecastRepository(IDbConnection connection) => _connection = connection;
+        public WeatherForecastRepository(IDbConnection connection, ILogger<EventRepository> logger)
+        {
+            _connection = connection;
+            _logger = logger;
+        }
 
         public async Task AddAsync(WeatherForecast wf)
         {
@@ -150,6 +156,27 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             var result = await _connection.QueryFirstAsync<WeatherForecast>(sql, forecast);
             return result;
+        }
+        public async Task<int> ArchivePastWeatherForecastsAsync()
+        {
+            const string sql = @"
+                        UPDATE [WeatherForecast]
+                        SET [Active] = 0
+                        WHERE [Active] = 1
+                          AND [DateWeather] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
+
+            try
+            {
+                var affectedRows = await _connection.ExecuteAsync(sql);
+                _logger.LogInformation("{Count} Weather Forecast(s) archived.", affectedRows);
+                return affectedRows;
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogError(ex, "Error archiving past Weather Forecasts.");
+                return 0;
+            }
         }
     }
 }

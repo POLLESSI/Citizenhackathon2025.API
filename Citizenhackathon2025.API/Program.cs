@@ -813,7 +813,7 @@ internal class Program
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         });
-        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath);
+        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<EventHub>(EventHubMethods.HubPath);
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath);
         hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath);

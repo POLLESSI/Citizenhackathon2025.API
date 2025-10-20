@@ -188,6 +188,27 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             throw new NotImplementedException();
         }
+        public async Task<int> ArchivePastEventsAsync()
+        {
+            const string sql = @"
+                        UPDATE [GptInteraction]
+                        SET [Active] = 0
+                        WHERE [Active] = 1
+                          AND [CreatedAt] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
+
+            try
+            {
+                var affectedRows = await _connection.ExecuteAsync(sql);
+                _logger.LogInformation("{Count} Gpt Interaction(s) archived.", affectedRows);
+                return affectedRows;
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogError(ex, "Error archiving past Gpt Interactions.");
+                return 0;
+            }
+        }
     }
 }
 

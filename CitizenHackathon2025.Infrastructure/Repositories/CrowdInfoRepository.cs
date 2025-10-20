@@ -1,6 +1,8 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using Dapper;
+using Microsoft.Extensions.Logging;
+using System.Data;
 using System.Data.Common;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
@@ -9,10 +11,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
     {
     #nullable disable
         private readonly System.Data.IDbConnection _connection;
+        private readonly ILogger<EventRepository> _logger;
 
-        public CrowdInfoRepository(System.Data.IDbConnection connection)
+        public CrowdInfoRepository(IDbConnection connection, ILogger<EventRepository> logger)
         {
             _connection = connection;
+            _logger = logger;
         }
 
         public async Task<bool> DeleteCrowdInfoAsync(int id)
@@ -108,6 +112,27 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 Console.WriteLine($"Error updating CrowdInfo: {ex.Message}");
             }
             return null;
+        }
+        public async Task<int> ArchivePastCrowdInfosAsync()
+        {
+            const string sql = @"
+                        UPDATE [CrowdInfo]
+                        SET [Active] = 0
+                        WHERE [Active] = 1
+                          AND [Timestamp] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
+
+            try
+            {
+                var affectedRows = await _connection.ExecuteAsync(sql);
+                _logger.LogInformation("{Count} Crowd info(s) archived.", affectedRows);
+                return affectedRows;
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogError(ex, "Error archiving past Crowd infos.");
+                return 0;
+            }
         }
     }
 }

@@ -210,7 +210,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                         UPDATE [Event]
                         SET [Active] = 0
                         WHERE [Active] = 1
-                          AND [DateEvent] < DATEADD(DAY, -2, CAST(GETDATE() AS DATETIME2(0)));";
+                          AND [DateEvent] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
 
             try
             {
