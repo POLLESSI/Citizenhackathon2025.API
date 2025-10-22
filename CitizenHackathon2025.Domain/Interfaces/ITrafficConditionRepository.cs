@@ -8,6 +8,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<TrafficCondition?> GetByIdAsync(int id);
         Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition @trafficCondition);
         TrafficCondition? UpdateTrafficCondition(TrafficCondition @trafficCondition);
+        Task<int> ArchivePastTrafficConditionsAsync();
     }
 }
 

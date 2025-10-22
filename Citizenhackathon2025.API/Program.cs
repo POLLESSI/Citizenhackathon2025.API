@@ -36,6 +36,7 @@ using CitizenHackathon2025.Infrastructure.SignalR;
 using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Notifications;
+using CitizenHackathon2025.Shared.Options;
 using CitizenHackathon2025.Shared.Resilience;
 using CitizenHackathon2025.Shared.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
@@ -184,10 +185,26 @@ internal class Program
         services.AddScoped<DatabaseService>();
         SqlMapper.AddTypeHandler(new RoleTypeHandler());
 
-        // ---------- Options (OpenAI, OpenWeather, JWT) ----------
+        // ---------- Options (OpenAI, OpenWeather, JWT, Archiver, ...) ----------
         services.Configure<OpenAIOptions>(configuration.GetSection("OpenAI"));
         services.Configure<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
         services.Configure<JwtOptions>(configuration.GetSection("Jwt")); // ← aligned with OutZenTokenMiddleware & JWT
+
+        builder.Services.AddOptions<CrowdInfoArchiverOptions>("CrowdInfo")
+            .Bind(builder.Configuration.GetSection("Archivers:CrowdInfo"))
+            .ValidateOnStart();
+
+        builder.Services.AddOptions<GptInteractionArchiverOptions>("GptInteractions")
+            .Bind(builder.Configuration.GetSection("Archivers:GptInteractions"))
+            .ValidateOnStart();
+
+        builder.Services.AddOptions<TrafficConditionArchiverOptions>("Traffic")
+            .Bind(builder.Configuration.GetSection("Archivers:Traffic"))
+            .ValidateOnStart();
+
+        builder.Services.AddOptions<WeatherForecastArchiverOptions>("Weather")
+            .Bind(builder.Configuration.GetSection("Archivers:Weather"))
+            .ValidateOnStart();
 
         // Retrieving JWT options for AddJwtBearer
         var jwt = configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
@@ -276,6 +293,11 @@ internal class Program
         //         options.AccessDeniedPath = "/api/auth/denied";
         //     });
 
+        // Hosted Services
+        builder.Services.AddHostedService<CrowdInfoArchiverService>();
+        builder.Services.AddHostedService<GptInteractionArchiverService>();
+        builder.Services.AddHostedService<TrafficConditionArchiverService>();
+        builder.Services.AddHostedService<WeatherForecastArchiverService>();
         // ---------- Domain services / app ----------
         services.AddScoped<IAIService, AIService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
@@ -405,7 +427,7 @@ internal class Program
 
         services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
         {
-            var opt = sp.GetRequiredService<IOptions<OpenWeatherOptions>>().Value;
+            var opt = sp.GetRequiredService<IOptions<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>>().Value;
             client.BaseAddress = new Uri(opt.BaseUrl ?? "https://api.openweathermap.org");
         });
 

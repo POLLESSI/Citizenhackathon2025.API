@@ -79,7 +79,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task SaveSuggestionAsync(Suggestion suggestion)
         {
             const string sql = @"
-                INSERT INTO Suggestions (UserId, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason)
+                INSERT INTO Suggestion (UserId, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason)
                 VALUES (@UserId, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason);";
 
             try
@@ -188,10 +188,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             throw new NotImplementedException();
         }
-        public async Task<int> ArchivePastEventsAsync()
+        public async Task<int> ArchivePastGptInteractionsAsync()
         {
             const string sql = @"
-                        UPDATE [GptInteraction]
+                        UPDATE [GptInteractions]
                         SET [Active] = 0
                         WHERE [Active] = 1
                           AND [CreatedAt] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";

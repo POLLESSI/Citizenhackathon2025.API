@@ -11,6 +11,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default);
         CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo); // sync → no token
         Task<CrowdLevelDTO> GetCrowdLevelAsync(string destination, CancellationToken ct = default);
+        Task<int> ArchivePastCrowdInfosAsync();
     }
 }
 

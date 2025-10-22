@@ -3,7 +3,9 @@ using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.Repositories;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
@@ -127,7 +129,14 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(entity.MapToWeatherForecastDTO());
         }
-
+        // archive expired (admin only)
+        [HttpPost("archive-expired")]
+        [Authorize(Policy = "Admin")]
+        public async Task<IActionResult> ArchiveExpiredWeatherForecasts()
+        {
+            var archived = await _weatherRepository.ArchivePastWeatherForecastsAsync();
+            return Ok(new { ArchivedCount = archived });
+        }
         // update + broadcast
         [HttpPut("{id:int}")]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]

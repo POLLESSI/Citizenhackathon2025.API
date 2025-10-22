@@ -1,9 +1,10 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Infrastructure.Repositories.Providers.Hubs;
-using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Infrastructure.Repositories.Providers.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -61,6 +62,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default)
             => Task.FromResult(new WeatherForecastDTO { Summary = "Not wired here (use OpenWeather controller endpoint)", DateWeather = DateTime.UtcNow });
+
+        public async Task<int> ArchivePastWeatherForecastsAsync()
+        {
+            string sql = "UPDATE WeatherForecast SET Active = 0 WHERE DateWeather < @Threshold AND Active = 1";
+            var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
+            return await _repo.ArchivePastWeatherForecastsAsync();
+        }
     }
 }
 

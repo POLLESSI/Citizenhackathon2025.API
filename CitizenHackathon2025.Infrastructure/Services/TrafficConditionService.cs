@@ -1,7 +1,8 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Infrastructure.Repositories;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -66,6 +67,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {// ❌ Before : _trafficConditionRepository.GetLatestTrafficConditionAsync();
             var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(limit, cancellationToken); // ✅
             return trafficConditions;
+        }
+
+        public async Task<int> ArchivePastTrafficConditionsAsync()
+        {
+            string sql = "UPDATE TrafficCondition SET Active = 0 WHERE DateCondition < @Threshold AND Active = 1";
+            var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
+            return await _trafficConditionRepository.ArchivePastTrafficConditionsAsync();
         }
     }
 }

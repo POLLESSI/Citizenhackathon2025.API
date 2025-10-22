@@ -91,5 +91,9 @@
     <None Include="Scripts\MergeGptInteractions.sql" />
     <None Include="Scripts\DeleteLogs.sql" />
     <None Include="Scripts\DevScript.sql" />
+    <None Include="Scripts\sp_ArchivePastCrowdInfo.sql" />
+    <None Include="Scripts\sp_ArchivePastGptInteraction.sql" />
+    <None Include="Scripts\sp_ArchivePastTrafficCondition.sql" />
+    <None Include="Scripts\sp_ArchivePastWeatherForecast.sql" />
   </ItemGroup>
 </Project>

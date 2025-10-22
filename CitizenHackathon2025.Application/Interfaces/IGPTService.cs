@@ -14,6 +14,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task SaveSuggestionAsync(Suggestion suggestion);
         Task DeleteSuggestionAsync(int id);
         Task<string> GenerateSuggestionAsync(string prompt);
+        Task<int> ArchivePastGptInteractionsAsync();
     }
 }
 

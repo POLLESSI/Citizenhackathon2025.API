@@ -54,6 +54,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         /// <param name="id">The ID of the interaction to deactivate.</param>
         /// <returns>True if the deactivation succeeded, false otherwise.</returns>
         Task<bool> DeactivateInteractionAsync(int id);
+        Task<int> ArchivePastGptInteractionsAsync();
     }
 }
 

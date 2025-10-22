@@ -27,7 +27,9 @@ GO
 
 CREATE INDEX IX_CrowdInfo_Active_Timestamp
 ON dbo.CrowdInfo (Active, [Timestamp] DESC);
+
 GO
+
 
 
 

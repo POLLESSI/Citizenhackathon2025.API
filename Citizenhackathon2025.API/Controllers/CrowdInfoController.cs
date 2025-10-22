@@ -2,7 +2,9 @@
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.Repositories;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
@@ -94,6 +96,15 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(new { Message = $"Attendance data with ID {id} successfully archived." });
         }
+
+        [HttpPost("archive-expired")]
+        [Authorize(Policy = "Admin")]
+        public async Task<IActionResult> ArchiveExpiredCrowdInfos()
+        {
+            var archived = await _crowdInfoRepository.ArchivePastCrowdInfosAsync();
+            return Ok(new { ArchivedCount = archived });
+        }
+
         [HttpPut("update")]
         public async Task<IActionResult> UpdateCrowdInfo([FromBody] CrowdInfoDTO dto)
         {

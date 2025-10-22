@@ -1,10 +1,11 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using Microsoft.AspNetCore.SignalR;
-using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
+using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.Repositories;
+using Microsoft.AspNetCore.SignalR;
 using System.Net.Http.Json;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -97,6 +98,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Console.WriteLine($"Error updating Crowd Info : {ex}");
                 return null;
             }
+        }
+
+        public async Task<int> ArchivePastCrowdInfosAsync()
+        {
+            string sql = "UPDATE CrowdInfo SET Active = 0 WHERE Timestamp < @Threshold AND Active = 1";
+            var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
+            return await _crowdInfoRepository.ArchivePastCrowdInfosAsync();
         }
     }
 }

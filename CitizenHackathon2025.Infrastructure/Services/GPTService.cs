@@ -1,7 +1,8 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -65,6 +66,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public Task<string> GenerateSuggestionAsync(string prompt)
         {
             throw new NotImplementedException();
+        }
+
+        public async Task<int> ArchivePastGptInteractionsAsync()
+        {
+            string sql = "UPDATE GptInteraction SET Active = 0 WHERE CreatedAt < @Threshold AND Active = 1";
+            var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
+            return await _gptRepository.ArchivePastGptInteractionsAsync();
         }
     }
 }

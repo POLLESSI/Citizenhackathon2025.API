@@ -8,6 +8,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default);
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id);
         Task<bool> DeleteCrowdInfoAsync(int id);
+        Task<int> ArchivePastCrowdInfosAsync();
         CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo);
     }
 }

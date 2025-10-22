@@ -4,6 +4,8 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
@@ -91,6 +93,13 @@ namespace CitizenHackathon2025.API.Controllers
             if (saved is null) return Problem("Insert failed");
             await _hubContext.Clients.All.SendAsync("ReceiveTrafficConditionUpdate", saved);
             return Ok(saved.MapToTrafficConditionDTO());
+        }
+        [HttpPost("archive-expired")]
+        [Authorize(Policy = "Admin")]
+        public async Task<IActionResult> ArchiveExpiredTrafficConditions()
+        {
+            var archived = await _trafficConditionRepository.ArchivePastTrafficConditionsAsync();
+            return Ok(new { ArchivedCount = archived });
         }
         [HttpPut("{id:int}")]
         public IActionResult UpdateTrafficCondition(int id, [FromBody] TrafficConditionUpdateDTO dto)
