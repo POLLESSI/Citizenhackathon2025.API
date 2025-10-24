@@ -75,6 +75,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
             return await _trafficConditionRepository.ArchivePastTrafficConditionsAsync();
         }
+
+        public async Task<TrafficCondition> UpsertTrafficConditionAsync(TrafficCondition trafficCondition)
+            => await _trafficConditionRepository.UpsertTrafficConditionAsync(trafficCondition);
     }
 }
 

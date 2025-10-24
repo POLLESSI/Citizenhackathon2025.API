@@ -5,6 +5,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface IGPTRepository
     {
+        Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction);
         /// <summary>
         /// Saves a GPT-generated suggestion to the database.
         /// </summary>

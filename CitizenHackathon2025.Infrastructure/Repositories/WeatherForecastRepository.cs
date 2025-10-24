@@ -52,36 +52,22 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity)
         {
-            const string merge = @"
-                            MERGE WeatherForecast AS t
-                            USING (SELECT @DateWeather AS DateWeather) AS s
-                            ON (t.DateWeather = s.DateWeather)
-                            WHEN MATCHED THEN
-                                UPDATE SET
-                                    Latitude     = @Latitude,
-                                    Longitude    = @Longitude,
-                                    TemperatureC = @TemperatureC,
-                                    Summary      = @Summary,
-                                    RainfallMm   = @RainfallMm,
-                                    Humidity     = @Humidity,
-                                    WindSpeedKmh = @WindSpeedKmh
-                            WHEN NOT MATCHED THEN
-                                INSERT (DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
-                                VALUES (@DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1)
-                            OUTPUT inserted.Id;";
+            const string sql = @"EXEC dbo.sp_WeatherForecast_Upsert
+                         @DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh;";
 
-            DynamicParameters parameters = new();
-            parameters.Add("DateWeather", entity.DateWeather, DbType.DateTime2);
-            parameters.Add("Latitude", entity.Latitude, DbType.Decimal);
-            parameters.Add("Longitude", entity.Longitude, DbType.Decimal);
-            parameters.Add("TemperatureC", entity.TemperatureC, DbType.Int32);
-            parameters.Add("Summary", entity.Summary, DbType.String);
-            parameters.Add("RainfallMm", entity.RainfallMm, DbType.Double);
-            parameters.Add("Humidity", entity.Humidity, DbType.Int32);
-            parameters.Add("WindSpeedKmh", entity.WindSpeedKmh, DbType.Double);
+            var parameters = new DynamicParameters();
+            parameters.Add("@DateWeather", entity.DateWeather, DbType.DateTime2);
+            parameters.Add("@Latitude", entity.Latitude, DbType.Decimal);
+            parameters.Add("@Longitude", entity.Longitude, DbType.Decimal);
+            parameters.Add("@TemperatureC", entity.TemperatureC, DbType.Int32);
+            parameters.Add("@Summary", entity.Summary, DbType.String);
+            parameters.Add("@RainfallMm", entity.RainfallMm, DbType.Double);
+            parameters.Add("@Humidity", entity.Humidity, DbType.Int32);
+            parameters.Add("@WindSpeedKmh", entity.WindSpeedKmh, DbType.Double);
 
-            entity.Id = await _connection.ExecuteScalarAsync<int>(merge, parameters);
-            return entity;
+            // Thanks to OUTPUT INSERTED.* in the SP, we recover the complete line
+            var saved = await _connection.QuerySingleAsync<WeatherForecast>(sql, parameters);
+            return saved;
         }
 
         public async Task<WeatherForecast> SaveWeatherForecastAsync(WeatherForecast forecast)

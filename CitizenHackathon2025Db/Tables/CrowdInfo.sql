@@ -30,7 +30,16 @@ ON dbo.CrowdInfo (Active, [Timestamp] DESC);
 
 GO
 
+CREATE UNIQUE INDEX UX_CrowdInfo_Active_Pos
+ON dbo.CrowdInfo(LocationName, Latitude, Longitude)
+WHERE Active = 1;
 
+GO
+
+CREATE INDEX IX_CrowdInfo_Active_Pos
+ON dbo.CrowdInfo(Active, LocationName, Latitude, Longitude);
+
+GO
 
 
 

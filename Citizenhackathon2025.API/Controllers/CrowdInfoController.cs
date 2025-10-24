@@ -64,21 +64,17 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(latest.Select(c => c.MapToCrowdInfoDTO()));
         }
         [HttpPost]
-        public async Task<IActionResult> SaveCrowdInfo([FromBody] CrowdInfoDTO crowdInfoDTO)
+        public async Task<IActionResult> SaveCrowdInfo([FromBody] CrowdInfoDTO dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var crowdInfo = crowdInfoDTO.MapToCrowdInfoWithTimestamp().MapToCrowdInfo();
-            var savedCrowdInfo = await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
+            var entity = dto.MapToCrowdInfoWithTimestamp().MapToCrowdInfo();
+            var saved = await _crowdInfoRepository.UpsertCrowdInfoAsync(entity);
 
-            if (savedCrowdInfo == null)
-                return StatusCode(500, "Error while saving");
+            if (saved is null) return StatusCode(500, "Upsert failed");
 
-            // Notify clients
-            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.ReceiveCrowdUpdate, savedCrowdInfo.MapToCrowdInfoDTO());
-
-            return Ok(savedCrowdInfo.MapToCrowdInfoDTO());
+            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.ReceiveCrowdUpdate, saved.MapToCrowdInfoDTO());
+            return Ok(saved.MapToCrowdInfoDTO());
         }
         [HttpDelete("archive/{id:int}")]
         public async Task<IActionResult> ArchiveCrowdInfo(int id)

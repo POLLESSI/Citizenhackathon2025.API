@@ -1,14 +1,12 @@
-﻿/* ===================================================================
+﻿--sql/99_post_deploy.sql
+
+/* ===================================================================
    Post-Deployment (idempotent) — CitizenHackathon2025
-   Does NOT create databases or tables. Only takes care of:
-   - Index WeatherForecast
-   - Trigger OnDeleteWeatherForecast (create if missing)
-   - Colonnes/seed TokenHash/TokenSalt de RefreshTokens
-   - Index/contrainte GptInteractions (cleaning + filtered index)
-   - Procédures d’UPSERT (CREATE OR ALTER)
-   - Procédures d’archivage (CREATE OR ALTER) — corrected
+   NOTE: GPT indexes (drop/recreate + unique filtered) are managed
+         in 01_fix_gpt_indexes.sql to avoid duplicates here.
    =================================================================== */
 
+SET NOCOUNT ON;
 --------------------------------------------------------------
 -- WeatherForecast : Index (idempotent)
 --------------------------------------------------------------
@@ -59,7 +57,7 @@ IF OBJECT_ID(N'dbo.OnDeleteWeatherForecast', N'TR') IS NULL
 GO
 
 --------------------------------------------------------------
--- RefreshTokens : Colonnes TokenHash / TokenSalt (idempotent)
+-- RefreshTokens : Colonnes TokenHash / TokenSalt + seed (idempotent)
 --------------------------------------------------------------
 IF COL_LENGTH('dbo.RefreshTokens','TokenHash') IS NULL
     ALTER TABLE [dbo].[RefreshTokens] ADD TokenHash VARBINARY(32) NULL;
@@ -96,72 +94,17 @@ IF EXISTS (SELECT 1 FROM sys.columns
              AND name = 'TokenHash' AND is_nullable = 1)
     ALTER TABLE [dbo].[RefreshTokens] ALTER COLUMN TokenHash VARBINARY(32) NOT NULL;
 GO
--- (Optional) When the app no ​​longer uses the Token column in clear:
+-- (Optional) when the Token (clear) column is no longer used:
 --IF COL_LENGTH('dbo.RefreshTokens','Token') IS NOT NULL
 --    ALTER TABLE [dbo].[RefreshTokens] DROP COLUMN [Token];
 --GO
 
---------------------------------------------------------------
--- GptInteractions : cleaning + indexes (idempotent)
---------------------------------------------------------------
--- Drop l'index s'il est déjà là (double création)
-IF EXISTS (SELECT 1 FROM sys.indexes 
-           WHERE name = N'IX_GptInteractions_Active'
-             AND object_id = OBJECT_ID(N'dbo.GptInteractions'))
-    DROP INDEX [IX_GptInteractions_Active] ON dbo.GptInteractions;
-GO
-
--- Supprime l'UNIQUE "global" sur PromptHash si présent (on veut l’unicité FILTRÉE)
-DECLARE @uniq sysname;
-SELECT TOP(1) @uniq = i.name
-FROM sys.indexes i
-JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-WHERE i.object_id = OBJECT_ID(N'dbo.GptInteractions')
-  AND i.is_unique = 1 AND i.has_filter = 0 AND c.name = N'PromptHash';
-
-IF @uniq IS NOT NULL
-    EXEC(N'DROP INDEX [' + @uniq + N'] ON dbo.GptInteractions;');
-GO
-
--- Recrée proprement, idempotent
-IF NOT EXISTS (SELECT 1 FROM sys.indexes 
-               WHERE name = N'IX_GptInteractions_Active'
-                 AND object_id = OBJECT_ID(N'dbo.GptInteractions'))
-    CREATE INDEX [IX_GptInteractions_Active]
-      ON dbo.GptInteractions([Active]);
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.indexes 
-               WHERE name = N'UX_GptInteractions_Active_PromptHash'
-                 AND object_id = OBJECT_ID(N'dbo.GptInteractions'))
-    CREATE UNIQUE INDEX [UX_GptInteractions_Active_PromptHash]
-      ON dbo.GptInteractions([PromptHash])
-      WHERE [Active] = 1;
-GO
-
-IF NOT EXISTS (
-    SELECT 1 FROM sys.indexes
-    WHERE [name] = N'IX_GptInteractions_Active'
-      AND [object_id] = OBJECT_ID(N'dbo.GptInteractions')
-)
-    CREATE INDEX [IX_GptInteractions_Active]
-    ON dbo.GptInteractions([Active]);
-
-IF NOT EXISTS (
-    SELECT 1 FROM sys.indexes
-    WHERE [name] = N'UX_GptInteractions_Active_PromptHash'
-      AND [object_id] = OBJECT_ID(N'dbo.GptInteractions')
-)
-    CREATE UNIQUE INDEX [UX_GptInteractions_Active_PromptHash]
-    ON dbo.GptInteractions([PromptHash])
-    WHERE [Active] = 1;GO
-
 /* ========================
-   Procedures: UPSERTS
+   Procédures: UPSERTS
    ======================== */
-
+--------------------------------------------------------------
 -- dbo.CrowdCalendar_Upsert
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.CrowdCalendar_Upsert', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.CrowdCalendar_Upsert AS SELECT 1');
 GO
@@ -207,7 +150,9 @@ BEGIN
 END
 GO
 
+--------------------------------------------------------------
 -- dbo.sp_CrowdInfo_Upsert
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_CrowdInfo_Upsert', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_CrowdInfo_Upsert AS SELECT 1');
 GO
@@ -238,7 +183,9 @@ BEGIN
 END
 GO
 
+--------------------------------------------------------------
 -- dbo.sp_GptInteraction_Upsert
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_GptInteraction_Upsert', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_GptInteraction_Upsert AS SELECT 1');
 GO
@@ -265,7 +212,9 @@ BEGIN
 END
 GO
 
+--------------------------------------------------------------
 -- dbo.sp_TrafficCondition_Upsert
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_TrafficCondition_Upsert', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_TrafficCondition_Upsert AS SELECT 1');
 GO
@@ -287,13 +236,15 @@ BEGIN
 
     INSERT INTO dbo.TrafficCondition
         (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active)
-    OUTPUT INSERTED.*
+    OUTPUT INSERTED.* 
     VALUES
         (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType, 1);
 END
 GO
 
+--------------------------------------------------------------
 -- dbo.sp_WeatherForecast_Upsert
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_WeatherForecast_Upsert', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_WeatherForecast_Upsert AS SELECT 1');
 GO
@@ -319,7 +270,7 @@ BEGIN
 
     INSERT INTO dbo.WeatherForecast
         (DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
-    OUTPUT INSERTED.*
+    OUTPUT INSERTED.* 
     VALUES
         (@DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1);
 END
@@ -328,8 +279,9 @@ GO
 /* ========================
    Procedures: Archiving
    ======================== */
-
+--------------------------------------------------------------
 -- dbo.sp_ArchivePastCrowdInfo
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_ArchivePastCrowdInfo', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_ArchivePastCrowdInfo AS SELECT 1');
 GO
@@ -344,7 +296,9 @@ BEGIN
 END
 GO
 
--- dbo.sp_ArchivePastGptInteraction  (⚠ corrects table → GptInteractions)
+--------------------------------------------------------------
+-- dbo.sp_ArchivePastGptInteraction
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_ArchivePastGptInteraction', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_ArchivePastGptInteraction AS SELECT 1');
 GO
@@ -360,7 +314,9 @@ BEGIN
 END
 GO
 
+--------------------------------------------------------------
 -- dbo.sp_ArchivePastTrafficCondition
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_ArchivePastTrafficCondition', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_ArchivePastTrafficCondition AS SELECT 1');
 GO
@@ -375,7 +331,9 @@ BEGIN
 END
 GO
 
--- dbo.sp_ArchivePastWeatherForecast (⚠ corrects table → WeatherForecast)
+--------------------------------------------------------------
+-- dbo.sp_ArchivePastWeatherForecast
+--------------------------------------------------------------
 IF OBJECT_ID(N'dbo.sp_ArchivePastWeatherForecast', N'P') IS NULL
     EXEC(N'CREATE PROCEDURE dbo.sp_ArchivePastWeatherForecast AS SELECT 1');
 GO
@@ -390,155 +348,18 @@ BEGIN
 END
 GO
 
--- Recreate IsExpired without PERSISTED if it was created with PERSISTED or set incorrectly
+/* ========================
+   UserSessions : IsExpired computed (non PERSISTED)
+   ======================== */
 IF OBJECT_ID('dbo.UserSessions','U') IS NOT NULL
 BEGIN
     DECLARE @isComputed INT = COLUMNPROPERTY(OBJECT_ID('dbo.UserSessions'),'IsExpired','IsComputed');
     IF @isComputed = 1
     BEGIN
-        -- Drops and recreates the computed column (ALTER COLUMN is not supported on computed columns)
+        -- we (re)create the calculated column WITHOUT PERSISTED to avoid error 4936
         ALTER TABLE dbo.UserSessions DROP COLUMN IsExpired;
         ALTER TABLE dbo.UserSessions
           ADD IsExpired AS (CASE WHEN ExpiresAtUtc <= SYSUTCDATETIME() THEN 1 ELSE 0 END);
     END
 END
 GO
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
---// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

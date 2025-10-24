@@ -87,11 +87,22 @@ namespace CitizenHackathon2025.API.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var entity = dto.MapToEntity();                // ❌ no Id/Active set here
-            var saved = await _trafficConditionRepository.SaveTrafficConditionAsync(entity);
+            var entity = new TrafficCondition
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dto.DateCondition == default ? DateTime.UtcNow : dto.DateCondition,
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType
+            };
 
-            if (saved is null) return Problem("Insert failed");
+            // 🧠 New UPSERT: archive + insert
+            var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
+            if (saved is null) return Problem("Échec de l'UPSERT");
+
+            // 🔔 SignalR Broadcast
             await _hubContext.Clients.All.SendAsync("ReceiveTrafficConditionUpdate", saved);
+
             return Ok(saved.MapToTrafficConditionDTO());
         }
         [HttpPost("archive-expired")]

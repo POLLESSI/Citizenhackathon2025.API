@@ -15,6 +15,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task CheckRoadAsync(CitizenHackathon2025.Domain.ValueObjects.Location userPosition, string destination);
         Task<TrafficAnalysisResult> CheckRoadAsync(string from, string to);
         Task<int> ArchivePastTrafficConditionsAsync();
+        Task<TrafficCondition?> UpsertTrafficConditionAsync(TrafficCondition trafficCondition);
     }
 }
 

@@ -63,6 +63,8 @@
     <Folder Include="Programmability\Procedures\spAuth" />
     <Folder Include="Scripts" />
     <Folder Include="obj\" />
+    <Folder Include="Programmability\Views" />
+    <Folder Include="sql" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="Tables\CrowdInfo.sql" />
@@ -80,6 +82,12 @@
     <Build Include="Tables\Logs.sql" />
     <Build Include="Tables\CrowdCalendar.sql" />
     <Build Include="Programmability\Procedures\CrowdCalendar_Upsert.sql" />
+    <Build Include="Programmability\Procedures\sp_CrowdInfo_Upsert.sql" />
+    <Build Include="Programmability\Procedures\sp_GptInteraction_Upsert.sql" />
+    <Build Include="Programmability\Procedures\sp_TrafficCondition_Upsert.sql" />
+    <Build Include="Programmability\Procedures\sp_WeatherForecast_Upsert.sql" />
+    <Build Include="Tables\UserSessions.sql" />
+    <Build Include="Programmability\Views\vUserSessions.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
@@ -95,5 +103,7 @@
     <None Include="Scripts\sp_ArchivePastGptInteraction.sql" />
     <None Include="Scripts\sp_ArchivePastTrafficCondition.sql" />
     <None Include="Scripts\sp_ArchivePastWeatherForecast.sql" />
+    <None Include="sql\01_fix_gpt_indexes.sql" />
+    <None Include="sql\99_post_deploy.sql" />
   </ItemGroup>
 </Project>

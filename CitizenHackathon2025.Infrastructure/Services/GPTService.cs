@@ -43,20 +43,18 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             await _gptRepository.SaveSuggestionAsync(suggestion);
             //await _hubContext.Clients.All.SendAsync("SuggestionAdded", suggestion);
-            _logger.LogInformation("Suggestion enregistrée et envoyée via SignalR : {@Suggestion}", suggestion);
+            _logger.LogInformation("Suggestion recorded and sent via SignalR : {@Suggestion}", suggestion);
         }
 
         public async Task DeleteSuggestionAsync(int suggestionId)
         {
             await _gptRepository.DeleteSuggestionAsync(suggestionId);
             //await _hubContext.Clients.All.SendAsync("SuggestionDeleted", suggestionId);
-            _logger.LogInformation("Suggestion supprimée et signalée via SignalR : Id={Id}", suggestionId);
+            _logger.LogInformation("Suggestion removed and reported via SignalR : Id={Id}", suggestionId);
         }
 
         public Task<Suggestion?> GetSuggestionByIdAsync(int id)
-        {
-            throw new NotImplementedException();
-        }
+            => throw new NotImplementedException();
         public async Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetRecommendationsForSwimmingAreasAsync()
         {
             DateTime fromLast24h = DateTime.UtcNow.AddHours(-24);
@@ -64,16 +62,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
 
         public Task<string> GenerateSuggestionAsync(string prompt)
-        {
-            throw new NotImplementedException();
-        }
+            => throw new NotImplementedException();
 
         public async Task<int> ArchivePastGptInteractionsAsync()
         {
-            string sql = "UPDATE GptInteraction SET Active = 0 WHERE CreatedAt < @Threshold AND Active = 1";
-            var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
             return await _gptRepository.ArchivePastGptInteractionsAsync();
         }
+
+        public Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction)
+            => _gptRepository.UpsertInteractionAsync(interaction);
     }
 }
 

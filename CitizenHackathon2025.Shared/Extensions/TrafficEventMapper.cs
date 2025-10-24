@@ -11,7 +11,7 @@ namespace CitizenHackathon2025.Shared.Extensions
             // raw.Level is INT (according to error CS8121), we are NOT testing "is string" here.
             TrafficLevel levelEnum = Enum.IsDefined(typeof(TrafficLevel), raw.Level)
                 ? (TrafficLevel)raw.Level
-                : TrafficLevel.Low;
+                : TrafficLevel.FreeFlow;
             int level = (int)levelEnum; // the DTO expects an int
 
             // 2) Normalize Id (DTO = int). raw.Id is STRING → TryParse, otherwise 0.

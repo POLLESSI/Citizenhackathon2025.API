@@ -134,6 +134,22 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return 0;
             }
         }
+
+        public async Task<CrowdInfo?> UpsertCrowdInfoAsync(CrowdInfo input, CancellationToken ct = default)
+        {
+            const string sql = @"EXEC dbo.sp_CrowdInfo_Upsert
+                         @LocationName, @Latitude, @Longitude, @CrowdLevel, @Timestamp;";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@LocationName", input.LocationName);
+            parameters.Add("@Latitude", input.Latitude);
+            parameters.Add("@Longitude", input.Longitude);
+            parameters.Add("@CrowdLevel", input.CrowdLevel);
+            parameters.Add("@Timestamp", input.Timestamp);
+
+            return await _connection.QuerySingleOrDefaultAsync<CrowdInfo>(
+                new CommandDefinition(sql, parameters, cancellationToken: ct));
+        }
     }
 }
 

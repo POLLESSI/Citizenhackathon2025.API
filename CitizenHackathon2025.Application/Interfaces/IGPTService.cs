@@ -5,6 +5,7 @@ namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IGPTService
     {
+        Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction);
         Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync();
         Task<Suggestion?> GetSuggestionByIdAsync(int id);
         Task<IEnumerable<Suggestion>> GetSuggestionsByEventIdAsync(int id);

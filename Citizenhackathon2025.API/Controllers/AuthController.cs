@@ -18,18 +18,16 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly ILogger<AuthController> _logger;
         private readonly TokenGenerator _tokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
+        private readonly IUserSessionService _userSessionService;
         private static string? GetEmail(ClaimsPrincipal p) =>
             p?.FindFirst(ClaimTypes.Email)?.Value ?? p?.Identity?.Name;
-        public AuthController(
-            IUserService userService,
-            ILogger<AuthController> logger,
-            TokenGenerator tokenGenerator,
-            IRefreshTokenService refreshTokenService)
+        public AuthController(IUserService userService, ILogger<AuthController> logger, TokenGenerator tokenGenerator, IRefreshTokenService refreshTokenService,IUserSessionService userSessionService)                  
         {
             _userService = userService;
             _logger = logger;
             _tokenGenerator = tokenGenerator;
             _refreshTokenService = refreshTokenService;
+            _userSessionService = userSessionService;               
         }
 
         // -----------------------------
@@ -40,8 +38,7 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> Login([FromBody] LoginDTO request)
         {
             var user = await _userService.AuthenticateAsync(request.Email, request.Password);
-
-            if (user == null)
+            if (user is null)
             {
                 _logger.LogWarning("Login attempt failed for {Email}", request.Email);
                 return Unauthorized(new { Message = "Invalid credentials" });
@@ -50,27 +47,36 @@ namespace CitizenHackathon2025.API.Controllers
             var accessToken = _tokenGenerator.GenerateToken(user.Email, user.Role);
             var refreshToken = await _refreshTokenService.GenerateAsync(user.Email);
 
-            _logger.LogInformation("User {Email} logged in successfully", user.Email);
-
-            return Ok(new
+            // ---- SESSION TRACKING ----
+            try
             {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken
-            });
+                await _userSessionService.TrackAccessTokenAsync(
+                    accessToken, user.Email, SessionSource.Api, HttpContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Session tracking failed at login for {Email}", user.Email);
+                // The login does not fail.
+            }
+
+            _logger.LogInformation("User {Email} logged in successfully", user.Email);
+            return Ok(new { AccessToken = accessToken, RefreshToken = refreshToken });
         }
 
         // -----------------------------
         // LOGOUT
         // -----------------------------
+        public sealed class LogoutDTO { public string RefreshToken { get; init; } = ""; }
+
         [Authorize]
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout([FromBody] string token)
+        public async Task<IActionResult> Logout([FromBody] LogoutDTO dto)
         {
-            if (string.IsNullOrWhiteSpace(token)) return BadRequest("Missing token");
-            var email = GetEmail(User);
+            if (string.IsNullOrWhiteSpace(dto.RefreshToken)) return BadRequest("Missing token");
+            var email = User.FindFirstValue(ClaimTypes.Email) ?? User.Identity?.Name;
             if (string.IsNullOrWhiteSpace(email)) return Unauthorized(new { Message = "No email in principal" });
 
-            await _refreshTokenService.InvalidateAsync(token, email);
+            await _refreshTokenService.InvalidateAsync(dto.RefreshToken, email);
             return Ok(new { message = "Logged out successfully" });
         }
 
@@ -101,16 +107,20 @@ namespace CitizenHackathon2025.API.Controllers
 
             var newAccess = _tokenGenerator.GenerateToken(user.Email, user.Role);
             var newRefresh = await _refreshTokenService.GenerateAsync(user.Email);
-
             await _refreshTokenService.InvalidateAsync(request.RefreshToken, user.Email);
 
-            return Ok(new { AccessToken = newAccess, RefreshToken = newRefresh.Token });
-        }
-        private string? GetEmailFromPrincipal(ClaimsPrincipal user)
-        {
-            return user?.FindFirst(ClaimTypes.Email)?.Value
-                ?? user?.FindFirst("email")?.Value
-                ?? user?.Identity?.Name;
+            // ---- SESSION TRACKING (new JWT session) ----
+            try
+            {
+                await _userSessionService.TrackAccessTokenAsync(
+                    newAccess, user.Email, SessionSource.Api, HttpContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Session tracking failed at refresh for {Email}", user.Email);
+            }
+
+            return Ok(new { AccessToken = newAccess, RefreshToken = newRefresh });
         }
     }
 }

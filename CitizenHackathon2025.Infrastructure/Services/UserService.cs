@@ -7,6 +7,7 @@ using CitizenHackathon2025.Shared.Utils;
 using Microsoft.Extensions.Logging;
 using System.Collections;
 using System.Data;
+using System.Security.Cryptography;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -26,15 +27,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _connection = connection;
         }
 
-        public async Task<Users> AuthenticateAsync(string email, string password)
+        public async Task<Users?> AuthenticateAsync(string email, string password)
         {
             var user = await _userRepository.GetUserByEmailAsync(email);
-            if (user == null) return null;
+            if (user is null || !user.Active || user.Status != UserStatus.Active) return null;
 
-            var hash = HashHelper.HashPassword(password, user.SecurityStamp.ToString());
-            var isValid = StructuralComparisons.StructuralEqualityComparer.Equals(hash, user.PasswordHash);
+            var expected = Sql512Hasher.Compute(password, user.SecurityStamp);
+            var ok = user.PasswordHash?.Length == expected.Length
+                     && CryptographicOperations.FixedTimeEquals(user.PasswordHash, expected);
 
-            return isValid ? user : null;
+            return ok ? user : null;
         }
 
         public async Task DeactivateUserAsync(int id)

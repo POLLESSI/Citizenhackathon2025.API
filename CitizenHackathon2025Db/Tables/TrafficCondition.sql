@@ -27,6 +27,11 @@ CREATE INDEX IX_TrafficCondition_Active_DateCondition
 ON dbo.TrafficCondition (Active, DateCondition DESC);
 GO
 
+CREATE UNIQUE INDEX UX_TrafficCondition_Active_LatLon
+ON dbo.TrafficCondition(Latitude, Longitude)
+WHERE Active = 1;
+GO
+
 
 
 

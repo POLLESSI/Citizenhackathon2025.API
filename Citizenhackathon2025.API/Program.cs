@@ -25,6 +25,7 @@ using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
+using CitizenHackathon2025.Infrastructure.Init;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
@@ -81,7 +82,7 @@ using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPI
 internal class Program
 {
 #nullable disable
-    private static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
         // ---------- Serilog ----------
         var builder = WebApplication.CreateBuilder(args);
@@ -189,6 +190,7 @@ internal class Program
         services.Configure<OpenAIOptions>(configuration.GetSection("OpenAI"));
         services.Configure<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
         services.Configure<JwtOptions>(configuration.GetSection("Jwt")); // ← aligned with OutZenTokenMiddleware & JWT
+        services.Configure<SessionJanitorOptions>(configuration.GetSection("Sessions:Janitor"));
 
         builder.Services.AddOptions<CrowdInfoArchiverOptions>("CrowdInfo")
             .Bind(builder.Configuration.GetSection("Archivers:CrowdInfo"))
@@ -236,7 +238,7 @@ internal class Program
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret ?? "")),
+                    IssuerSigningKey = signingKey,
                     ValidateIssuer = hasIssuer,
                     ValidIssuer = jwt.Issuer,
                     ValidateAudience = hasAudience,
@@ -246,7 +248,6 @@ internal class Program
                     ClockSkew = TimeSpan.FromMinutes(2)
                 };
 
-                // Accept token as querystring for SignalR (WebSockets/SSE)
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = ctx =>
@@ -256,9 +257,9 @@ internal class Program
                         var fromCookie = ctx.Request.Cookies.TryGetValue(Cookies.JwtTokenName, out var cookie) ? cookie : null;
 
                         if (path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(fromQuery))
-                            ctx.Token = fromQuery; 
+                            ctx.Token = fromQuery;
                         else if (!string.IsNullOrEmpty(fromCookie))
-                            ctx.Token = fromCookie; 
+                            ctx.Token = fromCookie;
 
                         return Task.CompletedTask;
                     }
@@ -321,6 +322,7 @@ internal class Program
         services.AddScoped<TrafficConditionService>();
         services.AddScoped<WeatherSuggestionOrchestrator>();
         services.AddScoped<IUserHubService, UserHubService>();
+
         services.AddScoped<IWeatherForecastService, WeatherForecastService>();
 
         // ---------- Hubs & notifiers ----------
@@ -338,6 +340,7 @@ internal class Program
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
         services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IUserSessionRepository, UserSessionRepository>();
         services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
 
         // ----------- Singletons -------------
@@ -537,7 +540,7 @@ internal class Program
         services.AddHostedService<MorningCrowdAdvisoryHostedService>();
         services.AddHostedService<EventArchiverService>();
         services.AddHostedService<WeatherService>();
-
+        services.AddHostedService<SessionJanitor>();
 
         // ---------- Autorisation ----------
         services.AddAuthorization(o =>
@@ -620,6 +623,35 @@ internal class Program
 
         // ---------- Build app ----------
         var app = builder.Build();
+
+        // --- RUN-ONCE DB INIT (post-deploy idempotent) --------------------
+        using (var scope = app.Services.CreateScope())
+        {
+            var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var conn = scope.ServiceProvider.GetRequiredService<System.Data.IDbConnection>();
+            if (conn.State != System.Data.ConnectionState.Open) conn.Open();
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                            IF OBJECT_ID('dbo.__AppOnce', 'U') IS NULL
+                            BEGIN
+                              CREATE TABLE dbo.__AppOnce (Name sysname PRIMARY KEY, RanAtUtc datetime2 NOT NULL);
+                            END;
+
+                            IF NOT EXISTS (SELECT 1 FROM dbo.__AppOnce WHERE Name = 'PostDeploy_GPT')
+                            BEGIN
+                              -----------------------------------------------------------------
+                              -- HERE: Call YOUR idempotent post-deployment SQL script.
+                              -- Let's inline some critical statements,
+                              -- either read a .sql from disk and EXEC(@sql).
+                              -----------------------------------------------------------------
+
+                              INSERT INTO dbo.__AppOnce(Name, RanAtUtc) VALUES ('PostDeploy_GPT', SYSUTCDATETIME());
+                            END;
+                            ";
+            cmd.ExecuteNonQuery();
+        }
+        // ------------------------------------------------------------------
 
         using (var scope = app.Services.CreateScope())
         {
@@ -759,16 +791,23 @@ internal class Program
         // CORS
         app.UseCors("AllowBlazor");
         // Auth
-        app.UseAuthentication();
+
 
         // Minimal middleware Anti-forgery (cookie issue on GET)
+        var dev = app.Environment.IsDevelopment();
+
         app.Use(async (ctx, next) =>
         {
             if (HttpMethods.IsGet(ctx.Request.Method))
             {
                 var af = ctx.RequestServices.GetRequiredService<IAntiforgery>();
                 var tokens = af.GetAndStoreTokens(ctx);
-                ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions { HttpOnly = false, Secure = true, SameSite = SameSiteMode.None });
+                ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
+                {
+                    HttpOnly = false,
+                    Secure = !dev ? true : false,        // false en DEV si besoin
+                    SameSite = dev ? SameSiteMode.Lax : SameSiteMode.None
+                });
             }
             await next();
         });
@@ -784,7 +823,11 @@ internal class Program
         // ⇩⇩⇩ ONLY applies this to /api (not /swagger, /, /static, etc.)
         //app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
         //    b => b.UseMiddleware<OutZenTokenMiddleware>());
+        app.UseSessionHeartbeat();
 
+        // Rate Limiter
+        app.UseRateLimiter();
+        app.UseAuthentication();
         app.UseAuthorization();
 
         if (app.Environment.IsDevelopment())
@@ -807,8 +850,7 @@ internal class Program
             }).RequireAuthorization(); // must return 200 + your roles
         }
 
-        // Rate Limiter
-        app.UseRateLimiter();
+        
 
         // Routes API (with rate limiting by group) for production
         //app.MapGroup("/api")
@@ -823,6 +865,20 @@ internal class Program
         app.UseSerilogRequestLogging();
 
         app.MapRazorPages();
+
+        // --- RUN-ONCE DB INIT (post-deploy idempotent) --------------------
+        using (var scope = app.Services.CreateScope())
+        {
+            var env = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+            var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DbInit");
+            var conn = scope.ServiceProvider.GetRequiredService<System.Data.IDbConnection>();
+            if (conn.State != System.Data.ConnectionState.Open) conn.Open();
+
+            await DbInit.RunOnceAsync(conn, env.ContentRootPath, log);
+        }
+        // ------------------------------------------------------------------
+
+
         // (If you have other controllers outside /api, uncomment the line below)
         app.MapControllers();
 

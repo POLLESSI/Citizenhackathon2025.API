@@ -131,6 +131,31 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return 0;
             }
         }
+
+        public async Task<TrafficCondition?> UpsertTrafficConditionAsync(TrafficCondition tc)
+        {
+            const string sql = @"EXEC dbo.sp_TrafficCondition_Upsert
+                         @Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType;";
+
+            var p = new DynamicParameters();
+            p.Add("@Latitude", tc.Latitude);
+            p.Add("@Longitude", tc.Longitude);
+            p.Add("@DateCondition", tc.DateCondition);
+            p.Add("@CongestionLevel", tc.CongestionLevel);
+            p.Add("@IncidentType", tc.IncidentType);
+
+            try
+            {
+                // Returns the newly inserted row (using OUTPUT INSERTED.*)
+                var saved = await _connection.QuerySingleAsync<TrafficCondition>(sql, p);
+                return saved;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de l'UPSERT TrafficCondition (lat={Lat}, lon={Lon})", tc.Latitude, tc.Longitude);
+                return null;
+            }
+        }
     }
 }
 

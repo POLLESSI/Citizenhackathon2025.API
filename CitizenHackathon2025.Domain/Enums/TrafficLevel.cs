@@ -2,9 +2,10 @@
 {
     public enum TrafficLevel
     {
-        Low = 1,
-        Medium = 2,
-        High = 3
+        FreeFlow = 1,
+        Moderate = 2,
+        Heavy = 3,
+        Jammed = 4
     }
 }
 

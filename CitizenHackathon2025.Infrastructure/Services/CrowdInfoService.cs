@@ -64,17 +64,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<CrowdInfo> SaveCrowdInfoAsync(CrowdInfo crowdInfo, CancellationToken ct = default)
         {
-            var saved = await _crowdInfoRepository.SaveCrowdInfoAsync(crowdInfo);
+            var saved = await _crowdInfoRepository.UpsertCrowdInfoAsync(crowdInfo, ct);
 
             if (saved != null)
             {
-                // Full DTO push to clients
                 await _crowdHubContext.BroadcastCrowdUpdate(saved);
-                // Optional: generic ping
-                await _crowdHubContext.BroadcastCrowdRefreshRequested("sync");
+                await _crowdHubContext.BroadcastCrowdRefreshRequested("sync"); 
             }
-
-            return saved;
+            return saved!;
         }
 
         public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)
@@ -105,6 +102,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
             string sql = "UPDATE CrowdInfo SET Active = 0 WHERE Timestamp < @Threshold AND Active = 1";
             var parameters = new { Threshold = DateTime.UtcNow.Date.AddDays(-2) };
             return await _crowdInfoRepository.ArchivePastCrowdInfosAsync();
+        }
+
+        public Task<CrowdInfo> UpsertCrowdInfoAsync(CrowdInfo input, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
         }
     }
 }

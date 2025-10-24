@@ -209,6 +209,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return 0;
             }
         }
+
+        public Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 

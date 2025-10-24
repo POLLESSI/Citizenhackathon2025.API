@@ -57,10 +57,24 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("ask")]
         public async Task<IActionResult> Ask([FromBody] string question)
         {
-            var response = await _gptRepository.AskAsync(question);
-            return Ok(response);
+            var response = $"(Simulated GPT Response) You asked : \"{question}\"";
 
-            
+            var saved = await _gptRepository.UpsertInteractionAsync(new GPTInteraction
+            {
+                Prompt = question,
+                Response = response,
+                Active = true
+            });
+
+            var dto = new GptAnswerDTO
+            {
+                Id = saved?.Id,
+                Prompt = saved?.Prompt ?? question,
+                Response = saved?.Response ?? response,
+                CreatedAt = saved?.CreatedAt ?? DateTime.UtcNow
+            };
+
+            return Ok(dto);
         }
 
         [HttpPost("ask-gpt")]
@@ -77,17 +91,18 @@ namespace CitizenHackathon2025.API.Controllers
             {
                 Prompt = prompt.Prompt,
                 Response = generatedResponse,
-                CreatedAt = DateTime.UtcNow,
                 Active = true
+                // CreatedAt is set by SQL
             };
 
-            await _gptRepository.SaveInteractionAsync(interaction);
+            // ⬇️ remplace SaveInteractionAsync par l’UPSERT (archive + insert)
+            var saved = await _gptRepository.UpsertInteractionAsync(interaction);
 
             await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
             {
-                prompt = interaction.Prompt,
-                response = interaction.Response,
-                createdAt = interaction.CreatedAt
+                prompt = saved?.Prompt ?? interaction.Prompt,
+                response = saved?.Response ?? interaction.Response,
+                createdAt = saved?.CreatedAt ?? DateTime.UtcNow
             });
 
             var groupedSuggestions = await _gptRepository.GetSuggestionsGroupedByPlaceAsync(
@@ -95,9 +110,9 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(new
             {
-                prompt = interaction.Prompt,
-                response = interaction.Response,
-                createdAt = interaction.CreatedAt,
+                prompt = saved?.Prompt ?? interaction.Prompt,
+                response = saved?.Response ?? interaction.Response,
+                createdAt = saved?.CreatedAt ?? DateTime.UtcNow,
                 groupedSuggestions
             });
         }

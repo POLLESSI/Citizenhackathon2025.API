@@ -243,6 +243,25 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return 0;
             }
         }
+        public async Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction)
+        {
+            var pepper = _config["Security:PromptHashPepper"];
+            if (string.IsNullOrWhiteSpace(pepper))
+                throw new InvalidOperationException("Missing Security:PromptHashPepper in configuration.");
+
+            // reuse your helpers (NormalizePrompt + HmacSha256Hex)
+            var normalized = NormalizePrompt(interaction.Prompt);
+            var promptHash = HmacSha256Hex(normalized, pepper);
+
+            const string sql = @"EXEC dbo.sp_GptInteraction_Upsert @Prompt, @PromptHash, @Response;";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@Prompt", interaction.Prompt);
+            parameters.Add("@PromptHash", promptHash);
+            parameters.Add("@Response", interaction.Response);
+
+            return await _connection.QuerySingleOrDefaultAsync<GPTInteraction>(sql, parameters);
+        }
     }
 }
 

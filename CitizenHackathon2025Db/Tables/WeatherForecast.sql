@@ -33,6 +33,12 @@ BEGIN
 END;
 GO
 
+CREATE UNIQUE INDEX UX_WeatherForecast_Active_Date_Lat_Lon
+ON dbo.WeatherForecast(DateWeather, Latitude, Longitude)
+WHERE Active = 1;
+
+GO
+
 
 
 
