@@ -2,6 +2,8 @@
 // Namespaces projet (⚠️ harmonized on CitizenHackathon2025)
 // ==================
 using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
+using CitizenHackathon2025.API.Azure.Security.KeyVault;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Hubs.Serilog.Sinks;
 using CitizenHackathon2025.API.Middlewares;
@@ -25,12 +27,13 @@ using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
-using CitizenHackathon2025.Infrastructure.Init;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
+using CitizenHackathon2025.Infrastructure.Init;
 using CitizenHackathon2025.Infrastructure.Persistence;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Infrastructure.Security;
 using CitizenHackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.Infrastructure.Services.Monitoring;
 using CitizenHackathon2025.Infrastructure.SignalR;
@@ -55,6 +58,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.SqlClient.AlwaysEncrypted.AzureKeyVaultProvider;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -155,10 +159,51 @@ internal class Program
             .SetApplicationName("CitizenHackathon2025");
         builder.Services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(
             builder.Configuration.GetSection("CrowdAdvisory"));
+        builder.Services.Configure<DeviceHasherOptions>(builder.Configuration.GetSection("DeviceHasher"));
         builder.Services.AddHostedService<MorningCrowdAdvisoryHostedService>();
 
         builder.Host.UseSerilog();
 
+        // Preferred: try KeyVault first, fallback to config
+        var kvUri = builder.Configuration["KeyVault:VaultUri"];
+        if (!string.IsNullOrWhiteSpace(kvUri))
+        {
+            // SecretClient is thread-safe and intended to be a singleton
+            builder.Services.AddSingleton(sp =>
+            {
+                var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("KeyVault");
+                logger.LogInformation("KeyVault configured at {VaultUri}", kvUri);
+                return new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            });
+
+            builder.Services.AddSingleton<IMemoryCache, MemoryCache>();
+            builder.Services.AddSingleton<ISecrets, Secrets>();
+        }
+        else
+        {
+            // Local fallback: still register MemoryCache and a Secrets implementation that reads from configuration
+            builder.Services.AddSingleton<IMemoryCache, MemoryCache>();
+            builder.Services.AddSingleton<ISecrets>(sp =>
+            {
+                var cfg = sp.GetRequiredService<IConfiguration>();
+                var fake = new CitizenHackathon2025.API.Azure.Security.KeyVault.Secrets(
+                    // create a dummy SecretClient to satisfy ctor; we won't call it if config contains the secret
+                    new SecretClient(new Uri("https://example.vault.azure.net/"), new DefaultAzureCredential()),
+                    sp.GetRequiredService<IMemoryCache>(),
+                    sp.GetRequiredService<ILogger<CitizenHackathon2025.API.Azure.Security.KeyVault.Secrets>>(),
+                    cacheTtl: TimeSpan.FromSeconds(30)
+                );
+
+                // seed cache with DeviceHasher:PepperBase64 if present (user-secrets)
+                var pepper = cfg["DeviceHasher:PepperBase64"];
+                if (!string.IsNullOrEmpty(pepper))
+                {
+                    sp.GetRequiredService<IMemoryCache>().Set("kv:device-pepper", pepper, TimeSpan.FromHours(1));
+                }
+
+                return fake;
+            });
+        }
         // ---------- Basic setup ----------
         var configuration = builder.Configuration;
         var services = builder.Services;
@@ -295,6 +340,7 @@ internal class Program
         //     });
 
         // Hosted Services
+        builder.Services.AddSingleton<IDeviceHasher, DeviceHasher>();
         builder.Services.AddHostedService<CrowdInfoArchiverService>();
         builder.Services.AddHostedService<GptInteractionArchiverService>();
         builder.Services.AddHostedService<TrafficConditionArchiverService>();
@@ -883,28 +929,33 @@ internal class Program
         app.MapControllers();
 
         // ---------- Hubs ----------
-        var hubs = app.MapGroup("/hubs").RequireAuthorization(); // ✅ all protected by default
+        // protected group + CORS
+        var hubs = app.MapGroup("/hubs")
+                      .RequireAuthorization()
+                      .RequireCors("AllowBlazor");
 
-        // Mapped Hubs (inherit from Authorize)
-        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath);
+        // 🎯 paths RELATIVE to "/hubs"
+        hubs.MapHub<CrowdHub>("crowdHub");
+        hubs.MapHub<SuggestionHub>("suggestionHub");
+        hubs.MapHub<WeatherForecastHub>("weatherforecastHub");
+        hubs.MapHub<TrafficHub>("trafficHub");
+        hubs.MapHub<OutZenHub>("outzen", o =>
+        {
+            o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
+        });
+
+        // These hubs mapped via constants must also be relative
+        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath.TrimStart('/')); // ex: "tourism"
         hubs.MapCrowdCalendarHub(o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         });
-        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<EventHub>(EventHubMethods.HubPath);
-        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath);
-        hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath);
-        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath, o =>
-        {
-            o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents; // 🎯 specific OutZen
-        });
-        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath);
-        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath);
-        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath);
-        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath);
-        hubs.MapHub<UserHub>(UserHubMethods.HubPath);
-        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath);
+        hubs.MapHub<EventHub>(EventHubMethods.HubPath.TrimStart('/'));
+        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath.TrimStart('/'));
+        hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath.TrimStart('/'));
+        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath.TrimStart('/'));
+        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath.TrimStart('/'));
+        hubs.MapHub<UserHub>(UserHubMethods.HubPath.TrimStart('/'));
 
         //app.MapGet("/csp-report/health", () => Results.Ok(new { status = "ok" }))
         //    .WithMetadata(new Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute { IgnoreApi = true });

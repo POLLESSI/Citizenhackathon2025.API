@@ -88,6 +88,13 @@
     <Build Include="Programmability\Procedures\sp_WeatherForecast_Upsert.sql" />
     <Build Include="Tables\UserSessions.sql" />
     <Build Include="Programmability\Views\vUserSessions.sql" />
+    <Build Include="Tables\CrowdInfoAntenna.sql" />
+    <Build Include="Tables\CrowdInfoAntennaConnection.sql" />
+    <Build Include="Programmability\Procedures\GetNearestAntennas.sql" />
+    <Build Include="Programmability\Procedures\UpsertAntennaConnection.sql" />
+    <Build Include="Programmability\Procedures\GetAntennaCounts.sql" />
+    <Build Include="Programmability\Procedures\CleanupStaleConnections.sql" />
+    <Build Include="Programmability\Views\vw_AntennaCounts.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
