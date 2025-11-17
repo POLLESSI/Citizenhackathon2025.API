@@ -23,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
 	  <ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
+	  <ProjectReference Include="..\..\CitizenHackathon2025.Contracts\CitizenHackathon2025.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
 	 <FrameworkReference Include="Microsoft.AspNetCore.App" />

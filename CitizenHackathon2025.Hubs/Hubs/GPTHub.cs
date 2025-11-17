@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
 using System.Threading.Tasks;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Contracts.Hubs;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {

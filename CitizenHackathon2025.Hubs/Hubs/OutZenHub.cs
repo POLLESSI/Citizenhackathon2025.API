@@ -1,6 +1,6 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Contracts.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Text.RegularExpressions;

@@ -1,7 +1,7 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Contracts.Hubs;
 
 namespace CitizenHackathon2025.Hubs.Extensions
 {
@@ -19,6 +19,9 @@ namespace CitizenHackathon2025.Hubs.Extensions
 
         public static Task SendNewEventToGroup(this IHubContext<EventHub> hubContext, string groupName, string message)
             => hubContext.Clients.Group(groupName).SendAsync(EventHubMethods.ToClient.NewEvent, message);
+
+        public static Task BroadcastNewEvent(this IHubContext<EventHub> ctx, object payload)
+           => ctx.Clients.All.SendAsync(EventHubMethods.ToClient.NewEvent, payload);
     }
 }
 

@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.SqlServer.Dac.Model;
 using Volo.Abp.Domain.Entities;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
-using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.SuggestionHubMethods;
+using HubEvents = CitizenHackathon2025.Contracts.Hubs.SuggestionHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {

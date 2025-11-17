@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
-using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.GptInteractionHubMethods;
+using HubEvents = CitizenHackathon2025.Contracts.Hubs.GptInteractionHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {

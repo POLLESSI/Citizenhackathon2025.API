@@ -47,12 +47,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\CitizenHackathon2025.Contracts\CitizenHackathon2025.Contracts.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.Application\CitizenHackathon2025.Application.csproj" />
 	<ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
 	<ProjectReference Include="..\Citizenhackathon2025.DTOs\Citizenhackathon2025.DTOs.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.Hubs\CitizenHackathon2025.Hubs.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.Infrastructure\CitizenHackathon2025.Infrastructure.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
+	<ProjectReference Include="..\..\CitizenHackathon2025.Contracts\CitizenHackathon2025.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

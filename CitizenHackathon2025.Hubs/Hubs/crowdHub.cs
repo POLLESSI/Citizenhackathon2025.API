@@ -1,7 +1,7 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Contracts.Hubs;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {

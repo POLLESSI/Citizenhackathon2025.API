@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
-using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.TrafficConditionHubMethods;
+using HubEvents = CitizenHackathon2025.Contracts.Hubs.TrafficConditionHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {

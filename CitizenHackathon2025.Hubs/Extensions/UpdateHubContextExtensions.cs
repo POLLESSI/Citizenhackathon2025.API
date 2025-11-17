@@ -1,6 +1,6 @@
 ﻿// CitizenHackathon2025.Hubs/Extensions/UpdateHubContextExtensions.cs
 using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Contracts.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
 

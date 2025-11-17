@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.WeatherForecastHubMethods;
+using HubEvents = CitizenHackathon2025.Contracts.Hubs.WeatherForecastHubMethods;
 namespace CitizenHackathon2025.API.Controllers
 {
     [EnableRateLimiting("per-user")]

@@ -18,6 +18,7 @@ using CitizenHackathon2025.Application.Mapping;
 using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Abstractions;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
@@ -537,7 +538,9 @@ internal class Program
         {
             options.AddPolicy("AllowBlazor", p =>
                     p.WithOrigins(
-                        "https://localhost:7101",     // dev
+                        "http://localhost:7101",  // dev
+                        "https://localhost:7101", // HTTPS
+                        "https://localhost:7254",
                         "https://app.wallonie-en-poche.example" // prod
                      )
                      .AllowAnyHeader()
@@ -950,7 +953,7 @@ internal class Program
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         });
-        hubs.MapHub<EventHub>(EventHubMethods.HubPath.TrimStart('/'));
+        hubs.MapHub<EventHub>(CitizenHackathon2025.Contracts.Hubs.EventHubMethods.HubPath.TrimStart('/'));
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath.TrimStart('/'));
         hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath.TrimStart('/'));
         hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath.TrimStart('/'));

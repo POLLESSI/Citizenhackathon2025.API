@@ -22,6 +22,7 @@
 	<ItemGroup>
 	  <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
 	  <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.21" />
+	  <PackageReference Include="Microsoft.Data.Tools.Msbuild" Version="16.0.62004.28040" />
 	  <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
 	  <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
 	</ItemGroup>

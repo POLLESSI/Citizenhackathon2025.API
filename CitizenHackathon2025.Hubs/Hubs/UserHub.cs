@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.Hubs.Hubs

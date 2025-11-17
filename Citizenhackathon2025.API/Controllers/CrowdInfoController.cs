@@ -3,13 +3,13 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Contracts.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
-using HubEvents = CitizenHackathon2025.Shared.StaticConfig.Constants.CrowdHubMethods;
+using HubEvents = CitizenHackathon2025.Contracts.Hubs.CrowdHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {

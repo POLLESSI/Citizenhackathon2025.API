@@ -1,5 +1,5 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Contracts.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
