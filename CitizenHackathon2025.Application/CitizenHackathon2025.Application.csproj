@@ -9,6 +9,7 @@
   <ItemGroup>
     <Folder Include="Events\" />
     <Folder Include="Models\" />
+    <Folder Include="WeatherForecasts\Commands\" />
   </ItemGroup>
 
   <ItemGroup>

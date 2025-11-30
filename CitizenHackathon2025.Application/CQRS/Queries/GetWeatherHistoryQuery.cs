@@ -3,6 +3,7 @@ using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.CQRS.Queries
 {
+    [Obsolete("Legacy MediatR query for WeatherForecast. Currently not used by OutZen API.")]
     public record GetWeatherHistoryQuery(int Limit) : IRequest<List<WeatherForecastDTO>>;
 }
 

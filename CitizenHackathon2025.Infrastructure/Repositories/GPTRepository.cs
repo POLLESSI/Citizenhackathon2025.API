@@ -214,6 +214,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             throw new NotImplementedException();
         }
+
+        public Task SaveInteractionAsync(string prompt, string response, DateTime timestamp)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 

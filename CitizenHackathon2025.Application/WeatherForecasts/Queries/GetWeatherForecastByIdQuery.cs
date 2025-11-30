@@ -3,6 +3,7 @@ using MediatR;
 
 namespace CitizenHackathon2025.Application.WeatherForecasts.Queries
 {
+    [Obsolete("Legacy MediatR query for WeatherForecast. Currently not used by OutZen API.")]
     public record GetWeatherForecastByIdQuery(int Id) : IRequest<WeatherForecastDTO?>;
 }
 

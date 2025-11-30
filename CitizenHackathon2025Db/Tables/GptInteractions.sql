@@ -2,7 +2,7 @@
 (
 	[Id] INT IDENTITY,
 	[Prompt] NVARCHAR(MAX),
-	[PromptHash] NVARCHAR(64) NOT NULL,
+	[PromptHash] NVARCHAR(64),
 	[Response] NVARCHAR(MAX),
 	[CreatedAt] DATETIME DEFAULT GETDATE(),
 	[DateDeleted] DATETIME2(0) NULL,
@@ -14,28 +14,20 @@
 GO
 
 CREATE TRIGGER [dbo].[OnDeleteGptInteractions]
-	ON [dbo].[GptInteractions]
-	INSTEAD OF DELETE
-	AS
-	BEGIN
-		SET NOCOUNT ON;
+    ON [dbo].[GptInteractions]
+    INSTEAD OF DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
 
-    UPDATE GptInteraction
-    SET Active = 0,
+    UPDATE G
+    SET Active      = 0,
         DateDeleted = SYSUTCDATETIME()
-    FROM dbo.GptInteractions GptInteraction
-    INNER JOIN deleted d ON d.Id = GptInteraction.Id;
-	END
-
-CREATE INDEX IX_GptInteractions_Active ON GptInteractions(Active);
-
+    FROM dbo.GptInteractions AS G
+    INNER JOIN deleted d ON d.Id = G.Id;
+END;
 GO
 
-    CREATE UNIQUE INDEX UX_GptInteractions_Active_PromptHash
-    ON dbo.GptInteractions(PromptHash)
-    WHERE Active = 1;
-
-GO
 
 
 

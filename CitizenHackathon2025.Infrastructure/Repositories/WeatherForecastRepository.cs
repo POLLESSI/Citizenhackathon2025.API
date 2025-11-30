@@ -130,19 +130,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var rows = await _connection.QueryAsync<WeatherForecast>(sql, parameters);
             return rows.ToList();
         }
-
-        public async Task<WeatherForecast> InsertAsync(WeatherForecast forecast, CancellationToken cancellationToken)
-        {
-            const string sql = @"
-                INSERT INTO WeatherForecasts
-                (Id, LocationName, Date, TemperatureC, WindSpeedKmh, PrecipitationMm, WeatherType, Severity)
-                VALUES (@Id, @LocationName, @Date, @TemperatureC, @WindSpeedKmh, @PrecipitationMm, @WeatherType, @Severity);
-
-                SELECT * FROM WeatherForecasts WHERE Id = @Id;";
-
-            var result = await _connection.QueryFirstAsync<WeatherForecast>(sql, forecast);
-            return result;
-        }
         public async Task<int> ArchivePastWeatherForecastsAsync()
         {
             const string sql = @"

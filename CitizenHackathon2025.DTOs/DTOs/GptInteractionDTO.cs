@@ -6,13 +6,24 @@
         public string Prompt { get; set; } = string.Empty;
         public string Response { get; set; } = string.Empty;
 
-        // Hash stored server-side (useful on admin/diagnostic side, optional on client UI side)
         public string PromptHash { get; set; } = string.Empty;
-
         public DateTime CreatedAt { get; set; }
         public bool Active { get; set; }
+
+        // ---- New: Context for the map / UI ----
+        public int? EventId { get; set; }
+        public int? CrowdInfoId { get; set; }
+        public int? PlaceId { get; set; }
+        public int? TrafficConditionId { get; set; }
+        public int? WeatherForecastId { get; set; }
+
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string? SourceType { get; set; }   // "Event", "Crowd", "Place", "Traffic", "Weather"
+        public int? CrowdLevel { get; set; }      // useful in a crowd context
     }
 }
+
 
 
 

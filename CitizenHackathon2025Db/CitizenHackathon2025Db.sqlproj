@@ -112,5 +112,6 @@
     <None Include="Scripts\sp_ArchivePastWeatherForecast.sql" />
     <None Include="sql\01_fix_gpt_indexes.sql" />
     <None Include="sql\99_post_deploy.sql" />
+    <None Include="Scripts\EvolutionScript.sql" />
   </ItemGroup>
 </Project>

@@ -3,9 +3,9 @@ using CitizenHackathon2025.Domain.DTOs;
 
 namespace CitizenHackathon2025.Domain.Interfaces
 {
-    public interface IGPTRepository
+    public interface IGPTRepository : IGptInteractionRepository
     {
-        Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction);
+        new Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction);
         /// <summary>
         /// Saves a GPT-generated suggestion to the database.
         /// </summary>
@@ -43,19 +43,19 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task DeleteSuggestionAsync(int id); 
         
         Task<string> AskAsync(string question);
-        Task SaveInteractionAsync(GPTInteraction interaction);
-        Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync();
+        new Task SaveInteractionAsync(GPTInteraction interaction);
+        new Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync();
         Task<IEnumerable<Suggestion>> GetSuggestionsByPlaceCrowdAsync(string placeName);
         public Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync(string? typeFilter = null, bool? indoorFilter = null, DateTime? sinceDate = null);
-        Task<GPTInteraction?> GetByIdAsync(int id);
+        new Task<GPTInteraction?> GetByIdAsync(int id);
 
         /// <summary>
         /// Deactivates a GPT interaction (logical delete).
         /// </summary>
         /// <param name="id">The ID of the interaction to deactivate.</param>
         /// <returns>True if the deactivation succeeded, false otherwise.</returns>
-        Task<bool> DeactivateInteractionAsync(int id);
-        Task<int> ArchivePastGptInteractionsAsync();
+        new Task<bool> DeactivateInteractionAsync(int id);
+        new Task<int> ArchivePastGptInteractionsAsync();
     }
 }
 

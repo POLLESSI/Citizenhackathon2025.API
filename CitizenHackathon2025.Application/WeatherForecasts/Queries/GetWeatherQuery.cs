@@ -3,6 +3,7 @@ using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.WeatherForecasts.Queries
 {
+    [Obsolete("Legacy MediatR query for WeatherForecast. Currently not used by OutZen API.")]
     public class GetWeatherQuery : IRequest<WeatherForecastDTO?>
     {
         // You can add parameters here if needed, for example a date filter or location

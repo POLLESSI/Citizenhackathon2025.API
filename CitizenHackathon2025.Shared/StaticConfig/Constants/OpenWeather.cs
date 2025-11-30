@@ -1,5 +1,6 @@
 ﻿namespace CitizenHackathon2025.Shared.StaticConfig.Constants
 {
+    [Obsolete("Use OpenWeatherOptions from configuration instead of static constants.")]
     public static class OpenWeather
     {
         public const string ApiBaseUrl = "https://api.openweathermap.org/data/2.5/";

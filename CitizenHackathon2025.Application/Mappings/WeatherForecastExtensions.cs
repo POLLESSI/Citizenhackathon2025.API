@@ -3,6 +3,7 @@ using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.Mappings
 {
+    [Obsolete("Use OpenWeatherOptions from configuration instead of static constants.")]
     public static class WeatherForecastExtensions
     {
         public static WeatherForecastDTO MapToWeatherForecastDTO(this WeatherForecast forecast)

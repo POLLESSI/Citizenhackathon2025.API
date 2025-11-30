@@ -5,24 +5,31 @@
 AS
 BEGIN
     SET NOCOUNT ON;
-    BEGIN TRAN;
 
-    -- 1) Archive (soft-delete via trigger) the existing active of this PromptHash
-    DELETE FROM dbo.GptInteractions WITH (ROWLOCK)
-     WHERE Active = 1
-       AND PromptHash = @PromptHash;
+    DECLARE @Now DATETIME2(0) = SYSUTCDATETIME();
 
-    -- 2) Inserts the new ACTIVE interaction
-    INSERT INTO dbo.GptInteractions (Prompt, PromptHash, Response, CreatedAt, Active)
-    VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1);
+    MERGE dbo.GptInteractions AS T
+    USING (SELECT @PromptHash AS PromptHash) AS S
+        ON (T.PromptHash = S.PromptHash)
+    WHEN MATCHED THEN
+        UPDATE SET 
+            T.Prompt      = @Prompt,
+            T.Response    = @Response,
+            T.CreatedAt   = @Now,
+            T.Active      = 1,
+            T.DateDeleted = NULL
+    WHEN NOT MATCHED THEN
+        INSERT (Prompt, PromptHash, Response, CreatedAt, Active)
+        VALUES (@Prompt, @PromptHash, @Response, @Now, 1);
 
-    DECLARE @NewId INT = SCOPE_IDENTITY();
-
-    COMMIT;
-
-    SELECT * FROM dbo.GptInteractions WHERE Id = @NewId;
-END
+    -- Returns the record for the C# mapping
+    SELECT TOP (1) *
+    FROM dbo.GptInteractions
+    WHERE PromptHash = @PromptHash;
+END;
 GO
+
+
 
 
 

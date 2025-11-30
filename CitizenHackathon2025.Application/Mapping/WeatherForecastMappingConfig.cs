@@ -4,6 +4,7 @@ using Mapster;
 
 namespace CitizenHackathon2025.Application.Mapping
 {
+    [Obsolete("Use OpenWeatherOptions from configuration instead of static constants.")]
     public class WeatherForecastMappingConfig : IRegister
     {
         public void Register(TypeAdapterConfig config)

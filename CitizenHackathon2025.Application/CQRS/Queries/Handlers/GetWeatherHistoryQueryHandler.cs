@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Application.CQRS.Queries.Handlers
 {
+    [Obsolete("Legacy MediatR query for WeatherForecast. Currently not used by OutZen API.")]
     public class GetWeatherHistoryQueryHandler : IRequestHandler<GetWeatherHistoryQuery, List<WeatherForecastDTO>>
     {
         private readonly IWeatherForecastRepository _repo;

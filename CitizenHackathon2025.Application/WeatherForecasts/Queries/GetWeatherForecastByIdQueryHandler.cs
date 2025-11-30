@@ -5,6 +5,7 @@ using MediatR;
 
 namespace CitizenHackathon2025.Application.WeatherForecasts.Queries
 {
+    [Obsolete("Legacy MediatR query for WeatherForecast. Currently not used by OutZen API.")]
     public class GetWeatherForecastByIdQueryHandler : IRequestHandler<GetWeatherForecastByIdQuery, WeatherForecastDTO?>
     {
         private readonly IWeatherForecastService _service;

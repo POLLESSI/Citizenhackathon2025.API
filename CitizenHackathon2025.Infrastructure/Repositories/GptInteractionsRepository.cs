@@ -5,12 +5,13 @@ using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Data;
+using System.Threading.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
-    public class GptInteractionsRepository : IGPTRepository
+    public class GptInteractionsRepository : IGptInteractionRepository, IGPTRepository
     {
 #nullable disable
         private readonly IDbConnection _connection;
@@ -173,14 +174,16 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var promptHash = HmacSha256Hex(normalized, pepper);
 
             const string sql = @"
-                            MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
-                            USING (SELECT @PromptHash AS PromptHash) AS s
-                            ON (t.PromptHash = s.PromptHash)
-                            WHEN MATCHED THEN
-                                UPDATE SET Response = @Response, CreatedAt = SYSUTCDATETIME(), Active = 1
-                            WHEN NOT MATCHED THEN
-                                INSERT (Prompt, PromptHash, Response, CreatedAt, Active)
-                                VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1);";
+                        MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
+                        USING (SELECT @PromptHash AS PromptHash) AS s
+                        ON (t.PromptHash = s.PromptHash)
+                        WHEN MATCHED THEN
+                            UPDATE SET Response = @Response,
+                                       CreatedAt = SYSUTCDATETIME(),
+                                       Active = 1
+                        WHEN NOT MATCHED THEN
+                            INSERT (Prompt, PromptHash, Response, CreatedAt, Active)
+                            VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1);";
 
             await _connection.ExecuteAsync(sql, new
             {
@@ -189,6 +192,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 Response = interaction.Response
             });
         }
+
 
         public async Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync()
         {
@@ -246,22 +250,43 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction)
         {
             var pepper = _config["Security:PromptHashPepper"];
-            if (string.IsNullOrWhiteSpace(pepper))
+            if (string.IsNullOrEmpty(pepper))
                 throw new InvalidOperationException("Missing Security:PromptHashPepper in configuration.");
 
-            // reuse your helpers (NormalizePrompt + HmacSha256Hex)
             var normalized = NormalizePrompt(interaction.Prompt);
             var promptHash = HmacSha256Hex(normalized, pepper);
 
-            const string sql = @"EXEC dbo.sp_GptInteraction_Upsert @Prompt, @PromptHash, @Response;";
-
             var parameters = new DynamicParameters();
-            parameters.Add("@Prompt", interaction.Prompt);
-            parameters.Add("@PromptHash", promptHash);
-            parameters.Add("@Response", interaction.Response);
+            parameters.Add("@Prompt", interaction.Prompt, DbType.String);
+            parameters.Add("@PromptHash", promptHash, DbType.String);
+            parameters.Add("@Response", interaction.Response, DbType.String);
 
-            return await _connection.QuerySingleOrDefaultAsync<GPTInteraction>(sql, parameters);
+            var result = await _connection.QuerySingleOrDefaultAsync<GPTInteraction>(
+                "dbo.sp_GptInteraction_Upsert",
+                parameters,
+                commandType: CommandType.StoredProcedure);
+
+            // Optional: Reflect the calculated hash in the returned entity
+            if (result != null)
+            {
+                result.PromptHash = promptHash;
+            }
+
+            return result;
         }
+        public async Task SaveInteractionAsync(string prompt, string response, DateTime timestamp)
+        {
+            var interaction = new GPTInteraction
+            {
+                Prompt = prompt,
+                Response = response,
+                CreatedAt = timestamp,
+                Active = true
+            };
+            // We're reusing your existing hash/merge logic.
+            await SaveInteractionAsync(interaction);
+        }
+
     }
 }
 

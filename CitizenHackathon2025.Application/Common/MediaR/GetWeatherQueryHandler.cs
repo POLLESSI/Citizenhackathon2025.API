@@ -7,6 +7,7 @@ using CitizenHackathon2025.DTOs.DTOs;
 namespace CitizenHackathon2025.Application.Common.MediaR
 {
 #nullable disable
+    [Obsolete("Legacy MediatR query for WeatherForecast. Currently not used by OutZen API.")]
     public class GetWeatherQueryHandler : HandlerBase<GetWeatherQuery, WeatherForecastDTO>
     {
 

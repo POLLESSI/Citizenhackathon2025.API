@@ -162,20 +162,27 @@ namespace CitizenHackathon2025.Infrastructure.Services
             throw new NotImplementedException();
         }
 
-        public Task<GPTInteraction> GetChatGptByIdAsync(int id)
+        public async Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt)
         {
-            throw new NotImplementedException();
+            await _repo.SaveInteractionAsync(prompt, reply, createdAt);
         }
 
-        public Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt)
+        public async Task<GPTInteraction> GetChatGptByIdAsync(int id)
         {
-            throw new NotImplementedException();
+            var result = await _repo.GetByIdAsync(id);
+            if (result is null)
+                throw new KeyNotFoundException($"GPTInteraction #{id} not found.");
+            return result;
         }
 
-        public Task<GPTInteraction> GetByIdAsync(int id)
+        public async Task<GPTInteraction> GetByIdAsync(int id)
         {
-            throw new NotImplementedException();
+            var result = await _repo.GetByIdAsync(id);
+            if (result is null)
+                throw new KeyNotFoundException($"GPTInteraction #{id} not found.");
+            return result;
         }
+
     }
 }
 

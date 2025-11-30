@@ -8,19 +8,14 @@ using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Hubs.Serilog.Sinks;
 using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Options;
-using CitizenHackathon2025.API.Security;
 using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.Behaviors;
 using CitizenHackathon2025.Application.CQRS.Queries;
-using CitizenHackathon2025.Application.DTOs;
 using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Mapping;
 using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
-using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Abstractions;
-using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
@@ -30,7 +25,6 @@ using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs;
-using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI;
 using CitizenHackathon2025.Infrastructure.Init;
 using CitizenHackathon2025.Infrastructure.Persistence;
 using CitizenHackathon2025.Infrastructure.Repositories;
@@ -47,12 +41,10 @@ using CitizenHackathon2025.Shared.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Dapper;
 using Mapster;
-using MapsterMapper;
 using MediatR;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc;
@@ -63,9 +55,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using OpenTelemetry;
-using OpenTelemetry.Instrumentation;
-using OpenTelemetry.Instrumentation.Runtime;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -79,7 +68,6 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
-using OpenAIGptExternalService = CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.GptExternalService;
 
 // =====================================
 // Program
@@ -98,7 +86,8 @@ internal class Program
         AzureEventHub.ConfigureSerilog(builder.Configuration);
 
         Log.Logger = new LoggerConfiguration()
-            .Destructure.ByTransforming<LogsDTO>(x => new {
+            .Destructure.ByTransforming<LogsDTO>(x => new
+            {
                 x.Id,
                 Sensitive = "***"
             })
@@ -161,7 +150,7 @@ internal class Program
         builder.Services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(
             builder.Configuration.GetSection("CrowdAdvisory"));
         builder.Services.Configure<DeviceHasherOptions>(builder.Configuration.GetSection("DeviceHasher"));
-        builder.Services.AddHostedService<MorningCrowdAdvisoryHostedService>();
+        // (Hosted service MorningCrowdAdvisoryHostedService is now listed further down, in the Hosted Services section)
 
         builder.Host.UseSerilog();
 
@@ -382,6 +371,7 @@ internal class Program
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
         services.AddScoped<ICrowdCalendarRepository, CrowdCalendarRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
+        services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
         services.AddScoped<IGPTRepository, GptInteractionsRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
@@ -398,7 +388,7 @@ internal class Program
         services.AddSingleton(sp =>
         {
             var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Polly");
-            var notifier = sp.GetRequiredService<INotifierAdmin>(); 
+            var notifier = sp.GetRequiredService<INotifierAdmin>();
 
             return new
             {
@@ -482,10 +472,11 @@ internal class Program
         });
 
         // ⛔️ Do not duplicate the above record with an AddScoped
-        services.AddHttpClient<OpenWeatherMapClient>();
+        // (client legacy OpenWeatherMapClient Removed here to avoid duplicates)
         services.AddMemoryCache();
         services.AddScoped<MemoryCacheService>();
-        services.AddScoped<WeatherSuggestionOrchestrator>();
+        // WeatherSuggestionOrchestrator already recorded above
+
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
@@ -525,10 +516,10 @@ internal class Program
                 var userId = http.User?.Identity?.Name ?? http.Connection.RemoteIpAddress?.ToString() ?? "anon";
                 return RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = 100,                      
-                    TokensPerPeriod = 100,                 
-                    ReplenishmentPeriod = TimeSpan.FromMinutes(1), 
-                    AutoReplenishment = true,              
+                    TokenLimit = 100,
+                    TokensPerPeriod = 100,
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                    AutoReplenishment = true,
                     QueueLimit = 0,
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst
                 });
@@ -605,6 +596,95 @@ internal class Program
             options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
         });
 
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+        services.AddRazorPages(options =>
+        {
+            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
+        });
+
+#if DEBUG
+        services
+            .AddRazorPages(options =>
+            {
+                options.Conventions.AuthorizeFolder("/Admin", "Admin");
+            })
+            .AddRazorRuntimeCompilation();
+#else
+            services.AddRazorPages(options =>
+            {
+                options.Conventions.AuthorizeFolder("/Admin", "Admin");
+            });
+#endif
+
         // ---------- Swagger ----------
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(c =>
@@ -656,19 +736,19 @@ internal class Program
             CitizenHackathon2025.Application.Interfaces.IUserHubService,
             CitizenHackathon2025.Infrastructure.Services.UserHubService>();
 
-        #if DEBUG
-            services
-                .AddRazorPages(options =>
-                {
-                    options.Conventions.AuthorizeFolder("/Admin", "Admin");
-                })
-                .AddRazorRuntimeCompilation();
-        #else
+#if DEBUG
+        services
+            .AddRazorPages(options =>
+            {
+                options.Conventions.AuthorizeFolder("/Admin", "Admin");
+            })
+            .AddRazorRuntimeCompilation();
+#else
             services.AddRazorPages(options =>
             {
                 options.Conventions.AuthorizeFolder("/Admin", "Admin");
             });
-        #endif
+#endif
 
         // ---------- Build app ----------
         var app = builder.Build();
@@ -766,15 +846,15 @@ internal class Program
         app.UseExceptionMiddleware();
         //app.UseAntiXssMiddleware();
         // ⬇️ Security headers (before static files)
-        app.UseSecurityHeaders(); 
+        app.UseSecurityHeaders();
         app.UseHttpsRedirection();
         if (!app.Environment.IsDevelopment())
         {
             app.UseHsts();
             app.UseUserAgentFiltering();
         }
-        
-        
+
+
         app.UseStaticFiles();
         app.UseRouting();
 
@@ -854,7 +934,7 @@ internal class Program
                 ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
                 {
                     HttpOnly = false,
-                    Secure = !dev ? true : false,        // false en DEV si besoin
+                    Secure = !dev ? true : false,        // false in DEV if needed
                     SameSite = dev ? SameSiteMode.Lax : SameSiteMode.None
                 });
             }
@@ -899,7 +979,7 @@ internal class Program
             }).RequireAuthorization(); // must return 200 + your roles
         }
 
-        
+
 
         // Routes API (with rate limiting by group) for production
         //app.MapGroup("/api")
@@ -908,7 +988,7 @@ internal class Program
         if (app.Environment.IsDevelopment())
         {
             // ⚠️ avoid blocking Postman in dev
-            //app.UseUserAgentFiltering(); // <- désactiver en DEV
+            //app.UseUserAgentFiltering(); // <- disable in DEV
         }
         app.UseAuditLogging();
         app.UseSerilogRequestLogging();
@@ -940,25 +1020,25 @@ internal class Program
         // 🎯 paths RELATIVE to "/hubs"
         hubs.MapHub<CrowdHub>("crowdHub");
         hubs.MapHub<SuggestionHub>("suggestionHub");
-        hubs.MapHub<WeatherForecastHub>("weatherforecastHub");
+        hubs.MapHub<WeatherForecastHub>(CitizenHackathon2025.Contracts.Hubs.WeatherForecastHubMethods.HubPath);
         hubs.MapHub<TrafficHub>("trafficHub");
-        hubs.MapHub<OutZenHub>("outzen", o =>
+        hubs.MapHub<OutZenHub>("outzenHub", o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         });
 
         // These hubs mapped via constants must also be relative
-        hubs.MapHub<AISuggestionHub>(TourismeHubMethods.HubPath.TrimStart('/')); // ex: "tourism"
+        hubs.MapHub<AISuggestionHub>("aisuggessionHub"); // ex: "tourism"
         hubs.MapCrowdCalendarHub(o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         });
-        hubs.MapHub<EventHub>(CitizenHackathon2025.Contracts.Hubs.EventHubMethods.HubPath.TrimStart('/'));
-        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath.TrimStart('/'));
-        hubs.MapHub<NotificationHub>(NotificationHubMethods.HubPath.TrimStart('/'));
-        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath.TrimStart('/'));
-        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath.TrimStart('/'));
-        hubs.MapHub<UserHub>(UserHubMethods.HubPath.TrimStart('/'));
+        hubs.MapHub<EventHub>("eventHub");
+        hubs.MapHub<GPTHub>("gptHub");
+        hubs.MapHub<NotificationHub>("notificationHub");
+        hubs.MapHub<PlaceHub>("placeHub");
+        hubs.MapHub<UpdateHub>("updateHub");
+        hubs.MapHub<UserHub>("serHub");
 
         //app.MapGet("/csp-report/health", () => Results.Ok(new { status = "ok" }))
         //    .WithMetadata(new Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute { IgnoreApi = true });
@@ -1040,6 +1120,7 @@ internal class Program
         app.Run();
     }
 }
+
 
 
 
