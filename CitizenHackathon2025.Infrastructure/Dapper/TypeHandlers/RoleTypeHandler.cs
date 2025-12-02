@@ -1,5 +1,5 @@
 ﻿using System.Data;
-using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Contracts.Enums;
 using Dapper;
 
 namespace CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers

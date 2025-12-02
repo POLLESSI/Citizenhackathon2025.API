@@ -1,6 +1,6 @@
-﻿using CitizenHackathon2025.Domain.Enums;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using CitizenHackathon2025.Contracts.Enums; 
 
 namespace CitizenHackathon2025.DTOs.DTOs
 {
@@ -10,19 +10,20 @@ namespace CitizenHackathon2025.DTOs.DTOs
         [EmailAddress(ErrorMessage = "Invalid email format.")]
         [DisplayName("Email")]
         public string Email { get; set; } = string.Empty;
+
         [Required(ErrorMessage = "Password is required.")]
         [MinLength(8, ErrorMessage = "Password must contain at least 8 characters.")]
-
         [DisplayName("Password")]
         public string Password { get; set; } = string.Empty;
-        
+
         /// <summary>"Admin" / "Modo" / "User" / "Guest" ...</summary>
         [Required(ErrorMessage = "Role is required.")]
-        [EnumDataType(typeof(UserRole))]   // ✅ enum correct
+        [EnumDataType(typeof(UserRole))]
         [DisplayName("Role")]
         public UserRole Role { get; set; } = UserRole.User;
     }
 }
+
 
 
 

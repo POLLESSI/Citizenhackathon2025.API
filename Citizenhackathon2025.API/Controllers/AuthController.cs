@@ -1,7 +1,7 @@
 ﻿using System.Security.Claims;
 using CitizenHackathon2025.API.Tools; 
 using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

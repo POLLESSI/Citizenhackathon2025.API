@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
@@ -76,7 +77,7 @@ namespace CitizenHackathon2025.API.Controllers
             var dto = saved.MapToWeatherForecastDTO();
 
             // (optional) real-time broadcast
-            await _hubContext.Clients.All.SendAsync("ReceiveForecast", dto, ct);
+            await _hubContext.Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.ReceiveForecast, dto, ct);
 
             return Ok(dto);
         }
@@ -87,9 +88,18 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<ActionResult<List<WeatherForecastDTO>>> GetAll(CancellationToken ct = default)
         {
             // ⚠️ Here we want EVERYTHING, so we call GetAllAsync() (not GetLatestWeatherForecastAsync)
-            var entities = await _weatherRepository.GetAllAsync();
-            var dtos = entities.Select(w => w.MapToWeatherForecastDTO()).ToList();
-            return Ok(dtos);
+            try
+            {
+                var entities = await _weatherRepository.GetAllAsync();
+                var dtos = entities.Select(w => w.MapToWeatherForecastDTO()).ToList();
+                return Ok(dtos);
+            }
+            catch (Exception ex)
+            {
+                // detailed log for us
+                Console.WriteLine($"[GetAll] {ex.GetType().Name}: {ex.Message}");
+                throw;
+            }
         }
 
         // current via OWM (existing)
@@ -153,12 +163,10 @@ namespace CitizenHackathon2025.API.Controllers
             var result = saved.MapToWeatherForecastDTO();
 
             // Real-time broadcast (reuses the same event as elsewhere)
-            await _hubContext.Clients.All.SendAsync("ReceiveForecast", result, ct);
+            await _hubContext.Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.ReceiveForecast, result, ct);
 
             return Ok(result);
         }
-
-
     }
 }
 

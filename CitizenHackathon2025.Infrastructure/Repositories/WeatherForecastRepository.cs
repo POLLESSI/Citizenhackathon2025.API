@@ -21,10 +21,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task AddAsync(WeatherForecast wf)
         {
             const string sql = @"
-                            INSERT INTO WeatherForecast
-                                (DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
-                            VALUES
-                                (@DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1);";
+        INSERT INTO WeatherForecast
+            (DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
+        VALUES
+            (@DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1);";
 
             DynamicParameters parameters = new();
             parameters.Add("DateWeather", wf.DateWeather, DbType.DateTime2);
@@ -39,11 +39,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             await _connection.ExecuteAsync(sql, parameters);
         }
 
+
         public Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default)
         {
             const string sql = @"
         SELECT TOP(1)
-            Id, DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
+            Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
         FROM dbo.WeatherForecast
         WHERE Active = 1
         ORDER BY DateWeather DESC;";
@@ -65,10 +66,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@Humidity", entity.Humidity, DbType.Int32);
             parameters.Add("@WindSpeedKmh", entity.WindSpeedKmh, DbType.Double);
 
-            // Thanks to OUTPUT INSERTED.* in the SP, we recover the complete line
             var saved = await _connection.QuerySingleAsync<WeatherForecast>(sql, parameters);
             return saved;
         }
+
 
         public async Task<WeatherForecast> SaveWeatherForecastAsync(WeatherForecast forecast)
             => await SaveOrUpdateAsync(forecast);
@@ -76,8 +77,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<WeatherForecast?> GetByIdAsync(int id)
         {
             const string sql = @"
-                            SELECT Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary,
-                                   RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
+                            SELECT Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Id = @Id AND Active = 1;";
             DynamicParameters parameters = new();
@@ -86,50 +86,60 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return await _connection.QueryFirstOrDefaultAsync<WeatherForecast>(sql, parameters);
         }
 
+
+
         public async Task<List<WeatherForecast>> GetAllAsync()
         {
             const string sql = @"
-                            SELECT Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary,
-                                   RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
+                            SELECT Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
                             FROM WeatherForecast
                             WHERE Active = 1
                             ORDER BY DateWeather DESC;";
-            DynamicParameters parameters = new();
-            parameters.Add("Limit", 256, DbType.Int32);
 
-            var rows = await _connection.QueryAsync<WeatherForecast>(sql, parameters);
+            // The Limit parameter is unnecessary here; you can remove it or keep it for later.
+            var rows = await _connection.QueryAsync<WeatherForecast>(sql);
             return rows.ToList();
         }
 
+
         public async Task<WeatherForecast> GenerateNewForecastAsync()
         {
+            // Small area around Wallonia/Brussels :
+            // lat ~ [50.2, 50.9], lon ~ [4.0, 5.1]
+            decimal lat = 50.2m + (decimal)_rng.NextDouble() * 0.7m;
+            decimal lon = 4.0m + (decimal)_rng.NextDouble() * 1.1m;
+
             var wf = new WeatherForecast
             {
                 DateWeather = DateTime.UtcNow,
+                Latitude = lat,
+                Longitude = lon,
                 TemperatureC = _rng.Next(-10, 35),
                 Summary = "Generated",
                 RainfallMm = Math.Round(_rng.NextDouble() * 20, 1),
                 Humidity = _rng.Next(30, 100),
                 WindSpeedKmh = Math.Round(_rng.NextDouble() * 80, 1)
             };
+
             return await SaveOrUpdateAsync(wf);
         }
+
 
         public async Task<List<WeatherForecast>> GetHistoryAsync(int limit = 128)
         {
             const string sql = @"
-                            SELECT TOP(@Limit)
-                                Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary,
-                                RainfallMm AS RainfallMm, Humidity, WindSpeedKmh, Active
-                            FROM WeatherForecast
-                            WHERE Active = 1
-                            ORDER BY DateWeather DESC;";
+                        SELECT TOP(@Limit) Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh,Active
+                        FROM WeatherForecast
+                        WHERE Active = 1
+                        ORDER BY DateWeather DESC;";
+
             DynamicParameters parameters = new();
             parameters.Add("Limit", limit, DbType.Int32);
 
             var rows = await _connection.QueryAsync<WeatherForecast>(sql, parameters);
             return rows.ToList();
         }
+
         public async Task<int> ArchivePastWeatherForecastsAsync()
         {
             const string sql = @"

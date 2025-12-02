@@ -2,7 +2,7 @@
 using System.Text;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;

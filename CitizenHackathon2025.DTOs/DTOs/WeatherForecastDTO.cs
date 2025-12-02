@@ -51,10 +51,10 @@ namespace CitizenHackathon2025.DTOs.DTOs
         [JsonIgnore]
         public string MonthName => DateWeather.ToString("MMMM", CultureInfo.InvariantCulture);
 
-        public string IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
-        public string WeatherMain { get; set; } = string.Empty;
-        public bool IsSevere { get; set; }
-        public string Description { get; set; }
+        public string? IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
+        public string? WeatherMain { get; set; } = string.Empty;
+        public bool IsSevere { get; set; } = false;
+        public string? Description { get; set; }
     }
 }
 

@@ -6,17 +6,22 @@ namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class WeatherForecastHub : Hub
     {
-    #nullable disable
+#nullable disable
         public async Task RefreshWeatherForecast(string message)
         {
-            await Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.NewWeatherForecast, message);
+            await Clients.All.SendAsync(
+                WeatherForecastHubMethods.ToClient.ReceiveForecast,
+                message);
         }
 
         public async Task Notify(string message)
         {
-            await Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.ReceiveForecast, message);
+            await Clients.All.SendAsync(
+                WeatherForecastHubMethods.ToClient.EventArchived,
+                message);
         }
     }
+
 }
 
 

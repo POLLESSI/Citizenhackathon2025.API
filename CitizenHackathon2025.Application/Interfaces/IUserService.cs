@@ -1,6 +1,6 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Contracts.Enums;
 namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IUserService

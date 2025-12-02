@@ -1,37 +1,44 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<!--CitizenHackathon2025.DTOs.csproj-->
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
-		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<RootNamespace>CitizenHackathon2025.DTOs</RootNamespace>
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="Events\**" />
-	  <Compile Remove="Extensions\**" />
-	  <EmbeddedResource Remove="Events\**" />
-	  <EmbeddedResource Remove="Extensions\**" />
-	  <None Remove="Events\**" />
-	  <None Remove="Extensions\**" />
+		<PackageReference Include="Dapper" Version="2.1.66" />
+		<PackageReference Include="Mapster" Version="7.4.0" />
+		<PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
+		<PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.21" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="OpenAI" Version="2.1.0" />
+		<PackageReference Include="Polly" Version="8.5.2" />
+		<PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+		<PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+		<PackageReference Include="Volo.Abp.Ddd.Domain" Version="8.3.4" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="Models\" />
+		<ProjectReference Include="..\..\CitizenHackathon2025.Contracts\CitizenHackathon2025.Contracts.csproj" />
+		<ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
+		<ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
-	  <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.21" />
-	  <PackageReference Include="Microsoft.Data.Tools.Msbuild" Version="16.0.62004.28040" />
-	  <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
-	  <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
+		<Folder Include="Hub\" />
 	</ItemGroup>
 
 </Project>
+
 
 
 

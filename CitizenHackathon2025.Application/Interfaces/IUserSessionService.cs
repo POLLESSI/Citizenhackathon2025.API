@@ -1,4 +1,4 @@
-﻿using CitizenHackathon2025.Domain.Enums;
+﻿using CitizenHackathon2025.Contracts.Enums;
 using Microsoft.AspNetCore.Http;
 
 namespace CitizenHackathon2025.Application.Interfaces

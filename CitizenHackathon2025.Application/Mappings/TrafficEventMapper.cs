@@ -1,4 +1,4 @@
-﻿using CitizenHackathon2025.Domain.Enums;
+﻿using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Shared.Extensions

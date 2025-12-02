@@ -1,5 +1,5 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.ValueObjects;
 using CitizenHackathon2025.DTOs.DTOs;
 using Volo.Abp.Domain.Entities;
@@ -20,11 +20,19 @@ namespace CitizenHackathon2025.Application.Extensions
             return new CitizenHackathon2025.Domain.Entities.WeatherForecast
             {
                 DateWeather = dto.DateWeather,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
                 TemperatureC = dto.TemperatureC,
                 Summary = dto.Summary,
                 RainfallMm = dto.RainfallMm,
                 Humidity = dto.Humidity,
-                WindSpeedKmh = dto.WindSpeedKmh
+                WindSpeedKmh = dto.WindSpeedKmh,
+
+                Icon = null,
+                IconUrl = string.Empty,
+                WeatherMain = string.Empty,
+                IsSevere = false,
+                Description = null
             };
         }
 
@@ -36,11 +44,19 @@ namespace CitizenHackathon2025.Application.Extensions
             {
                 Id = entity.Id, 
                 DateWeather = entity.DateWeather,
+                Latitude = entity.Latitude,
+                Longitude = entity.Longitude,
                 TemperatureC = entity.TemperatureC,
                 Summary = entity.Summary,
                 RainfallMm = entity.RainfallMm,
                 Humidity = entity.Humidity,
-                WindSpeedKmh = entity.WindSpeedKmh
+                WindSpeedKmh = entity.WindSpeedKmh,
+
+                Icon = null,
+                IconUrl = string.Empty,
+                WeatherMain = string.Empty,
+                IsSevere = false,
+                Description = null
             };
         }
 

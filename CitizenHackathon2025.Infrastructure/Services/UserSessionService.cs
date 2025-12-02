@@ -1,6 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Enums;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -8,7 +8,7 @@ using System.IdentityModel.Tokens.Jwt;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    public sealed class UserSessionService : Application.Interfaces.IUserSessionService
+    public sealed class UserSessionService : IUserSessionService
     {
         private readonly IUserSessionRepository _repo;
         private readonly ILogger<UserSessionService> _log;
@@ -30,7 +30,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 IssuedAtUtc = jwt.ValidFrom.ToUniversalTime(),
                 ExpiresAtUtc = jwt.ValidTo.ToUniversalTime(),
                 LastSeenUtc = DateTime.UtcNow,
-                Source = source,
+                //Source = source,
                 UserAgent = ua,
                 Ip = ip
             });

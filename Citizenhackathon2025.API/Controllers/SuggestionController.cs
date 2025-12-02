@@ -15,7 +15,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.SqlServer.Dac.Model;
 using Volo.Abp.Domain.Entities;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using HubEvents = CitizenHackathon2025.Contracts.Hubs.SuggestionHubMethods;

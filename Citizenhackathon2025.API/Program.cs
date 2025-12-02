@@ -5,6 +5,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using CitizenHackathon2025.API.Azure.Security.KeyVault;
 using CitizenHackathon2025.API.Extensions;
+using CitizenHackathon2025.API.Hubs;
 using CitizenHackathon2025.API.Hubs.Serilog.Sinks;
 using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Options;
@@ -15,6 +16,7 @@ using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Abstractions;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -1012,23 +1014,21 @@ internal class Program
         app.MapControllers();
 
         // ---------- Hubs ----------
-        // protected group + CORS
         var hubs = app.MapGroup("/hubs")
-                      .RequireAuthorization()
-                      .RequireCors("AllowBlazor");
+                      .RequireAuthorization();   // CORS is already global -> no need for RequireCors here
 
-        // 🎯 paths RELATIVE to "/hubs"
+        // Paths RELATIVE to "/hubs"
         hubs.MapHub<CrowdHub>("crowdHub");
         hubs.MapHub<SuggestionHub>("suggestionHub");
-        hubs.MapHub<WeatherForecastHub>(CitizenHackathon2025.Contracts.Hubs.WeatherForecastHubMethods.HubPath);
+        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath); // "weatherforecastHub"
         hubs.MapHub<TrafficHub>("trafficHub");
         hubs.MapHub<OutZenHub>("outzenHub", o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         });
 
-        // These hubs mapped via constants must also be relative
-        hubs.MapHub<AISuggestionHub>("aisuggessionHub"); // ex: "tourism"
+        // Other hubs
+        hubs.MapHub<AISuggestionHub>("aisuggessionHub");
         hubs.MapCrowdCalendarHub(o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
@@ -1038,7 +1038,7 @@ internal class Program
         hubs.MapHub<NotificationHub>("notificationHub");
         hubs.MapHub<PlaceHub>("placeHub");
         hubs.MapHub<UpdateHub>("updateHub");
-        hubs.MapHub<UserHub>("serHub");
+        hubs.MapHub<UserHub>("userHub");
 
         //app.MapGet("/csp-report/health", () => Results.Ok(new { status = "ok" }))
         //    .WithMetadata(new Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute { IgnoreApi = true });

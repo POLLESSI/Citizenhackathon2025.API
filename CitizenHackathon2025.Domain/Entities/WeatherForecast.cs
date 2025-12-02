@@ -1,4 +1,4 @@
-﻿using CitizenHackathon2025.Domain.Enums;
+﻿using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.ValueObjects;
 using System;
 
@@ -18,6 +18,11 @@ namespace CitizenHackathon2025.Domain.Entities
         public double WindSpeedKmh { get; set; }
         public WeatherType WeatherType { get; set; }
         public SeverityLevel Severity { get; set; }
+        public string? Icon { get; set; } = string.Empty; // ex: 10d
+        public string? IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
+        public string? WeatherMain { get; set; } = string.Empty;
+        public bool IsSevere { get; set; } = false;
+        public string? Description { get; set; }
         public bool Active { get; private set; } = true;
     }
     // DEPRECATED: Migrer to WeatherForecast DDD
