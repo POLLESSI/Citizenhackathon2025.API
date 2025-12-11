@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using CitizenHackathon2025.Contracts.Enums;
+using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json.Serialization;
 
@@ -27,20 +28,24 @@ namespace CitizenHackathon2025.DTOs.DTOs
                 return tempF.ToString(CultureInfo.InvariantCulture);
             }
         }
-
-        [DisplayName("Summary : ")]
-        public string Summary { get; set; } = string.Empty;
-
+        [DisplayName("Humidity : ")]
+        public int Humidity { get; set; }
+        [DisplayName("Wind Speed km/h : ")]
+        public double WindSpeedKmh { get; set; }
         [DisplayName("Rainfall mm : ")]
         public double RainfallMm { get; set; }
 
-        [DisplayName("Humidity : ")]
-        public int Humidity { get; set; }
+        [DisplayName("Summary : ")]
+        public string Summary { get; set; } = string.Empty;
+        public string? WeatherMain { get; set; } = string.Empty;
 
-        [DisplayName("Wind Speed km/h : ")]
-        public double WindSpeedKmh { get; set; }
+        public string? Description { get; set; }
+
         [DisplayName("Icon : ")]
         public string? Icon { get; set; }
+        public string? IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
+        public bool IsSevere { get; set; } = false;
+        public WeatherType WeatherType { get; set; }
 
         [JsonIgnore]
         public string DateWeatherFormatted => DateWeather.ToString("dd/MM/yyyy");
@@ -49,12 +54,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         public string DayOfWeek => DateWeather.ToString("dddd", CultureInfo.InvariantCulture);
 
         [JsonIgnore]
-        public string MonthName => DateWeather.ToString("MMMM", CultureInfo.InvariantCulture);
-
-        public string? IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
-        public string? WeatherMain { get; set; } = string.Empty;
-        public bool IsSevere { get; set; } = false;
-        public string? Description { get; set; }
+        public string MonthName => DateWeather.ToString("MMMM", CultureInfo.InvariantCulture); 
     }
 }
 

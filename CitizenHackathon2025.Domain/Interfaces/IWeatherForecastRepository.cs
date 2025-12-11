@@ -14,6 +14,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         //WeatetherForecast? UpdateWeatherForecast(WeatherForecast weatherForecast);
         Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity);
         Task<int> ArchivePastWeatherForecastsAsync();
+        Task<(double LastHour, double Last72h)> GetRainAccumulationAsync(decimal latitude, decimal longitude, DateTime now, CancellationToken ct = default);
     }
 }
 

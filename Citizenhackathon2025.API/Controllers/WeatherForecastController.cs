@@ -1,10 +1,12 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.WeatherForecasts.Commands;
 using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Infrastructure.Services;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -71,13 +73,26 @@ namespace CitizenHackathon2025.API.Controllers
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
         public async Task<IActionResult> Generate(CancellationToken ct = default)
         {
-            // generate a random record + upsert to DB
             var saved = await _weatherRepository.GenerateNewForecastAsync();
-
             var dto = saved.MapToWeatherForecastDTO();
 
-            // (optional) real-time broadcast
-            await _hubContext.Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.ReceiveForecast, dto, ct);
+            // 1) normal distribution of the forecast
+            await _hubContext.Clients.All.SendAsync(
+                WeatherForecastHubMethods.ToClient.ReceiveForecast,
+                dto,
+                ct);
+
+            // 2) rain alert check via MediatR
+            var alert = await _mediator.Send(new CheckRainfallAlertCommand(saved), ct);
+
+            if (alert is not null)
+            {
+                // 3) rain alert check via MediatR
+                await _hubContext.Clients.All.SendAsync(
+                    WeatherForecastHubMethods.ToClient.HeavyRainAlert,
+                    alert,
+                    ct);
+            }
 
             return Ok(dto);
         }

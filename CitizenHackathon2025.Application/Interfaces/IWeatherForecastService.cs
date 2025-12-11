@@ -1,4 +1,6 @@
-﻿using CitizenHackathon2025.DTOs.DTOs;
+﻿using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.Interfaces
 {
@@ -13,6 +15,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<WeatherForecastDTO?> GetByIdAsync(int id, CancellationToken ct = default);
         Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default);
         Task<List<WeatherForecastDTO>> GetAllAsync(CitizenHackathon2025.Domain.Entities.WeatherForecast forecast, CancellationToken ct = default);
+        Task<RainAlertDTO?> CheckRainfallAlertAsync(WeatherForecast wf, CancellationToken ct = default);
         Task SendWeatherToAllClientsAsync(CancellationToken ct = default);
         Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default);
         Task<int> ArchivePastWeatherForecastsAsync();

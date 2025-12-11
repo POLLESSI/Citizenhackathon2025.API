@@ -8,21 +8,21 @@ namespace CitizenHackathon2025.Domain.Entities
     {
         public int Id { get; set; }
         public DateTime DateWeather { get; set; }
-        public decimal Latitude { get; set; }
-        public decimal Longitude { get; set; }
+        public decimal? Latitude { get; set; }
+        public decimal? Longitude { get; set; }
         public int TemperatureC { get; set; }
         public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-        public string? Summary { get; set; }
-        public double RainfallMm { get; set; }
         public int Humidity { get; set; }
         public double WindSpeedKmh { get; set; }
-        public WeatherType WeatherType { get; set; }
+        public double RainfallMm { get; set; }
+        public string? Summary { get; set; }
+        public string? WeatherMain { get; set; } = string.Empty;
+        public string? Description { get; set; }
         public SeverityLevel Severity { get; set; }
         public string? Icon { get; set; } = string.Empty; // ex: 10d
         public string? IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
-        public string? WeatherMain { get; set; } = string.Empty;
         public bool IsSevere { get; set; } = false;
-        public string? Description { get; set; }
+        public WeatherType WeatherType { get; set; }
         public bool Active { get; private set; } = true;
     }
     // DEPRECATED: Migrer to WeatherForecast DDD

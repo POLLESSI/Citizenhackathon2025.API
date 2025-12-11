@@ -1,15 +1,16 @@
-﻿using System;
+﻿using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Domain.Entities;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface ISuggestionService
     {
-#nullable disable
+    #nullable disable
         /// <summary>
         /// Gets all active suggestions from a given user.
         /// </summary>
@@ -28,6 +29,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default);
         Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion, CancellationToken ct = default);
         Suggestion? UpdateSuggestion(Suggestion suggestion);
+        Task<IReadOnlyList<SuggestionGroupedByPlaceDTO>> GroupSuggestionsByPlaceAsync(DateTime? since = null, CancellationToken ct = default);
     }
 }
 

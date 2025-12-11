@@ -1,0 +1,10 @@
+﻿using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
+using MediatR;
+
+namespace CitizenHackathon2025.Application.WeatherForecasts.Commands
+{
+    public record CheckRainfallAlertCommand(WeatherForecast Weather)
+        : IRequest<RainAlertDTO?>;
+}

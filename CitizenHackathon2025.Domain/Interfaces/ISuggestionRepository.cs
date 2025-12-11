@@ -6,6 +6,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     {
         Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
         Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default);
+        Task<IEnumerable<Suggestion>> GetActiveSinceAsync(DateTime since, CancellationToken ct = default);
         /// <summary>
         /// Retrieves active suggestions for a given user.
         /// </summary>

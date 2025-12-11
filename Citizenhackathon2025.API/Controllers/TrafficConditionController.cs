@@ -43,7 +43,8 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> GetCurrent(double lat, double lon)
         {
             var dto = await _trafficApiService.GetCurrentTrafficAsync(lat, lon);
-            if (dto == null) return NotFound();
+            if (dto == null)
+                return NotFound();
 
             // Mapper DTO → Entity
             var entity = new TrafficCondition
@@ -54,11 +55,24 @@ namespace CitizenHackathon2025.API.Controllers
                 CongestionLevel = dto.CongestionLevel,
                 IncidentType = dto.IncidentType
             };
-            // Backup to database and distribution
-            var saved = await _trafficConditionRepository.SaveTrafficConditionAsync(entity);
-            await _hubContext.Clients.All.SendAsync("NewTrafficCondition", saved);
-            return Ok(saved);
+
+            // 🔹 Backup to database (UPSERT)
+            var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
+            if (saved is null)
+                return Problem("UPSERT failed");
+
+            // 🔹 Mapping to DTO for output + SignalR
+            var dtoOut = saved.MapToTrafficConditionDTO();
+
+            // 🔹 SignalR Broadcast (same event everywhere)
+            await _hubContext.Clients.All.SendAsync(
+                HubEvents.ToClient.TrafficUpdated,
+                dtoOut
+            );
+
+            return Ok(dtoOut);
         }
+
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetTrafficConditionById(int id)
         {
@@ -96,14 +110,15 @@ namespace CitizenHackathon2025.API.Controllers
                 IncidentType = dto.IncidentType
             };
 
-            // 🧠 New UPSERT: archive + insert
             var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
-            if (saved is null) return Problem("Échec de l'UPSERT");
+            if (saved is null) return Problem("UPSERT failed");
 
-            // 🔔 SignalR Broadcast
-            await _hubContext.Clients.All.SendAsync("ReceiveTrafficConditionUpdate", saved);
+            var savedDto = saved.MapToTrafficConditionDTO();
 
-            return Ok(saved.MapToTrafficConditionDTO());
+            // 🔔 Broadcast SignalR with the correct event name
+            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.TrafficUpdated, savedDto);
+
+            return Ok(savedDto);
         }
         [HttpPost("archive-expired")]
         [Authorize(Policy = "Admin")]

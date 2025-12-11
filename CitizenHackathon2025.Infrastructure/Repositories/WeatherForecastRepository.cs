@@ -140,6 +140,29 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return rows.ToList();
         }
 
+        public async Task<(double LastHour, double Last72h)> GetRainAccumulationAsync(decimal lat, decimal lon, DateTime asOfUtc)
+        {
+            const string sql = @"
+                        SELECT
+                            SUM(CASE WHEN DateWeather >= @From1h  THEN ISNULL(RainfallMm, 0) ELSE 0 END) AS Rain1h,
+                            SUM(CASE WHEN DateWeather >= @From72h THEN ISNULL(RainfallMm, 0) ELSE 0 END) AS Rain72h
+                        FROM WeatherForecast
+                        WHERE Active = 1
+                          AND ABS(Latitude  - @Lat) <= @Delta
+                          AND ABS(Longitude - @Lon) <= @Delta;";
+
+            var p = new DynamicParameters();
+            p.Add("@From1h", asOfUtc.AddHours(-1), DbType.DateTime2);
+            p.Add("@From72h", asOfUtc.AddHours(-72), DbType.DateTime2);
+            p.Add("@Lat", lat, DbType.Decimal);
+            p.Add("@Lon", lon, DbType.Decimal);
+            p.Add("@Delta", 0.05m, DbType.Decimal); // ~5 km on each side (approx.)
+
+            var result = await _connection.QuerySingleAsync<(double Rain1h, double Rain72h)>(sql, p);
+            return (result.Rain1h, result.Rain72h);
+        }
+
+
         public async Task<int> ArchivePastWeatherForecastsAsync()
         {
             const string sql = @"
@@ -161,6 +184,25 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return 0;
             }
         }
+
+        public async Task<(double LastHour, double Last72h)> GetRainAccumulationAsync( decimal latitude, decimal longitude, DateTime now, CancellationToken ct = default)
+        {
+            const string sql = @"
+                        SELECT 
+                            SUM(CASE WHEN DateWeather >= DATEADD(HOUR, -1, @Now) THEN RainfallMm ELSE 0 END) AS LastHour,
+                            SUM(CASE WHEN DateWeather >= DATEADD(HOUR, -72, @Now) THEN RainfallMm ELSE 0 END) AS Last72h
+                        FROM WeatherForecast
+                        WHERE Active = 1
+                          AND ISNULL(Latitude, 0) = @Lat
+                          AND ISNULL(Longitude, 0) = @Lon;
+    ";
+
+            var result = await _connection.QueryFirstAsync<(double LastHour, double Last72h)>(
+                new CommandDefinition(sql, new { Now = now, Lat = latitude, Lon = longitude }, cancellationToken: ct));
+
+            return result;
+        }
+
     }
 }
 

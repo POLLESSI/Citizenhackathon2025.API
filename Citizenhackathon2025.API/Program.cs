@@ -25,6 +25,7 @@ using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
+using CitizenHackathon2025.Infrastructure.Extensions;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs;
 using CitizenHackathon2025.Infrastructure.Init;
@@ -346,6 +347,7 @@ internal class Program
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IGeoService, GeoService>();
         services.AddScoped<IGPTService, GPTService>();
+        services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IPlaceService, PlaceService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
@@ -361,7 +363,7 @@ internal class Program
         services.AddScoped<WeatherSuggestionOrchestrator>();
         services.AddScoped<IUserHubService, UserHubService>();
 
-        services.AddScoped<IWeatherForecastService, WeatherForecastService>();
+        //services.AddScoped<IWeatherForecastService, WeatherForecastService>();
 
         // ---------- Hubs & notifiers ----------
         services.AddScoped<IWeatherHubService, CitizenHackathon2025.Hubs.Services.WeatherHubService>();
@@ -378,6 +380,7 @@ internal class Program
         services.AddScoped<IPlaceRepository, PlaceRepository>();
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
         services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
+        services.AddScoped<IUserMessageRepository, UserMessageRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserSessionRepository, UserSessionRepository>();
         services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
@@ -493,6 +496,7 @@ internal class Program
         // ⛔️ Unnecessary: ​​another HttpClient<OpenWeatherService> would be redundant and ambiguous
         services.AddInfrastructure();
         services.AddInfrastructureServices();
+        services.AddOutZenServices();
         //services.AddMapster();
 
         // ---------- MediatR ----------
@@ -537,7 +541,8 @@ internal class Program
                         "https://app.wallonie-en-poche.example" // prod
                      )
                      .AllowAnyHeader()
-                     .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                     //.WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                     .AllowAnyMethod()
                      .AllowCredentials());
 
         });
@@ -589,7 +594,7 @@ internal class Program
         {
             o.AddPolicy("Admin", p => p.RequireRole(Roles.Admin, "Admin", "ADMIN", "Developer"));
             o.AddPolicy("Modo", p => p.RequireRole(Roles.Admin, Roles.Modo));
-            o.AddPolicy("User", p => p.RequireRole(Roles.User));
+            o.AddPolicy("User", p => p.RequireRole(Roles.User, Roles.Admin, Roles.Modo));
             o.AddPolicy("Guest", p => p.RequireRole(Roles.Guest));
         });
 
@@ -979,6 +984,19 @@ internal class Program
                     Roles = u.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToArray()
                 });
             }).RequireAuthorization(); // must return 200 + your roles
+            app.MapGet("/_whoami-user", (HttpContext ctx) =>
+            {
+                var u = ctx.User;
+                return Results.Json(new
+                {
+                    Authenticated = u.Identity?.IsAuthenticated,
+                    Name = u.Identity?.Name,
+                    Roles = u.Claims
+                        .Where(c => c.Type == ClaimTypes.Role)
+                        .Select(c => c.Value)
+                        .ToArray()
+                });
+            }).RequireAuthorization("User"); // 👈 IMPORTANT
         }
 
 
@@ -1013,32 +1031,58 @@ internal class Program
         // (If you have other controllers outside /api, uncomment the line below)
         app.MapControllers();
 
-        // ---------- Hubs ----------
-        var hubs = app.MapGroup("/hubs")
-                      .RequireAuthorization();   // CORS is already global -> no need for RequireCors here
+        app.Use(async (ctx, next) =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/hubs/weatherforecastHub", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[Diag-HubWF] Incoming {ctx.Request.Method} {ctx.Request.Path}{ctx.Request.QueryString}");
 
-        // Paths RELATIVE to "/hubs"
-        hubs.MapHub<CrowdHub>("crowdHub");
-        hubs.MapHub<SuggestionHub>("suggestionHub");
-        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath); // "weatherforecastHub"
-        hubs.MapHub<TrafficHub>("trafficHub");
-        hubs.MapHub<OutZenHub>("outzenHub", o =>
+                // Endpoint already selected by the routing (if yes) :
+                var endpoint = ctx.GetEndpoint();
+                Console.WriteLine($"[Diag-HubWF] Endpoint = {endpoint?.DisplayName ?? "<null>"}");
+            }
+
+            await next();
+        });
+
+
+        // ---------- Hubs ----------
+
+        app.MapHub<WeatherForecastHub>($"/hubs/{WeatherForecastHubMethods.HubPath}").RequireAuthorization(); // "weatherforecastHub"
+        app.MapHub<CrowdHub>("/hubs/crowdHub").RequireAuthorization();
+        app.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization(); 
+        app.MapHub<TrafficHub>($"/hubs/{TrafficConditionHubMethods.HubPath}").RequireAuthorization();
+        app.MapHub<OutZenHub>("/hubs/outzenHub", o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
-        });
+        }).RequireAuthorization();
+        //var hubs = app.MapGroup("/hubs")
+        //              .RequireAuthorization();   // CORS is already global -> no need for RequireCors here
+
+        //// Paths RELATIVE to "/hubs"
+        //hubs.MapHub<CrowdHub>("crowdHub");
+        //hubs.MapHub<SuggestionHub>("suggestionHub");
+        //hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath); // "weatherforecastHub"
+        ////hubs.MapHub<WeatherForecastHub>("/hubs/weatherforecastHub");
+        //hubs.MapHub<TrafficHub>("trafficHub");
+        //hubs.MapHub<OutZenHub>("outzenHub", o =>
+        //{
+        //    o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
+        //});
 
         // Other hubs
-        hubs.MapHub<AISuggestionHub>("aisuggessionHub");
-        hubs.MapCrowdCalendarHub(o =>
+        app.MapHub<AISuggestionHub>("aisuggessionHub").RequireAuthorization();
+        app.MapCrowdCalendarHub(o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
-        });
-        hubs.MapHub<EventHub>("eventHub");
-        hubs.MapHub<GPTHub>("gptHub");
-        hubs.MapHub<NotificationHub>("notificationHub");
-        hubs.MapHub<PlaceHub>("placeHub");
-        hubs.MapHub<UpdateHub>("updateHub");
-        hubs.MapHub<UserHub>("userHub");
+        }).RequireAuthorization();
+        app.MapHub<EventHub>($"/hubs/{EventHubMethods.HubPath}").RequireAuthorization();
+        app.MapHub<GPTHub>($"/hubs/{GptInteractionHubMethods.HubPath}").RequireAuthorization();
+        app.MapHub<MessageHub>("/hubs/messageHub").RequireAuthorization();
+        app.MapHub<NotificationHub>("notificationHub").RequireAuthorization();
+        app.MapHub<PlaceHub>("placeHub").RequireAuthorization();
+        app.MapHub<UpdateHub>("updateHub").RequireAuthorization();
+        app.MapHub<UserHub>("userHub").RequireAuthorization();
 
         //app.MapGet("/csp-report/health", () => Results.Ok(new { status = "ok" }))
         //    .WithMetadata(new Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute { IgnoreApi = true });

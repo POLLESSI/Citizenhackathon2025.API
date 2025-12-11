@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.SignalR;
 using Volo.Abp.Domain.Entities;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using HubEvents = CitizenHackathon2025.Contracts.Hubs.SuggestionHubMethods;
+using SuggestionGroupedByPlaceDTO = CitizenHackathon2025.DTOs.DTOs.SuggestionGroupedByPlaceDTO;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -29,13 +30,17 @@ namespace CitizenHackathon2025.API.Controllers
     {
         private readonly ISuggestionRepository _repo;
         private readonly IHubContext<SuggestionHub> _hub;
+        private readonly ISuggestionService _service;
 
         private const string HubMethod_ReceiveSuggestionUpdate = "ReceiveSuggestionUpdate";
-        public SuggestionsController(ISuggestionRepository repo, IHubContext<SuggestionHub> hub)
+
+        public SuggestionsController(ISuggestionRepository repo, IHubContext<SuggestionHub> hub, ISuggestionService service)
         {
             _repo = repo;
             _hub = hub;
+            _service = service;
         }
+
         [HttpGet("all")]
         [AllowAnonymous]
         public async Task<IActionResult> GetAll([FromQuery] int? userId, [FromQuery] bool all = false, CancellationToken ct = default)
@@ -70,6 +75,16 @@ namespace CitizenHackathon2025.API.Controllers
             var entity = await _repo.GetByIdAsync(id);
             if (entity is null) return NotFound();
             return Ok(entity.MapToSuggestionDTO());
+        }
+
+        [HttpGet("map")]
+        [AllowAnonymous] // à ajuster selon ta politique
+        [ProducesResponseType(typeof(IEnumerable<SuggestionGroupedByPlaceDTO>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetSuggestionsMap([FromQuery] int days = 7, CancellationToken ct = default)
+        {
+            var since = DateTime.UtcNow.AddDays(-Math.Abs(days));
+            var result = await _service.GroupSuggestionsByPlaceAsync(since, ct);
+            return Ok(result);
         }
 
         [HttpPost]

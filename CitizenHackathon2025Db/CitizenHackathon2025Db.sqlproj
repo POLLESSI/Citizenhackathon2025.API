@@ -95,6 +95,7 @@
     <Build Include="Programmability\Procedures\GetAntennaCounts.sql" />
     <Build Include="Programmability\Procedures\CleanupStaleConnections.sql" />
     <Build Include="Programmability\Views\vw_AntennaCounts.sql" />
+    <Build Include="Tables\UserMessage.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />

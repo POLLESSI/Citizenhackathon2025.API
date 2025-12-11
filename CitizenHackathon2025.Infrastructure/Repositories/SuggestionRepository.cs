@@ -182,6 +182,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return false;
             }
         }
+
+        public Task<IEnumerable<Suggestion>> GetActiveSinceAsync(DateTime since, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 

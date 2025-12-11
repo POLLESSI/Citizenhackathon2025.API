@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Domain.ValueObjects;
 using CitizenHackathon2025.DTOs.DTOs;
 using Volo.Abp.Domain.Entities;
@@ -14,51 +15,80 @@ namespace CitizenHackathon2025.Application.Extensions
         private static DateTime TruncateToSecond(DateTime dt)
             => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond), dt.Kind);
 
-        // DTO -> Entity
-        public static CitizenHackathon2025.Domain.Entities.WeatherForecast MapToWeatherForecast(this WeatherForecastDTO dto)
+        // DTO -> Entity (WeatherForecastDTO -> Domain.Entities.WeatherForecast)
+        public static CitizenHackathon2025.Domain.Entities.WeatherForecast MapToWeatherForecast(
+            this WeatherForecastDTO dto)
         {
+            if (dto is null) return null!;
+
+            // If you want to allow the DEFAULT SQL to run for 50.89 / 4.34,
+            // You can convert 0/0 to null. Otherwise, remove this logic.
+            decimal? lat = dto.Latitude == 0 ? null : dto.Latitude;
+            decimal? lon = dto.Longitude == 0 ? null : dto.Longitude;
+
             return new CitizenHackathon2025.Domain.Entities.WeatherForecast
             {
-                DateWeather = dto.DateWeather,
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
+                Id = dto.Id,
+                DateWeather = TruncateToSecond(dto.DateWeather),
+
+                Latitude = lat,
+                Longitude = lon,
+
                 TemperatureC = dto.TemperatureC,
-                Summary = dto.Summary,
-                RainfallMm = dto.RainfallMm,
                 Humidity = dto.Humidity,
                 WindSpeedKmh = dto.WindSpeedKmh,
+                RainfallMm = dto.RainfallMm,
 
-                Icon = null,
-                IconUrl = string.Empty,
-                WeatherMain = string.Empty,
-                IsSevere = false,
-                Description = null
+                Summary = dto.Summary,
+                WeatherMain = dto.WeatherMain,
+                Description = dto.Description,
+
+                Icon = dto.Icon,
+                IconUrl = dto.IconUrl,
+
+                IsSevere = dto.IsSevere,
+                WeatherType = dto.WeatherType,
+                // Severity : to calculate in your business department if you want intelligent weather logic
+                // Active : We leave the default (true) to be managed by the entity/DB
             };
         }
 
-        // Entity -> DTO
-        public static WeatherForecastDTO MapToWeatherForecastDTO(this CitizenHackathon2025.Domain.Entities.WeatherForecast entity)
+        // Entity -> DTO (Domain.Entities.WeatherForecast -> WeatherForecastDTO)
+        public static WeatherForecastDTO MapToWeatherForecastDTO(
+            this CitizenHackathon2025.Domain.Entities.WeatherForecast entity)
         {
+            if (entity is null) return null!;
+
+            // In practice, your table has DEFAULT values ​​(50.89 / 4.34),
+            // Therefore, entity.Latitude/Longitude should not be null.
+            var lat = entity.Latitude ?? 50.89m;
+            var lon = entity.Longitude ?? 4.34m;
 
             return new WeatherForecastDTO
             {
-                Id = entity.Id, 
+                Id = entity.Id,
                 DateWeather = entity.DateWeather,
-                Latitude = entity.Latitude,
-                Longitude = entity.Longitude,
+
+                Latitude = lat,
+                Longitude = lon,
+
                 TemperatureC = entity.TemperatureC,
-                Summary = entity.Summary,
-                RainfallMm = entity.RainfallMm,
                 Humidity = entity.Humidity,
                 WindSpeedKmh = entity.WindSpeedKmh,
+                RainfallMm = entity.RainfallMm,
 
-                Icon = null,
-                IconUrl = string.Empty,
-                WeatherMain = string.Empty,
-                IsSevere = false,
-                Description = null
+                Summary = entity.Summary ?? string.Empty,
+                WeatherMain = entity.WeatherMain ?? string.Empty,
+                Description = entity.Description,
+
+                Icon = entity.Icon,
+                IconUrl = entity.IconUrl ?? string.Empty,
+
+                IsSevere = entity.IsSevere,
+                WeatherType = entity.WeatherType
             };
         }
+
 
         public static WeatherInfoDTO MapToWeatherInfoDTO(this WeatherForecastDTO dto, string city)
         {
@@ -256,13 +286,24 @@ namespace CitizenHackathon2025.Application.Extensions
         // Suggestion → DTO
         public static SuggestionDTO MapToSuggestionDTO(this Suggestion entity)
         {
+            if (entity is null) return null;
             return new SuggestionDTO
             {
+                Id = entity.Id,
                 UserId = entity.User_Id,
                 DateSuggestion = entity.DateSuggestion,
                 OriginalPlace = entity.OriginalPlace,
                 SuggestedAlternatives = entity.SuggestedAlternatives,
-                Reason = entity.Reason
+                Reason = entity.Reason,
+                Active = entity.Active,
+                Message = entity.Message,
+                Context = entity.Context,
+                EventId = entity.EventId,
+                // Optional 
+                // Latitude = entity.Latitude,
+                // Longitude = entity.Longitude,
+                // DistanceKm = entity.DistanceKm,
+                // Title = entity.OriginalPlace
             };
         }
         //DTO → Suggestion
