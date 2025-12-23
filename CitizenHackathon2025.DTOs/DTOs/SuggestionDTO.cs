@@ -32,6 +32,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         public string Message { get; set; }
         public string Context { get; set; }
         public int? EventId { get; set; }
+        public int? PlaceId { get; set; }
 
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }

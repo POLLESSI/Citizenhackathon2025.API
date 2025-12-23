@@ -16,6 +16,7 @@
 
         // Links to external entities
         public int? EventId { get; set; }
+        public int? PlaceId { get; set; }
         public int? ForecastId { get; set; }
         public int? TrafficId { get; set; }
         public string? LocationName { get; set; }

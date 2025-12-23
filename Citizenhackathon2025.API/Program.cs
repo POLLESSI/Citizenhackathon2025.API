@@ -357,6 +357,7 @@ internal class Program
         services.AddSingleton<TokenGenerator>();
         services.AddScoped<ITrafficConditionService, TrafficConditionService>();
         services.AddScoped<ITrafficApiService, TrafficAPIService>();
+        services.AddScoped<IUserMessageService, UserMessageService>();
         services.AddScoped<NotificationService>();
         services.AddScoped<OpenAiSuggestionService>();
         services.AddScoped<TrafficConditionService>();
@@ -535,7 +536,6 @@ internal class Program
         {
             options.AddPolicy("AllowBlazor", p =>
                     p.WithOrigins(
-                        "http://localhost:7101",  // dev
                         "https://localhost:7101", // HTTPS
                         "https://localhost:7254",
                         "https://app.wallonie-en-poche.example" // prod
@@ -546,6 +546,12 @@ internal class Program
                      .AllowCredentials());
 
         });
+        services.ConfigureApplicationCookie(o =>
+        {
+            o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            o.Cookie.SameSite = SameSiteMode.Lax; 
+        });
+
 
         // ---------- Controllers / JSON ----------
         services.AddControllers()
@@ -813,6 +819,23 @@ internal class Program
             app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
                 b => b.UseMiddleware<OutZenTokenMiddleware>());
         }
+        app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api"),
+    b => b.Use(async (ctx, next) =>
+    {
+        if (HttpMethods.IsGet(ctx.Request.Method))
+        {
+            var af = ctx.RequestServices.GetRequiredService<IAntiforgery>();
+            var tokens = af.GetAndStoreTokens(ctx);
+
+            ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
+            {
+                HttpOnly = false,
+                Secure = true,                 // ✅ even in development if https
+                SameSite = SameSiteMode.Lax    // ✅ consistent
+            });
+        }
+        await next();
+    }));
 
         //if (!app.Environment.IsDevelopment())
         //{

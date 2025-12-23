@@ -126,7 +126,8 @@ namespace CitizenHackathon2025.API.Controllers
                 DateSuggestion = dto.DateSuggestion,
                 OriginalPlace = dto.OriginalPlace,
                 SuggestedAlternatives = dto.SuggestedAlternatives,
-                Reason = dto.Reason
+                Reason = dto.Reason,
+                PlaceId = dto.PlaceId,
             };
 
             var updated = _repo.UpdateSuggestion(entity);

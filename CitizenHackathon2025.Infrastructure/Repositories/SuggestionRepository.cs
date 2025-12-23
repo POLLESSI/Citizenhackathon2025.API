@@ -24,7 +24,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = @"
                             SELECT TOP(@Limit)
                                 Id, User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, Active, DateDeleted,
-                                EventId, ForecastId, TrafficId, LocationName
+                                EventId, PlaceId, ForecastId, TrafficId, LocationName
                             FROM dbo.Suggestion
                             WHERE Active = 1
                             ORDER BY DateSuggestion DESC;";
@@ -46,7 +46,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             SELECT Id, User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason,
-                                   Active, DateDeleted, EventId, ForecastId, TrafficId, LocationName
+                                   Active, DateDeleted, EventId, PlaceId, ForecastId, TrafficId, LocationName
                             FROM dbo.Suggestion
                             WHERE Id = @Id AND Active = 1;";
             DynamicParameters parameters = new();
@@ -88,9 +88,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             INSERT INTO dbo.Suggestion
-                            (User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, EventId, ForecastId, TrafficId, LocationName)
+                            (User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, EventId, PlaceId, ForecastId, TrafficId, LocationName)
                             OUTPUT INSERTED.*
-                            VALUES (@User_Id, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason, @EventId, @ForecastId, @TrafficId, @LocationName);";
+                            VALUES (@User_Id, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason, @EventId, @PlaceId, @ForecastId, @TrafficId, @LocationName);";
             DynamicParameters parameters = new();
             parameters.Add("User_Id", suggestion.User_Id, DbType.Int32);
             parameters.Add("DateSuggestion", suggestion.DateSuggestion, DbType.DateTime2);
@@ -98,6 +98,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("SuggestedAlternatives", suggestion.SuggestedAlternatives, DbType.String);
             parameters.Add("Reason", suggestion.Reason, DbType.String);
             parameters.Add("EventId", suggestion.EventId, DbType.Int32);
+            parameters.Add("PlaceId", suggestion.PlaceId, DbType.Int32);
             parameters.Add("ForecastId", suggestion.ForecastId, DbType.Int32);
             parameters.Add("TrafficId", suggestion.TrafficId, DbType.Int32);
             parameters.Add("LocationName", suggestion.LocationName, DbType.String);
@@ -132,6 +133,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 SuggestedAlternatives = @SuggestedAlternatives,
                                 Reason = @Reason,
                                 EventId = @EventId,
+                                PlaceId = @PlaceId,
                                 ForecastId = @ForecastId,
                                 TrafficId = @TrafficId,
                                 LocationName = @LocationName
@@ -144,6 +146,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("SuggestedAlternatives", suggestion.SuggestedAlternatives, DbType.String);
             parameters.Add("Reason", suggestion.Reason, DbType.String);
             parameters.Add("EventId", suggestion.EventId, DbType.Int32);
+            parameters.Add("PlaceId", suggestion.PlaceId, DbType.Int32);
             parameters.Add("ForecastId", suggestion.ForecastId, DbType.Int32);
             parameters.Add("TrafficId", suggestion.TrafficId, DbType.Int32);
             parameters.Add("LocationName", suggestion.LocationName, DbType.String);

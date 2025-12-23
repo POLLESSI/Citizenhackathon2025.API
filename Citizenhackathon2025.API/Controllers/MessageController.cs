@@ -1,53 +1,63 @@
-﻿using CitizenHackathon2025.Domain.Entities; // UserMessage
-using CitizenHackathon2025.Domain.Interfaces; // IUserMessageRepository
-using CitizenHackathon2025.Application.Interfaces; // IMessageCorrelationService
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
-using CitizenHackathon2025.DTOs.DTOs; 
-using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.API.Controllers
 {
     [EnableRateLimiting("per-user")]
     [Route("api/[controller]")]
     [ApiController]
-    public class MessageController : ControllerBase
+    public sealed class MessageController : ControllerBase
     {
-        private readonly IUserMessageRepository _repo;
+        private readonly IUserMessageService _svc;
         private readonly IMessageCorrelationService _correlator;
         private readonly IHubContext<MessageHub> _hub;
 
         public MessageController(
-            IUserMessageRepository repo,
+            IUserMessageService svc,
             IMessageCorrelationService correlator,
             IHubContext<MessageHub> hub)
         {
-            _repo = repo;
+            _svc = svc;
             _correlator = correlator;
             _hub = hub;
         }
 
+        // GET api/message/latest?take=100
         [HttpGet("latest")]
-        [Authorize(Policy = "User")]
         public async Task<IActionResult> GetLatest([FromQuery] int take = 100, CancellationToken ct = default)
         {
-            var list = await _repo.GetLatestAsync(take, ct);
-            var dtos = list.Select(ToDto).ToList();
+            var list = await _svc.GetLatestAsync(take, ct);
+            var dtos = list.MapToClientMessageDTOs(); // <-- extension
             return Ok(dtos);
         }
+        // GET api/message/{id}
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct = default)
+        {
+            var msg = await _svc.GetByIdAsync(id, ct);
+            if (msg is null) return NotFound();
 
-        public class CreateMessageRequest
+            return Ok(msg.MapToClientMessageDTO()); // <-- extension
+        }
+
+        public sealed class CreateMessageRequest
         {
             public string Content { get; set; } = "";
         }
 
+        // POST api/message
         [HttpPost]
         [Authorize(Policy = "User")]
         public async Task<IActionResult> Post([FromBody] CreateMessageRequest req, CancellationToken ct = default)
         {
+            if (req is null) return BadRequest("Body is required.");
             if (string.IsNullOrWhiteSpace(req.Content))
                 return BadRequest("Content cannot be empty.");
 
@@ -59,31 +69,34 @@ namespace CitizenHackathon2025.API.Controllers
                 Content = req.Content
             };
 
-            // Corrélation
+            // Correlation (SourceType, SourceId, RelatedName, Tags, Lat/Lng...)
             var enriched = await _correlator.CorrelateAsync(raw, ct);
 
-            // Insert
-            var saved = await _repo.InsertAsync(enriched, ct);
-            var dto = ToDto(saved);
+            // Insert via Service (validation + normalisation + repo)
+            var saved = await _svc.InsertAsync(enriched, ct);
 
-            // Broadcast via SignalR
+            var dto = saved.MapToClientMessageDTO(); 
             await _hub.Clients.All.SendAsync("ReceiveMessageUpdate", dto, ct);
 
             return Ok(dto);
         }
 
-        private static ClientMessageDTO ToDto(UserMessage m) => new()
+        // DELETE api/message/{id}
+        // Soft-delete via trigger INSTEAD OF DELETE (repo executes DELETE)
+        [HttpDelete("{id:int}")]
+        [Authorize(Policy = "User")]
+        public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct = default)
         {
-            Id = m.Id,
-            UserId = m.UserId,
-            SourceType = m.SourceType,
-            SourceId = m.SourceId,
-            RelatedName = m.RelatedName,
-            Latitude = m.Latitude.HasValue ? (double?)m.Latitude.Value : null,
-            Longitude = m.Longitude.HasValue ? (double?)m.Longitude.Value : null,
-            Tags = m.Tags,
-            Content = m.Content,
-            CreatedAt = m.CreatedAt
-        };
+            var ok = await _svc.DeleteMessageAsync(id, ct);
+            if (!ok) return NotFound();
+
+            // Optional: notify customers (if your UI needs to remove the message)
+            await _hub.Clients.All.SendAsync("ReceiveMessageDeleted", new { Id = id }, ct);
+
+            return NoContent();
+        }
+
+        
     }
 }
+

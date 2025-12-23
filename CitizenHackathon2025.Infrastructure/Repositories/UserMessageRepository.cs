@@ -41,6 +41,20 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = @"SELECT * FROM dbo.UserMessage WHERE Id = @Id AND Active = 1;";
             return await _db.QuerySingleOrDefaultAsync<UserMessage>(new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
         }
-    }
 
+        public async Task<bool> DeleteMessageAsync(int id, CancellationToken ct = default)
+        {
+            const string sql = @"
+        DELETE FROM dbo.UserMessage
+        WHERE Id = @Id AND Active = 1;";
+
+            // The INSTEAD OF DELETE trigger will convert this DELETE into UPDATE Active=0
+            var affected = await _db.ExecuteAsync(new CommandDefinition(
+                sql,
+                new { Id = id },
+                cancellationToken: ct));
+
+            return affected > 0;
+        }
+    }
 }

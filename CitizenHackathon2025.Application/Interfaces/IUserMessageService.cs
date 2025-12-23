@@ -1,8 +1,8 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 
-namespace CitizenHackathon2025.Domain.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces
 {
-    public interface IUserMessageRepository
+    public interface IUserMessageService
     {
         Task<UserMessage> InsertAsync(UserMessage msg, CancellationToken ct = default);
         Task<List<UserMessage>> GetLatestAsync(int take = 100, CancellationToken ct = default);

@@ -112,6 +112,7 @@ namespace CitizenHackathon2025.Application.Extensions
            {
                Id = entity.Id,
                Name = entity.Name,
+               PlaceId = entity.PlaceId,
                Latitude = (double)entity.Latitude,
                Longitude = (double)entity.Longitude,
                DateEvent = entity.DateEvent,               
@@ -124,6 +125,7 @@ namespace CitizenHackathon2025.Application.Extensions
              {
                  Id = dto.Id,
                  Name = dto.Name,
+                 PlaceId = dto.PlaceId,
                  Latitude = RoundLat(dto.Latitude),          
                  Longitude = RoundLon(dto.Longitude),        
                  DateEvent = TruncateToSecond(dto.DateEvent),
@@ -136,6 +138,7 @@ namespace CitizenHackathon2025.Application.Extensions
             {
                 Id = dto.Id,
                 Name = dto.Name,
+                PlaceId = dto.PlaceId,
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,
                 DateEvent = TruncateToSecond(dto.DateEvent),
@@ -238,6 +241,30 @@ namespace CitizenHackathon2025.Application.Extensions
             entity.Active = dto.Active;
             return entity;
         }
+        // Entity -> DTO (UserMessage -> ClientMessageDTO)
+        public static ClientMessageDTO MapToClientMessageDTO(this UserMessage m)
+        {
+            if (m is null) return null!;
+
+            return new ClientMessageDTO
+            {
+                Id = m.Id,
+                UserId = m.UserId,
+                SourceType = m.SourceType,
+                SourceId = m.SourceId,
+                RelatedName = m.RelatedName,
+                Latitude = m.Latitude.HasValue ? (double?)m.Latitude.Value : null,
+                Longitude = m.Longitude.HasValue ? (double?)m.Longitude.Value : null,
+                Tags = m.Tags,
+                Content = m.Content,
+                CreatedAt = m.CreatedAt
+            };
+        }
+
+        // Optional: collection helper
+        public static List<ClientMessageDTO> MapToClientMessageDTOs(this IEnumerable<UserMessage> items)
+            => items?.Select(x => x.MapToClientMessageDTO()).ToList() ?? new List<ClientMessageDTO>();
+    
         // Place → DTOSugges
         public static PlaceDTO MapToPlaceDTO(this Place entity)
         {
@@ -299,6 +326,7 @@ namespace CitizenHackathon2025.Application.Extensions
                 Message = entity.Message,
                 Context = entity.Context,
                 EventId = entity.EventId,
+                PlaceId = entity.PlaceId,
                 // Optional 
                 // Latitude = entity.Latitude,
                 // Longitude = entity.Longitude,

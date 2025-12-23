@@ -3,8 +3,8 @@
     public class UserMessage
     {
         public int Id { get; set; }
-        public string UserId { get; set; } = null!;
-        public string SourceType { get; set; } = null!;
+        public string? UserId { get; set; } = null!;
+        public string? SourceType { get; set; } = null!;
         public int? SourceId { get; set; } = null!;
         public string? RelatedName { get; set; }
         public decimal? Latitude { get; set; }

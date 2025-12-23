@@ -10,16 +10,18 @@
     [DateDeleted]          DATETIME2(0) NULL,
     [CrowdId]              INT NULL,
     [EventId]              INT NULL,
+    [PlaceId]              INT NULL,
     [TrafficId]            INT NULL,
     [ForecastId]           INT NULL,
     [LocationName]         NVARCHAR(128) NULL
 
     CONSTRAINT [PK_Suggestion] PRIMARY KEY ([Id]),
-    CONSTRAINT [FK_Suggestion_User]            FOREIGN KEY ([User_Id])     REFERENCES [dbo].[Users]([Id]),
-    CONSTRAINT [FK_Suggestion_Crowd]           FOREIGN KEY ([CrowdId])     REFERENCES [dbo].[CrowdInfo]([Id]) ON DELETE SET NULL,
-    CONSTRAINT [FK_Suggestion_Event]           FOREIGN KEY ([EventId])     REFERENCES [dbo].[Event]([Id]) ON DELETE SET NULL,
-    CONSTRAINT [FK_Suggestion_Traffic]         FOREIGN KEY ([TrafficId])   REFERENCES [dbo].[TrafficCondition]([Id]) ON DELETE SET NULL,
-    CONSTRAINT [FK_Suggestion_WeatherForecast] FOREIGN KEY ([ForecastId])  REFERENCES [dbo].[WeatherForecast]([Id]) ON DELETE SET NULL,
+    CONSTRAINT [FK_Suggestion_User] FOREIGN KEY ([User_Id]) REFERENCES [dbo].[Users]([Id]),
+    CONSTRAINT [FK_Suggestion_Crowd] FOREIGN KEY ([CrowdId]) REFERENCES [dbo].[CrowdInfo]([Id]) ON DELETE SET NULL,
+    CONSTRAINT [FK_Suggestion_Event] FOREIGN KEY ([EventId]) REFERENCES [dbo].[Event]([Id]) ON DELETE SET NULL,
+    CONSTRAINT [FK_Suggestion_Place] FOREIGN KEY ([PlaceId]) REFERENCES [dbo].[Place]([Id]) ON DELETE SET NULL,
+    CONSTRAINT [FK_Suggestion_Traffic] FOREIGN KEY ([TrafficId]) REFERENCES [dbo].[TrafficCondition]([Id]) ON DELETE SET NULL,
+    CONSTRAINT [FK_Suggestion_WeatherForecast] FOREIGN KEY ([ForecastId]) REFERENCES [dbo].[WeatherForecast]([Id]) ON DELETE SET NULL,
 );
 
 GO

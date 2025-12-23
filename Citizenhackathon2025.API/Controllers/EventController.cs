@@ -90,6 +90,7 @@ namespace CitizenHackathon2025.API.Controllers
             var newEvent = new Event
             {
                 Name = dto.Name,
+                PlaceId = dto.PlaceId,
                 Latitude = (decimal)Math.Round(dto.Latitude, 2),   
                 Longitude = (decimal)Math.Round(dto.Longitude, 3), 
                 DateEvent = new DateTime(dto.DateEvent.Ticks - (dto.DateEvent.Ticks % TimeSpan.TicksPerSecond), dto.DateEvent.Kind),

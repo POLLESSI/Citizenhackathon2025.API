@@ -22,14 +22,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Event> CreateEventAsync(Event newEvent)
         {
             const string sql = @"
-                INSERT INTO [Event] ([Name], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
-                VALUES (@Name, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
+                INSERT INTO [Event] ([Name], [PlaceId] [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
+                VALUES (@Name, @PlaceId, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
                 SELECT CAST(SCOPE_IDENTITY() as int);";
 
             try
             {
                 var parameters = new DynamicParameters();
                 parameters.Add("@Name", newEvent.Name);
+                parameters.Add("@PlaceId", newEvent.PlaceId);
                 parameters.Add("@Latitude", newEvent.Latitude);
                 parameters.Add("@Longitude", newEvent.Longitude);
                 parameters.Add("@DateEvent", newEvent.DateEvent);
@@ -57,6 +58,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 const string sql = @"
             SELECT [Id],
                    [Name],
+                   [PlaceId],
                    [Latitude],
                    [Longitude],
                    [DateEvent],
@@ -85,7 +87,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                     SELECT TOP(@Limit)
-                        [Id], [Name], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active]
+                        [Id], [Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active]
                     FROM [Event]
                     WHERE [Active] = 1
                     ORDER BY [DateEvent] DESC;";
@@ -98,6 +100,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             string sql = @"
             SELECT [Id],
                    [Name],
+                   [PlaceId],
                    [Latitude],
                    [Longitude],
                    [DateEvent],
@@ -126,13 +129,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Event> SaveEventAsync(Event @event)
         {
             const string sql = @"
-                    INSERT INTO [Event] ([Name], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
-                    VALUES (@Name, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
+                    INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
+                    VALUES (@Name, @PlaceId, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
                     SELECT CAST(SCOPE_IDENTITY() as int);";
             try
             {
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Name", @event.Name, DbType.String);
+                parameters.Add("@PlaceId", @event.PlaceId, DbType.Int32);
                 parameters.Add("@Latitude", @event.Latitude, DbType.Decimal);
                 parameters.Add("@Longitude", @event.Longitude, DbType.Decimal);
                 parameters.Add("@DateEvent", @event.DateEvent, DbType.DateTime);
@@ -167,6 +171,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = @"
                     UPDATE [Event]
                     SET Name = @Name,
+                        PlaceId = @PlaceId,
                         Latitude = @Latitude,     
                         Longitude = @Longitude,    
                         DateEvent = @DateEvent,
@@ -180,6 +185,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", @event.Id, DbType.Int32);
                 parameters.Add("@Name", @event.Name, DbType.String);
+                parameters.Add("@PlaceId", @event.PlaceId, DbType.Int32);
                 parameters.Add("@Latitude", @event.Latitude, DbType.String);
                 parameters.Add("@Longitude", @event.Longitude, DbType.String);
                 parameters.Add("@DateEvent", @event.DateEvent, DbType.DateTime);
