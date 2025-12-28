@@ -1,0 +1,10 @@
+﻿namespace CitizenHackathon2025.DTOs.DTOs
+{
+    public sealed class EventAntennaCrowdDTO
+    {
+        public int EventId { get; set; }
+        public int AntennaId { get; set; }
+        public double DistanceMeters { get; set; }
+        public AntennaCountsDTO Counts { get; set; } = new();
+    }
+}

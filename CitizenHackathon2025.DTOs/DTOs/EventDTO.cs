@@ -11,7 +11,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         [DisplayName("Event Name : ")]
         public string Name { get; set; }
         [DisplayName("Place Id : ")]
-        public int PlaceId { get; set; }
+        public int? PlaceId { get; set; }
         [Required]
         [Range(-90, 90, ErrorMessage = "Invalid latitude.")]
         [DisplayName("Latitude : ")]

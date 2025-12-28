@@ -2,8 +2,8 @@
 (
 	[Id] INT IDENTITY,
 	[LocationName] NVARCHAR(64) NOT NULL,
-	[Latitude] DECIMAL(9, 6) NOT NULL,
-	[Longitude] DECIMAL(9, 6) NOT NULL,
+	[Latitude] DECIMAL(9, 3) NOT NULL,
+	[Longitude] DECIMAL(9, 3) NOT NULL,
 	[CrowdLevel] INT NOT NULL,
 	[Timestamp] DATETIME2(0) NOT NULL,
 	[Active] BIT DEFAULT 1,

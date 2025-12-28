@@ -1,0 +1,17 @@
+﻿using CitizenHackathon2025.DTOs.DTOs;
+
+namespace CitizenHackathon2025.Application.Interfaces
+{
+    public interface ICrowdInfoAntennaService
+    {
+        Task<IReadOnlyList<CrowdInfoAntennaDTO>> GetAllAsync(CancellationToken ct);
+        Task<CrowdInfoAntennaDTO?> GetByIdAsync(int id, CancellationToken ct);
+
+        Task<NearestAntennaDTO?> GetNearestAsync(double lat, double lng, double maxRadiusMeters, CancellationToken ct);
+
+        Task<AntennaCountsDTO> GetCountsAsync(int antennaId, int windowMinutes, CancellationToken ct);
+
+        // Use-case “événement -> antenne la plus proche -> counts”
+        Task<EventAntennaCrowdDTO?> GetEventCrowdAsync(int eventId, int windowMinutes, double maxRadiusMeters, CancellationToken ct);
+    }
+}

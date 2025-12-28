@@ -340,18 +340,21 @@ internal class Program
         builder.Services.AddHostedService<WeatherForecastArchiverService>();
         // ---------- Domain services / app ----------
         services.AddScoped<IAIService, AIService>();
+        services.AddScoped<IAggregateSuggestionService, AstroIAService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
         services.AddScoped<CrowdInfoService>();
         services.AddScoped<ICrowdAdvisoryService, CrowdAdvisoryService>();
+        services.AddScoped<ICrowdInfoAntennaService, CrowdInfoAntennaService>();
+        services.AddScoped<ICrowdInfoAntennaConnectionService, CrowdInfoAntennaConnectionService>();
         services.AddScoped<CitizenSuggestionService>();
         services.AddScoped<IEventService, EventService>();
+        services.AddScoped<IEventReadService, EventReadService>();
         services.AddScoped<IGeoService, GeoService>();
         services.AddScoped<IGPTService, GPTService>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IPlaceService, PlaceService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
-        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<ISuggestionService, SuggestionService>();
         services.AddSingleton<TokenGenerator>();
@@ -371,14 +374,17 @@ internal class Program
         services.AddScoped<IHubNotifier, CitizenHackathon2025.Hubs.Hubs.SignalRNotifier>();
 
         // ---------- Repositories ----------
-        services.AddScoped<IAggregateSuggestionService, AstroIAService>();
+        
         services.AddScoped<IAIRepository, AIRepository>();
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
+        services.AddScoped<ICrowdInfoAntennaRepository, CrowdInfoAntennaRepository>();
+        services.AddScoped<ICrowdInfoAntennaConnectionRepository, CrowdInfoAntennaConnectionRepository>();
         services.AddScoped<ICrowdCalendarRepository, CrowdCalendarRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
         services.AddScoped<IGPTRepository, GptInteractionsRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
         services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
         services.AddScoped<IUserMessageRepository, UserMessageRepository>();

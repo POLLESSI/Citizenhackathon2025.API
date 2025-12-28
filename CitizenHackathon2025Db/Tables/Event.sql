@@ -1,14 +1,14 @@
 ﻿CREATE TABLE [dbo].[Event]
 (
 	[Id] INT IDENTITY,
-    [Name] NVARCHAR(64),
+    [Name] NVARCHAR(64) NOT NULL,
 	[PlaceId] INT NULL,
-	[Latitude] DECIMAL(9, 2),
-	[Longitude] DECIMAL(9, 3),
-	[DateEvent] DATETIME2(0),
-	[ExpectedCrowd] INT,
-	[IsOutdoor] BIT,
-	[Active] BIT DEFAULT 1
+	[Latitude] DECIMAL(9, 2) NOT NULL,
+	[Longitude] DECIMAL(9, 3) NOT NULL,
+	[DateEvent] DATETIME2(0) NOT NULL,
+	[ExpectedCrowd] INT NULL,
+	[IsOutdoor] BIT NULL,
+	[Active] BIT DEFAULT 1,
 
 	CONSTRAINT [PK_Event] PRIMARY KEY ([Id]),
 	CONSTRAINT [FK_Event_Place] FOREIGN KEY ([PlaceId]) REFERENCES [dbo].[Place]([Id]) ON DELETE SET NULL,

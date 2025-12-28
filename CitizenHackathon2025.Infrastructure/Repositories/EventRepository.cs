@@ -22,7 +22,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Event> CreateEventAsync(Event newEvent)
         {
             const string sql = @"
-                INSERT INTO [Event] ([Name], [PlaceId] [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
+                INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
                 VALUES (@Name, @PlaceId, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
                 SELECT CAST(SCOPE_IDENTITY() as int);";
 
@@ -186,11 +186,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 parameters.Add("@Id", @event.Id, DbType.Int32);
                 parameters.Add("@Name", @event.Name, DbType.String);
                 parameters.Add("@PlaceId", @event.PlaceId, DbType.Int32);
-                parameters.Add("@Latitude", @event.Latitude, DbType.String);
-                parameters.Add("@Longitude", @event.Longitude, DbType.String);
+                parameters.Add("@Latitude", @event.Latitude, DbType.Decimal);
+                parameters.Add("@Longitude", @event.Longitude, DbType.Decimal);
                 parameters.Add("@DateEvent", @event.DateEvent, DbType.DateTime);
-                parameters.Add("@ExpectedCrowd", @event.ExpectedCrowd, DbType.String);
-                parameters.Add("@IsOutdoor", @event.IsOutdoor, DbType.String);
+                parameters.Add("@ExpectedCrowd", @event.ExpectedCrowd, DbType.Int32);
+                parameters.Add("@IsOutdoor", @event.IsOutdoor, DbType.Boolean);
 
                 var affectedRows = _connection.Execute(sql, parameters);
 
