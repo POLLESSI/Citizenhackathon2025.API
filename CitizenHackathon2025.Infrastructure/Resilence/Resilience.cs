@@ -11,7 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CitizenHackathon2025.Shared.Notifications;
 
-namespace CitizenHackathon2025.Shared.Resilience
+namespace CitizenHackathon2025.Infrastructure.Resilience
 {
     public static class Resilience
     {
@@ -101,7 +101,7 @@ namespace CitizenHackathon2025.Shared.Resilience
             try
             {
                 var result = await pipeline.ExecuteAsync(
-                    (ResilienceContext _) => action(cancellationToken),
+                    (_) => action(cancellationToken),
                     ctx);
 
                 Duration.WithLabels(policyName, service, operation).Observe(sw.Elapsed.TotalSeconds);

@@ -1,6 +1,6 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 
-namespace CitizenHackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Hubs.Services
 {
     public interface ICrowdInfoAntennaService
     {

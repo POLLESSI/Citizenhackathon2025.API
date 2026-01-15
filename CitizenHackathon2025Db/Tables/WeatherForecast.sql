@@ -2,8 +2,8 @@
 (
     [Id] INT IDENTITY(1,1) NOT NULL,
     [DateWeather] DATETIME2 NOT NULL,
-    [Latitude] DECIMAL(9,3) DEFAULT(50.890000),
-	[Longitude] DECIMAL(9,3) DEFAULT(4.340000),
+    [Latitude] DECIMAL(9,6) DEFAULT(50.890000),
+	[Longitude] DECIMAL(9,6) DEFAULT(4.340000),
     [TemperatureC] INT NOT NULL,
     [TemperatureF] AS (CONVERT(int, (32 + (TemperatureC / 0.5556)))),
     [Summary] NVARCHAR(256) NOT NULL,

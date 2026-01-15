@@ -1,4 +1,4 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection;
 

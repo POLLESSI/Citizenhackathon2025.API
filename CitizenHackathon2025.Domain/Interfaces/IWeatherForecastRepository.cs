@@ -4,17 +4,18 @@ namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface IWeatherForecastRepository
     {
-        Task AddAsync(WeatherForecast weatherForecast);
+        Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity, CancellationToken ct = default);
+
         Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default);
-        Task<WeatherForecast> SaveWeatherForecastAsync(WeatherForecast forecast);
-        Task<WeatherForecast> GenerateNewForecastAsync();
-        Task<List<WeatherForecast>> GetHistoryAsync(int limit = 128);
-        Task<WeatherForecast?> GetByIdAsync(int id);
-        Task<List<WeatherForecast>> GetAllAsync();
-        //WeatetherForecast? UpdateWeatherForecast(WeatherForecast weatherForecast);
-        Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity);
-        Task<int> ArchivePastWeatherForecastsAsync();
-        Task<(double LastHour, double Last72h)> GetRainAccumulationAsync(decimal latitude, decimal longitude, DateTime now, CancellationToken ct = default);
+        Task<List<WeatherForecast>> GetAllAsync(CancellationToken ct = default);
+        Task<List<WeatherForecast>> GetHistoryAsync(int limit = 128, CancellationToken ct = default);
+        Task<WeatherForecast?> GetByIdAsync(int id, CancellationToken ct = default);
+
+        Task<WeatherForecast> GenerateNewForecastAsync(CancellationToken ct = default);
+
+        Task<int> ArchivePastWeatherForecastsAsync(CancellationToken ct = default);
+
+        Task<(double LastHour, double Last72h)> GetRainAccumulationAsync(decimal latitude, decimal longitude, DateTime asOfUtc,CancellationToken ct = default);
     }
 }
 

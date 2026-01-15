@@ -10,8 +10,8 @@ namespace CitizenHackathon2025.Application.Extensions
     public static class MapperExtensions
     {
 #nullable disable
-        private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 2);
-        private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 3);
+        private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 6);
+        private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 6);
         private static DateTime TruncateToSecond(DateTime dt)
             => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond), dt.Kind);
 
@@ -357,7 +357,11 @@ namespace CitizenHackathon2025.Application.Extensions
                 Longitude = entity.Longitude,
                 DateCondition = entity.DateCondition,
                 CongestionLevel = entity.CongestionLevel,
-                IncidentType = entity.IncidentType
+                IncidentType = entity.IncidentType,
+
+                Location = entity.Road ?? "",
+                Level = entity.Severity,
+                Message = entity.Title ?? ""
             };
         }
         // DTO side standardization (default date + truncation)
@@ -375,14 +379,26 @@ namespace CitizenHackathon2025.Application.Extensions
 
         // DTO -> Entity (CREATE)
         public static TrafficCondition MapToTrafficCondition(this TrafficConditionDTO dto)
-        => new TrafficCondition
-        {
-            Latitude = dto.Latitude,
-            Longitude = dto.Longitude,
-            DateCondition = dto.DateCondition,
-            CongestionLevel = dto.CongestionLevel,
-            IncidentType = dto.IncidentType,
-        };
+            => new TrafficCondition
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dto.DateCondition,
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType,
+
+                Road = string.IsNullOrWhiteSpace(dto.Location) ? null : dto.Location,
+                Severity = dto.Level,
+                Title = string.IsNullOrWhiteSpace(dto.Message) ? null : dto.Message,
+
+                Provider = "manual",
+                ExternalId = $"manual-{Guid.NewGuid():N}",
+                Fingerprint = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes($"manual|{dto.Latitude}|{dto.Longitude}|{dto.DateCondition:O}|{dto.IncidentType}")
+                ),
+                LastSeenAt = DateTime.UtcNow
+            };
+
 
         // DTO -> Entity (UPDATE) existe déjà pour TrafficConditionUpdateDTO → OK
 

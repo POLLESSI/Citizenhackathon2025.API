@@ -1,11 +1,11 @@
 ﻿using System.Threading.Tasks;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
-namespace CitizenHackathon2025.Application.Interfaces
+namespace CitizenHackathon2025.Application.Interfaces.OpenWeather
 {
     public interface IOpenWeatherService
     {
-        Task<(double lat, double lon)?> GetCoordinatesAsync(string city);
+        Task<(double lat, double lon)?> GetCoordinatesAsync(string city, CancellationToken ct = default);
 
         // with ct
         Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city, CancellationToken ct = default);
@@ -21,6 +21,36 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<string> GetWeatherSummaryAsync(string location);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

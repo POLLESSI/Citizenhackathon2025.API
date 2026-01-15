@@ -4,6 +4,8 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
+using CitizenHackathon2025.Infrastructure.Helpers;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,14 +24,18 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly ITrafficConditionRepository _trafficConditionRepository;
         private readonly ITrafficApiService _trafficApiService;
         private readonly IHubContext<TrafficHub> _hubContext;
+        private readonly byte[] _trafficHmacKey;
 
         private const string HubMethod_ReceiveTrafficConditionUpdate = "ReceiveTrafficConditionUpdate";
-        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext)
+
+        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext, byte[] trafficHmacKey)
         {
             _trafficConditionRepository = trafficConditionRepository;
             _trafficApiService = trafficApiService;
             _hubContext = hubContext;
+            _trafficHmacKey = trafficHmacKey;
         }
+
         // 1) Endpoint to retrieve the latest in the database
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatestTrafficCondition(CancellationToken ct)
@@ -38,40 +44,61 @@ namespace CitizenHackathon2025.API.Controllers
             var dtos = trafficConditions.Select(tc => tc?.MapToTrafficConditionDTO()).ToList();
             return Ok(dtos);
         }
-        // 2) Endpoint for live fetch from Waze
+        // 2) Endpoint for live fetch from Odwb
         [HttpGet("current")]
-        public async Task<IActionResult> GetCurrent(double lat, double lon)
+        public async Task<IActionResult> GetCurrent(double lat, double lon, CancellationToken ct)
         {
-            var dto = await _trafficApiService.GetCurrentTrafficAsync(lat, lon);
-            if (dto == null)
-                return NotFound();
+            var dto = await _trafficApiService.GetCurrentTrafficAsync(lat, lon, ct);
+            if (dto is null) return NotFound();
 
-            // Mapper DTO → Entity
+            // Ensures UTC (important for SQL + consistency)
+            var dateUtc = dto.DateCondition.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(dto.DateCondition, DateTimeKind.Utc)
+                : dto.DateCondition.ToUniversalTime();
+
+            var provider = "trafficapi"; // or "waze" if it really is Waze, otherwise naming consistency
+
+            // ExternalId stable + fingerprint stable
+            var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
+                provider: provider,
+                lat: dto.Latitude,
+                lon: dto.Longitude,
+                dateUtc: dateUtc,
+                incidentType: dto.IncidentType,
+                location: dto.Location,
+                congestionLevel: dto.CongestionLevel,
+                timeBucket: TimeSpan.FromMinutes(1) // adjust if needed
+            );
+
             var entity = new TrafficCondition
             {
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,
-                DateCondition = dto.DateCondition,
+                DateCondition = dateUtc,
                 CongestionLevel = dto.CongestionLevel,
-                IncidentType = dto.IncidentType
+                IncidentType = dto.IncidentType,
+
+                Provider = provider,
+                ExternalId = externalId,
+                Fingerprint = fingerprint,
+                LastSeenAt = DateTime.UtcNow,
+
+                // Optional if you want to use your DB columns :
+                Title = dto.Message,
+                Road = dto.Location,
+                // Severity = ... if you have a logic
             };
 
-            // 🔹 Backup to database (UPSERT)
             var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
-            if (saved is null)
-                return Problem("UPSERT failed");
+            if (saved is null) return Problem("UPSERT failed");
 
-            // 🔹 Mapping to DTO for output + SignalR
             var dtoOut = saved.MapToTrafficConditionDTO();
 
-            // 🔹 SignalR Broadcast (same event everywhere)
-            await _hubContext.Clients.All.SendAsync(
-                HubEvents.ToClient.TrafficUpdated,
-                dtoOut
-            );
+            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.TrafficUpdated, dtoOut, ct);
 
             return Ok(dtoOut);
         }
+
 
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetTrafficConditionById(int id)
@@ -97,29 +124,66 @@ namespace CitizenHackathon2025.API.Controllers
             return tc == null ? NotFound() : Ok(tc);
         }
         [HttpPost]
-        public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficConditionDTO dto)
+        public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficConditionDTO dto, CancellationToken ct)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var dateUtc = dto.DateCondition == default
+                ? DateTime.UtcNow
+                : (dto.DateCondition.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(dto.DateCondition, DateTimeKind.Utc)
+                    : dto.DateCondition.ToUniversalTime());
+
+            var provider = "manual";
+
+            // For a manual POST: you can choose stable (hash) OR unique (GUID)
+            // Stable is better if you want to "update the same incident".
+            var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
+                provider: provider,
+                lat: dto.Latitude,
+                lon: dto.Longitude,
+                dateUtc: dateUtc,
+                incidentType: dto.IncidentType,
+                location: dto.Location,
+                congestionLevel: dto.CongestionLevel,
+                timeBucket: TimeSpan.FromMinutes(1)
+            );
 
             var entity = new TrafficCondition
             {
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,
-                DateCondition = dto.DateCondition == default ? DateTime.UtcNow : dto.DateCondition,
+                DateCondition = dto.DateCondition == default ? DateTime.UtcNow : dto.DateCondition.ToUniversalTime(),
                 CongestionLevel = dto.CongestionLevel,
-                IncidentType = dto.IncidentType
+                IncidentType = dto.IncidentType,
+
+                Provider = "manual",
+                ExternalId = externalId,
+                Fingerprint = fingerprint,
+                LastSeenAt = DateTime.UtcNow,
+
+                Title = dto.Message,
+                Road = dto.Location
             };
+
+            // ✅ Load the key from IConfiguration/IOptions
+            var key = _trafficHmacKey; // see §6
+            TrafficUpsertIdentityHmac.Ensure(entity, defaultProvider: "odwb", hmacKey: key, timeBucket: TimeSpan.FromMinutes(1));
 
             var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
             if (saved is null) return Problem("UPSERT failed");
 
             var savedDto = saved.MapToTrafficConditionDTO();
-
-            // 🔔 Broadcast SignalR with the correct event name
-            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.TrafficUpdated, savedDto);
-
+            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.TrafficUpdated, savedDto, ct);
             return Ok(savedDto);
         }
+        [HttpPost("sync-odwb")]
+        public async Task<IActionResult> SyncOdwb([FromServices] ITrafficOdwbIngestionService svc, int? limit, CancellationToken ct)
+        {
+            var n = await svc.SyncAsync(limit, ct);
+            return Ok(new { Upserted = n });
+        }
+
         [HttpPost("archive-expired")]
         [Authorize(Policy = "Admin")]
         public async Task<IActionResult> ArchiveExpiredTrafficConditions()

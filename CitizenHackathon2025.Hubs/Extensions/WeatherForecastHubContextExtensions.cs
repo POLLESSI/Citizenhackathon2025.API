@@ -1,24 +1,20 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using CitizenHackathon2025.Contracts.Hubs;
+using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Contracts.Hubs;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.Hubs.Extensions
 {
     public static class WeatherForecastHubContextExtensions
     {
-        public static Task BroadcastNewForecast(this IHubContext<WeatherForecastHub> ctx, string payload) =>
-            ctx.Clients.All.SendAsync(
-                WeatherForecastHubMethods.ToClient.ReceiveForecast,
-                payload);
+        public static Task BroadcastNewForecast( this IHubContext<WeatherForecastHub> ctx, WeatherForecastDTO dto, CancellationToken ct = default)
+            => ctx.Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.ReceiveForecast, dto, ct);
 
-        public static Task BroadcastForecastMessage(this IHubContext<WeatherForecastHub> ctx, string message) =>
-            ctx.Clients.All.SendAsync(
-                WeatherForecastHubMethods.ToClient.EventArchived,
-                message);
+        public static Task BroadcastForecastArchived(this IHubContext<WeatherForecastHub> ctx, int id, CancellationToken ct = default)
+            => ctx.Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.EventArchived, id, ct);
     }
-
 }
+
 
 
 

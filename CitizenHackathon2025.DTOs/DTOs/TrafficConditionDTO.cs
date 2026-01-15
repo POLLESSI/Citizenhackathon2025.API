@@ -18,7 +18,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         public string IncidentType { get; set; }
 
         public string Location { get; set; }
-        public string Level { get; set; }
+        public byte? Level { get; set; }  
         public string Message { get; set; } = string.Empty;
     }
 }

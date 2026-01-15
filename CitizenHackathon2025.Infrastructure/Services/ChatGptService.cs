@@ -58,7 +58,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             HttpResponseMessage resp;
             try
             {
-                resp = await Resilience.ExecuteLoggedAsync(
+                resp = await ResilienceExec.ExecuteLoggedAsync(
                     _pipeline,
                     ct => new ValueTask<HttpResponseMessage>(_httpClient.SendAsync(req, ct)), // <- wrap Task => ValueTask
                     ctx,

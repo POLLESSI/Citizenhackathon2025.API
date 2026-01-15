@@ -1,6 +1,6 @@
 ﻿namespace CitizenHackathon2025.DTOs.DTOs
 {
-    public class CrowdInfoAntennaConnection
+    public class CrowdInfoAntennaConnectionDTO
     {
         public Guid Id { get; set; }
         public int AntennaId { get; set; }

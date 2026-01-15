@@ -13,6 +13,7 @@ using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.Behaviors;
 using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
@@ -25,12 +26,20 @@ using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
-using CitizenHackathon2025.Infrastructure.Extensions;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
+using CitizenHackathon2025.Infrastructure.Extensions;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Adapters;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Services;
 using CitizenHackathon2025.Infrastructure.Init;
+using CitizenHackathon2025.Infrastructure.Options;
 using CitizenHackathon2025.Infrastructure.Persistence;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Infrastructure.Resilience;
 using CitizenHackathon2025.Infrastructure.Security;
 using CitizenHackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.Infrastructure.Services.Monitoring;
@@ -39,7 +48,6 @@ using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Notifications;
 using CitizenHackathon2025.Shared.Options;
-using CitizenHackathon2025.Shared.Resilience;
 using CitizenHackathon2025.Shared.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Dapper;
@@ -71,6 +79,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
+using SharedOpenWeatherOptions = CitizenHackathon2025.Shared.Options.OpenWeatherOptions;
 
 // =====================================
 // Program
@@ -82,6 +91,9 @@ internal class Program
     {
         // ---------- Serilog ----------
         var builder = WebApplication.CreateBuilder(args);
+
+        Console.WriteLine($"ENV = {builder.Environment.EnvironmentName}");
+        Console.WriteLine("TrafficHmacKeyBase64 = " + (builder.Configuration["Security:TrafficHmacKeyBase64"] ?? "<null>"));
 
         var resource = ResourceBuilder.CreateDefault()
             .AddService(serviceName: "CitizenHackathon2025.API", serviceVersion: "1.0.0");
@@ -229,6 +241,31 @@ internal class Program
         services.Configure<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
         services.Configure<JwtOptions>(configuration.GetSection("Jwt")); // ← aligned with OutZenTokenMiddleware & JWT
         services.Configure<SessionJanitorOptions>(configuration.GetSection("Sessions:Janitor"));
+        services.Configure<TrafficApiOptions>(configuration.GetSection("TrafficApi"));
+        //services.Configure<OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
+
+        services.Configure<TrafficHmacOptions>(configuration.GetSection("Security"));
+
+        services.AddSingleton(sp =>
+        {
+            var opt = sp.GetRequiredService<IOptions<TrafficHmacOptions>>().Value;
+
+            if (string.IsNullOrWhiteSpace(opt.TrafficHmacKeyBase64))
+                throw new InvalidOperationException("Missing Security:TrafficHmacKeyBase64");
+
+            try
+            {
+                return Convert.FromBase64String(opt.TrafficHmacKeyBase64.Trim());
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException(
+                    "Invalid Base64 in Security:TrafficHmacKeyBase64 (check user-secrets / env overrides).",
+                    ex);
+            }
+        });
+
+        services.AddSingleton<ResiliencePipelines>(sp => ResiliencePipelinesFactory.Create(sp));
 
         builder.Services.AddOptions<CrowdInfoArchiverOptions>("CrowdInfo")
             .Bind(builder.Configuration.GetSection("Archivers:CrowdInfo"))
@@ -338,9 +375,16 @@ internal class Program
         builder.Services.AddHostedService<GptInteractionArchiverService>();
         builder.Services.AddHostedService<TrafficConditionArchiverService>();
         builder.Services.AddHostedService<WeatherForecastArchiverService>();
+        builder.Services.AddScoped<IOpenWeatherIngestionService, OpenWeatherIngestionService>();
+        // Application
+        builder.Services.AddScoped<IWeatherForecastAppService, CitizenHackathon2025.Application.Services.WeatherForecastAppService>();
+
+        // Infrastructure (SignalR broadcaster)
+        builder.Services.AddScoped<IWeatherForecastBroadcaster, CitizenHackathon2025.Infrastructure.Services.WeatherForecastBroadcaster>();
+
         // ---------- Domain services / app ----------
         services.AddScoped<IAIService, AIService>();
-        services.AddScoped<IAggregateSuggestionService, AstroIAService>();
+        services.AddScoped<IAggregateSuggestionService,AstroIAService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
         services.AddScoped<CrowdInfoService>();
         services.AddScoped<ICrowdAdvisoryService, CrowdAdvisoryService>();
@@ -357,17 +401,25 @@ internal class Program
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<ISuggestionService, SuggestionService>();
-        services.AddSingleton<TokenGenerator>();
+        services.AddScoped<
+            IOpenWeatherIngestionService,
+            CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Services.OpenWeatherIngestionService>();
+
+        services.AddScoped<ITrafficApiService, OdwbTrafficApiAdapter>();
         services.AddScoped<ITrafficConditionService, TrafficConditionService>();
-        services.AddScoped<ITrafficApiService, TrafficAPIService>();
+        services.AddScoped<ITrafficIngestionService, TrafficIngestionService>();
+        services.AddScoped<ITrafficOdwbIngestionService, TrafficOdwbIngestionService>();
         services.AddScoped<IUserMessageService, UserMessageService>();
         services.AddScoped<NotificationService>();
         services.AddScoped<OpenAiSuggestionService>();
         services.AddScoped<TrafficConditionService>();
         services.AddScoped<WeatherSuggestionOrchestrator>();
+        services.AddScoped<IWeatherAlertsIngestionService, WeatherAlertsIngestionService>();
+        services.AddScoped<IWeatherForecastAppService, WeatherForecastAppService>();
+        services.AddScoped<IWeatherForecastBroadcaster, WeatherForecastBroadcaster>();
         services.AddScoped<IUserHubService, UserHubService>();
 
-        //services.AddScoped<IWeatherForecastService, WeatherForecastService>();
+        services.AddScoped<IWeatherForecastService, WeatherForecastService>();
 
         // ---------- Hubs & notifiers ----------
         services.AddScoped<IWeatherHubService, CitizenHackathon2025.Hubs.Services.WeatherHubService>();
@@ -391,97 +443,12 @@ internal class Program
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserSessionRepository, UserSessionRepository>();
         services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
+        services.AddScoped<IWeatherAlertRepository, WeatherAlertRepository>();
 
         // ----------- Singletons -------------
         services.AddSingleton<INotifierAdmin, NotifierAdmin>();
         services.AddSingleton<ITimeZoneConverter, DefaultTimeZoneConverter>();
-
-        // ---------- Polly : Retry + Circuit Breaker ----------
-        services.AddSingleton(sp =>
-        {
-            var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Polly");
-            var notifier = sp.GetRequiredService<INotifierAdmin>();
-
-            return new
-            {
-                OpenAi = Resilience.BuildHttpPipeline(log, notifier, "openai", retry: 3, breakerFailures: 5, openSeconds: 30, timeoutSeconds: 25),
-                Weather = Resilience.BuildHttpPipeline(log, notifier, "openweather", retry: 2, breakerFailures: 4, openSeconds: 20, timeoutSeconds: 8),
-                Traffic = Resilience.BuildHttpPipeline(log, notifier, "trafficapi", retry: 3, breakerFailures: 5, openSeconds: 30, timeoutSeconds: 10),
-            };
-        });
-
-        // Specific policy for OpenWeatherService (used in WeatherService)
-        services.AddSingleton<AsyncPolicyWrap>(sp =>
-        {
-            var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("WeatherPolicy");
-
-            var retry = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(
-                    retryCount: 3,
-                    sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                    onRetry: (ex, delay, attempt, ctx) =>
-                        log.LogWarning(ex, "[WeatherService] Retry {Attempt} after {Delay}s", attempt, delay.TotalSeconds));
-
-            var breaker = Policy
-                .Handle<Exception>()
-                .CircuitBreakerAsync(
-                    exceptionsAllowedBeforeBreaking: 3,
-                    durationOfBreak: TimeSpan.FromMinutes(1),
-                    onBreak: (ex, breakDelay) =>
-                        log.LogWarning("[WeatherService] Circuit open for {Delay}s due to {Message}", breakDelay.TotalSeconds, ex.Message),
-                    onReset: () =>
-                        log.LogInformation("[WeatherService] Circuit closed. Normal operations resumed."));
-
-            // (optional) non-generic timeout
-            // var timeout = Policy.TimeoutAsync(20);
-
-            // Compose what you use in WeatherService
-            return Policy.WrapAsync(retry, breaker /*, timeout */);
-        });
-
-        // ---------- Utils & HttpClients ----------
-        services.AddSingleton<CspViolationStore>();
-        services.AddSingleton<IRealTimeNotifier, RealTimeNotifier>();
-        services.AddHttpClient();
-        services.AddHttpClient("Default")
-            .AddPolicyHandler(PollyPolicies.GetResiliencePolicy());
-
-        // HttpClient OpenAI (key from config) → IGptExternalService ↦ OpenAIGptExternalService
-        services.AddHttpClient<IGptExternalService>(client =>
-        {
-            var openAiKey = configuration["OpenAI:ApiKey"];
-            client.BaseAddress = new Uri(configuration["OpenAI:BaseUrl"]
-                             ?? configuration["OpenAI:ApiUrl"]
-                             ?? "https://api.openai.com");
-            if (!string.IsNullOrWhiteSpace(openAiKey))
-            {
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", openAiKey);
-            }
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
-        })
-        .AddHttpMessageHandler(sp =>
-        {
-            var pipelines = sp.GetRequiredService<dynamic>();
-            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
-            return new ResilienceHandler(pipelines.OpenAi, logger);
-        });
-
-        services.AddSingleton(sp =>
-        {
-            var lf = sp.GetRequiredService<ILoggerFactory>();
-            var log = lf.CreateLogger("PollyPoliciesV7");
-            return PollyPoliciesV7.Build("openai", log);
-        });
-
-        services.AddScoped<AstroIAService>();
-
-        services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
-        {
-            var opt = sp.GetRequiredService<IOptions<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>>().Value;
-            client.BaseAddress = new Uri(opt.BaseUrl ?? "https://api.openweathermap.org");
-        });
+        services.AddSingleton<TokenGenerator>();
 
         // ⛔️ Do not duplicate the above record with an AddScoped
         // (client legacy OpenWeatherMapClient Removed here to avoid duplicates)
@@ -496,6 +463,72 @@ internal class Program
             if (!string.IsNullOrWhiteSpace(baseUrl))
                 client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
             client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
+        });
+
+        services.AddHttpClient<IOdwbTrafficApiService, OdwbTrafficApiService>((sp, client) =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var endpoint = cfg["ODWB:Endpoint"];
+            if (!string.IsNullOrWhiteSpace(endpoint))
+                client.BaseAddress = new Uri(endpoint, UriKind.Absolute);
+
+            client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
+        })
+        .AddHttpMessageHandler(sp =>
+        {
+            var pipelines = sp.GetRequiredService<ResiliencePipelines>();
+            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
+            return new ResilienceHandler(pipelines.Traffic, logger);
+        });
+
+        services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
+        {
+            var opt = sp.GetRequiredService<IOptions<OpenWeatherOptions>>().Value;
+            client.BaseAddress = new Uri((opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/') + "/");
+        });
+
+        //.AddHttpMessageHandler(sp =>
+        //{
+        //    var pipelines = sp.GetRequiredService<ResiliencePipelines>();
+        //    var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
+        //    return new ResilienceHandler(pipelines.Weather, logger);
+        //});
+
+        services.AddHttpClient<
+            CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Interfaces.IOpenWeatherAlertsClient,
+            CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.OpenWeatherAlertsClient
+        >((sp, client) =>
+        {
+            var opt = sp.GetRequiredService<IOptions<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>>().Value;
+            client.BaseAddress = new Uri(opt.BaseUrl ?? "https://api.openweathermap.org");
+            client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
+        });
+
+        services.AddHttpClient<
+            CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Interfaces.IOpenWeatherCurrentClient,
+            CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Clients.OpenWeatherCurrentClient>((sp, client) =>
+        {
+            var opt = sp.GetRequiredService<IOptions<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>>().Value;
+            client.BaseAddress = new Uri(opt.BaseUrl ?? "https://api.openweathermap.org");
+            client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
+        });
+
+        services.AddHttpClient<IGptExternalService, CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.OpenAIGptExternalService>((sp, client) =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var openAiKey = cfg["OpenAI:ApiKey"];
+
+            client.BaseAddress = new Uri(cfg["OpenAI:BaseUrl"] ?? "https://api.openai.com");
+            if (!string.IsNullOrWhiteSpace(openAiKey))
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", openAiKey);
+
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+        })
+        .AddHttpMessageHandler(sp =>
+        {
+            var pipelines = sp.GetRequiredService<ResiliencePipelines>();
+            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
+            return new ResilienceHandler(pipelines.OpenAi, logger);
         });
 
         //services.AddHttpClient<OpenWeatherService>()
@@ -598,8 +631,10 @@ internal class Program
         // ---------- Hosted Services ----------
         services.AddHostedService<MorningCrowdAdvisoryHostedService>();
         services.AddHostedService<EventArchiverService>();
+        services.AddHostedService<OdwbTrafficCollector>();
         services.AddHostedService<WeatherService>();
         services.AddHostedService<SessionJanitor>();
+        services.AddHostedService<WeatherService>();
 
         // ---------- Autorisation ----------
         services.AddAuthorization(o =>
@@ -609,100 +644,6 @@ internal class Program
             o.AddPolicy("User", p => p.RequireRole(Roles.User, Roles.Admin, Roles.Modo));
             o.AddPolicy("Guest", p => p.RequireRole(Roles.Guest));
         });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-        services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", "Admin"); // your policy
-        });
-
-#if DEBUG
-        services
-            .AddRazorPages(options =>
-            {
-                options.Conventions.AuthorizeFolder("/Admin", "Admin");
-            })
-            .AddRazorRuntimeCompilation();
-#else
-            services.AddRazorPages(options =>
-            {
-                options.Conventions.AuthorizeFolder("/Admin", "Admin");
-            });
-#endif
 
         // ---------- Swagger ----------
         services.AddEndpointsApiExplorer();
@@ -771,6 +712,15 @@ internal class Program
 
         // ---------- Build app ----------
         var app = builder.Build();
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+    Console.Error.WriteLine($"UNHANDLED: {e.ExceptionObject}");
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Console.Error.WriteLine($"UNOBSERVED: {e.Exception}");
+            e.SetObserved();
+        };
 
         // --- RUN-ONCE DB INIT (post-deploy idempotent) --------------------
         using (var scope = app.Services.CreateScope())
@@ -1028,8 +978,11 @@ internal class Program
             }).RequireAuthorization("User"); // 👈 IMPORTANT
         }
 
-
-
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapMethods("{*path}", new[] { "OPTIONS" }, () => Results.Ok())
+               .AllowAnonymous();
+        }
         // Routes API (with rate limiting by group) for production
         //app.MapGroup("/api")
         //   .RequireRateLimiting("per-user")
@@ -1056,10 +1009,6 @@ internal class Program
         }
         // ------------------------------------------------------------------
 
-
-        // (If you have other controllers outside /api, uncomment the line below)
-        app.MapControllers();
-
         app.Use(async (ctx, next) =>
         {
             if (ctx.Request.Path.StartsWithSegments("/hubs/weatherforecastHub", StringComparison.OrdinalIgnoreCase))
@@ -1074,44 +1023,34 @@ internal class Program
             await next();
         });
 
-
+        // (If you have other controllers outside /api, uncomment the line below)
+        app.MapControllers();
         // ---------- Hubs ----------
+        var hubs = app.MapGroup("/hubs");
 
-        app.MapHub<WeatherForecastHub>($"/hubs/{WeatherForecastHubMethods.HubPath}").RequireAuthorization(); // "weatherforecastHub"
-        app.MapHub<CrowdHub>("/hubs/crowdHub").RequireAuthorization();
-        app.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization(); 
-        app.MapHub<TrafficHub>($"/hubs/{TrafficConditionHubMethods.HubPath}").RequireAuthorization();
-        app.MapHub<OutZenHub>("/hubs/outzenHub", o =>
+        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<MessageHub>(MessageHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<UserHub>(UserHubMethods.HubPath).RequireAuthorization();
+
+        hubs.MapHub<EventHub>("events"); 
+        hubs.MapHub<NotificationHub>("notificationHub").RequireAuthorization();
+
+        // OutZen with options
+        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath, o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         }).RequireAuthorization();
-        //var hubs = app.MapGroup("/hubs")
-        //              .RequireAuthorization();   // CORS is already global -> no need for RequireCors here
 
-        //// Paths RELATIVE to "/hubs"
-        //hubs.MapHub<CrowdHub>("crowdHub");
-        //hubs.MapHub<SuggestionHub>("suggestionHub");
-        //hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath); // "weatherforecastHub"
-        ////hubs.MapHub<WeatherForecastHub>("/hubs/weatherforecastHub");
-        //hubs.MapHub<TrafficHub>("trafficHub");
-        //hubs.MapHub<OutZenHub>("outzenHub", o =>
-        //{
-        //    o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
-        //});
+        // New antenna hubs :
+        app.MapHub<CrowdInfoAntennaHub>(CrowdInfoAntennaHubMethods.HubPath).RequireAuthorization();
+        app.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
 
-        // Other hubs
-        app.MapHub<AISuggestionHub>("aisuggessionHub").RequireAuthorization();
-        app.MapCrowdCalendarHub(o =>
-        {
-            o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
-        }).RequireAuthorization();
-        app.MapHub<EventHub>($"/hubs/{EventHubMethods.HubPath}").RequireAuthorization();
-        app.MapHub<GPTHub>($"/hubs/{GptInteractionHubMethods.HubPath}").RequireAuthorization();
-        app.MapHub<MessageHub>("/hubs/messageHub").RequireAuthorization();
-        app.MapHub<NotificationHub>("notificationHub").RequireAuthorization();
-        app.MapHub<PlaceHub>("placeHub").RequireAuthorization();
-        app.MapHub<UpdateHub>("updateHub").RequireAuthorization();
-        app.MapHub<UserHub>("userHub").RequireAuthorization();
 
         //app.MapGet("/csp-report/health", () => Results.Ok(new { status = "ok" }))
         //    .WithMetadata(new Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute { IgnoreApi = true });
@@ -1193,6 +1132,74 @@ internal class Program
         app.Run();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

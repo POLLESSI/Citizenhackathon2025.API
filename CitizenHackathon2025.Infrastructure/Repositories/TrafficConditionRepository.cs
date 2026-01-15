@@ -1,6 +1,8 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.Helpers;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using System.Data;
 
@@ -10,9 +12,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
     {
     #nullable disable
         private readonly System.Data.IDbConnection _connection;
-        private readonly ILogger<EventRepository> _logger;
+        private readonly ILogger<TrafficConditionRepository> _logger;
 
-        public TrafficConditionRepository(IDbConnection connection, ILogger<EventRepository> logger)
+        public TrafficConditionRepository(IDbConnection connection, ILogger<TrafficConditionRepository> logger)
         {
             _connection = connection;
             _logger = logger;
@@ -22,7 +24,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             SELECT TOP(@Limit)
-                                Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active
+                                Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType,
+                                Provider, ExternalId, Fingerprint, LastSeenAt, Title, Road, Severity, GeomWkt, Active
                             FROM dbo.TrafficCondition
                             WHERE Active = 1
                             ORDER BY DateCondition DESC;";
@@ -113,10 +116,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<int> ArchivePastTrafficConditionsAsync()
         {
             const string sql = @"
-                        UPDATE [TrafficCondition]
-                        SET [Active] = 0
-                        WHERE [Active] = 1
-                          AND [DateCondition] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
+                            UPDATE [TrafficCondition]
+                            SET [Active] = 0
+                            WHERE [Active] = 1
+                              AND [DateCondition] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
 
             try
             {
@@ -134,8 +137,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<TrafficCondition?> UpsertTrafficConditionAsync(TrafficCondition tc)
         {
+            TrafficUpsertIdentity.Ensure(tc, defaultProvider: "manual");
+
+            if (tc.Fingerprint is null || tc.Fingerprint.Length != 32)
+                throw new ArgumentException("Fingerprint must be 32 bytes.", nameof(tc));
+
             const string sql = @"EXEC dbo.sp_TrafficCondition_Upsert
-                         @Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType;";
+                            @Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType,
+                            @Provider, @ExternalId, @Fingerprint, @LastSeenAt;";
 
             var p = new DynamicParameters();
             p.Add("@Latitude", tc.Latitude);
@@ -144,15 +153,18 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             p.Add("@CongestionLevel", tc.CongestionLevel);
             p.Add("@IncidentType", tc.IncidentType);
 
+            p.Add("@Provider", tc.Provider);
+            p.Add("@ExternalId", tc.ExternalId);
+            p.Add("@Fingerprint", tc.Fingerprint, DbType.Binary, size: 32);
+            p.Add("@LastSeenAt", tc.LastSeenAt);
+
             try
             {
-                // Returns the newly inserted row (using OUTPUT INSERTED.*)
-                var saved = await _connection.QuerySingleAsync<TrafficCondition>(sql, p);
-                return saved;
+                return await _connection.QuerySingleAsync<TrafficCondition>(sql, p);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erreur lors de l'UPSERT TrafficCondition (lat={Lat}, lon={Lon})", tc.Latitude, tc.Longitude);
+                _logger.LogError(ex, "UPSERT failed provider={Provider} externalId={ExternalId}", tc.Provider, tc.ExternalId);
                 return null;
             }
         }

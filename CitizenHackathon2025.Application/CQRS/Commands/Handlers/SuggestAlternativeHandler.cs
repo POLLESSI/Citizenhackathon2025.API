@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.DTOs.UI;
 using MediatR;
 

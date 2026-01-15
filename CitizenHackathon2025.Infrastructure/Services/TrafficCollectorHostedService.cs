@@ -85,10 +85,132 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 Latitude = ev.Latitude,
                 Longitude = ev.Longitude,
-                DateCondition = ev.DateConditionUtc,     // déjà UTC
+                DateCondition = ev.DateConditionUtc,
                 CongestionLevel = ev.CongestionLevel,
-                IncidentType = ev.IncidentType
+                IncidentType = ev.IncidentType,
+
+                Provider = string.IsNullOrWhiteSpace(ev.Provider) ? "odwb" : ev.Provider,
+                ExternalId = string.IsNullOrWhiteSpace(ev.ExternalId) ? $"auto-{Guid.NewGuid():N}" : ev.ExternalId!,
+                Fingerprint = (ev.Fingerprint is { Length: 32 }) ? ev.Fingerprint : Hash32Fallback(ev),
+                LastSeenAt = DateTime.UtcNow,
+
+                Title = ev.Title,
+                Severity = ev.Severity is null ? null : (byte?)Math.Clamp(ev.Severity.Value, 0, 255),
+                // Road / GeomWkt si tu les as dans ton event provider
             };
 
+        private static byte[] Hash32Fallback(TrafficEvent ev)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var s = $"{ev.Provider}|{ev.ExternalId}|{ev.Latitude}|{ev.Longitude}|{ev.DateConditionUtc:O}|{ev.IncidentType}";
+            return sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(s)); // 32 bytes
+        }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

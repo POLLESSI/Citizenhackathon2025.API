@@ -25,7 +25,7 @@ namespace CitizenHackathon2025.Application.Mappings
             return new TrafficConditionDTO
             {
                 Location = "Default",
-                Level = forecast.WindSpeedKmh > 60 ? "Severe" : "Moderate",
+                Level = forecast.WindSpeedKmh > 60 ? (byte)4 : (byte)2,
                 Message = "Risk of gusts affecting traffic"
             };
         }

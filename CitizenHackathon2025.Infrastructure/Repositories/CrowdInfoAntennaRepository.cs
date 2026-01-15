@@ -14,10 +14,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IReadOnlyList<CrowdInfoAntenna>> GetAllAsync(CancellationToken ct)
         {
             const string sql = @"
-SELECT Id, Name, Latitude, Longitude, Active, CreatedUtc, Description
-FROM dbo.CrowdInfoAntenna
-WHERE Active = 1
-ORDER BY Id DESC;";
+                            SELECT Id, Name, Latitude, Longitude, Active, CreatedUtc, Description
+                            FROM dbo.CrowdInfoAntenna
+                            WHERE Active = 1
+                            ORDER BY Id DESC;";
 
             var rows = await _db.QueryAsync<CrowdInfoAntenna>(new CommandDefinition(sql, cancellationToken: ct));
             return rows.AsList();

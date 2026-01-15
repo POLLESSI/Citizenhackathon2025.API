@@ -1,189 +1,93 @@
-﻿using CitizenHackathon2025.Application.Extensions;
-using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.WeatherForecasts.Commands;
-using CitizenHackathon2025.Contracts.Hubs;
-using CitizenHackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Infrastructure.Repositories;
-using CitizenHackathon2025.Infrastructure.Services;
-using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using HubEvents = CitizenHackathon2025.Contracts.Hubs.WeatherForecastHubMethods;
+
 namespace CitizenHackathon2025.API.Controllers
 {
     [EnableRateLimiting("per-user")]
     [ApiController]
     [Route("api/[controller]")]
-    public class WeatherForecastController : ControllerBase
+    public sealed class WeatherForecastController : ControllerBase
     {
-        private readonly IWeatherForecastRepository _weatherRepository;
-        private readonly IHubContext<WeatherForecastHub> _hubContext;
-        private readonly IOpenWeatherService _owmService; 
-        private readonly IMediator _mediator;
+        private readonly IWeatherForecastAppService _app;
 
-        public WeatherForecastController(
-            IWeatherForecastRepository weatherRepository,
-            IHubContext<WeatherForecastHub> hubContext,
-            IOpenWeatherService owmService,
-            IMediator mediator)
-        {
-            _weatherRepository = weatherRepository;
-            _hubContext = hubContext;
-            _owmService = owmService;
-            _mediator = mediator;
-        }
+        public WeatherForecastController(IWeatherForecastAppService app)
+            => _app = app;
 
-        // standard create + broadcast
         [HttpPost]
-        public async Task<ActionResult<WeatherForecastDTO>> Create([FromBody] WeatherForecastDTO dto)
+        public async Task<ActionResult<WeatherForecastDTO>> Create([FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
         {
             if (dto is null) return BadRequest();
-
-            var saved = await _weatherRepository.SaveOrUpdateAsync(dto.MapToWeatherForecast());
-            var result = saved.MapToWeatherForecastDTO();
-
-            await _hubContext.Clients.All.SendAsync("ReceiveForecast", result); // broadcast
-            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+            var created = await _app.CreateAsync(dto, ct);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
-        // Manual injection (test)
         [HttpPost("manual")]
-        public async Task<ActionResult<WeatherForecastDTO>> PostManual([FromBody] WeatherForecastDTO dto)
+        public async Task<ActionResult<WeatherForecastDTO>> Manual([FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
         {
-            if (dto == null) return BadRequest();
-
-            // upsert + broadcast
-            var entity = dto.MapToWeatherForecast();
-            var saved = await _weatherRepository.SaveOrUpdateAsync(entity);
-            var result = saved.MapToWeatherForecastDTO();
-
-            await _hubContext.Clients.All.SendAsync("ReceiveForecast", result);
-            return Ok(result);
+            if (dto is null) return BadRequest();
+            return Ok(await _app.ManualAsync(dto, ct));
         }
 
-        // generate + broadcast
+        [HttpPost("pull")]
+        public async Task<IActionResult> Pull([FromQuery] decimal lat, [FromQuery] decimal lon, CancellationToken ct = default)
+        {
+            if (lat is < -90 or > 90) return BadRequest("Invalid lat.");
+            if (lon is < -180 or > 180) return BadRequest("Invalid lon.");
+
+            var (alertsUpserted, forecastSaved) = await _app.PullAsync(lat, lon, ct);
+            return Ok(new { alertsUpserted, forecastSaved });
+        }
+
         [HttpPost("generate")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
-        public async Task<IActionResult> Generate(CancellationToken ct = default)
-        {
-            var saved = await _weatherRepository.GenerateNewForecastAsync();
-            var dto = saved.MapToWeatherForecastDTO();
+        public async Task<ActionResult<WeatherForecastDTO>> Generate(CancellationToken ct = default)
+            => Ok(await _app.GenerateAsync(ct));
 
-            // 1) normal distribution of the forecast
-            await _hubContext.Clients.All.SendAsync(
-                WeatherForecastHubMethods.ToClient.ReceiveForecast,
-                dto,
-                ct);
-
-            // 2) rain alert check via MediatR
-            var alert = await _mediator.Send(new CheckRainfallAlertCommand(saved), ct);
-
-            if (alert is not null)
-            {
-                // 3) rain alert check via MediatR
-                await _hubContext.Clients.All.SendAsync(
-                    WeatherForecastHubMethods.ToClient.HeavyRainAlert,
-                    alert,
-                    ct);
-            }
-
-            return Ok(dto);
-        }
-
-        // all (existing)
         [HttpGet("all")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<WeatherForecastDTO>))]
         public async Task<ActionResult<List<WeatherForecastDTO>>> GetAll(CancellationToken ct = default)
-        {
-            // ⚠️ Here we want EVERYTHING, so we call GetAllAsync() (not GetLatestWeatherForecastAsync)
-            try
-            {
-                var entities = await _weatherRepository.GetAllAsync();
-                var dtos = entities.Select(w => w.MapToWeatherForecastDTO()).ToList();
-                return Ok(dtos);
-            }
-            catch (Exception ex)
-            {
-                // detailed log for us
-                Console.WriteLine($"[GetAll] {ex.GetType().Name}: {ex.Message}");
-                throw;
-            }
-        }
+            => Ok(await _app.GetAllAsync(ct));
 
-        // current via OWM (existing)
         [HttpGet("current")]
         public async Task<IActionResult> GetCurrent([FromQuery] string? city = null, CancellationToken ct = default)
         {
-            var entity = await _weatherRepository.GetLatestWeatherForecastAsync(ct); 
-            if (entity is null) return Ok(Array.Empty<WeatherForecastDTO>());
-
-            return Ok(new[] { entity.MapToWeatherForecastDTO() });
+            var arr = await _app.GetCurrentAsync(city, ct);
+            // WHY: eep customer compatibility: always table
+            return Ok(arr);
         }
 
-        // history (existing)
         [HttpGet("history")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<WeatherForecastDTO>))]
         public async Task<IActionResult> GetHistory([FromQuery, Range(1, 500)] int limit = 10, CancellationToken ct = default)
-        {
-            // safety terminal (in case the attribute does not apply)
-            limit = Math.Clamp(limit, 1, 500);
+            => Ok(await _app.GetHistoryAsync(limit, ct));
 
-            var entities = await _weatherRepository.GetHistoryAsync(limit);
-            var dtos = entities.Select(w => w.MapToWeatherForecastDTO()).ToList();
-
-            // Always 200, even if empty list (like EventController)
-            return Ok(dtos);
-        }
-
-        // by id (existing)
         [HttpGet("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
         public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct = default)
         {
-            if (id <= 0) return BadRequest("The provided ID is invalid.");
+            if (id <= 0) return BadRequest("Invalid id.");
 
-            var entity = await _weatherRepository.GetByIdAsync(id);
-            if (entity is null) return NotFound($"No events found for the ID {id}.");
-
-            return Ok(entity.MapToWeatherForecastDTO());
+            var dto = await _app.GetByIdAsync(id, ct);
+            return dto is null ? NotFound() : Ok(dto);
         }
-        // archive expired (admin only)
+
         [HttpPost("archive-expired")]
         [Authorize(Policy = "Admin")]
-        public async Task<IActionResult> ArchiveExpiredWeatherForecasts()
-        {
-            var archived = await _weatherRepository.ArchivePastWeatherForecastsAsync();
-            return Ok(new { ArchivedCount = archived });
-        }
-        // update + broadcast
+        public async Task<IActionResult> ArchiveExpired(CancellationToken ct = default)
+            => Ok(new { ArchivedCount = await _app.ArchiveExpiredAsync(ct) });
+
         [HttpPut("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WeatherForecastDTO))]
-        public async Task<IActionResult> Update(int id, [FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
+        public async Task<IActionResult> Update([FromRoute] int id, [FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
         {
+            if (dto is null) return BadRequest("Body is required.");
             if (id <= 0 || id != dto.Id) return BadRequest("Id mismatch.");
 
-            // DTO -> Entity 
-            var entity = dto.MapToWeatherForecast();
-
-            // Upsert 
-            var saved = await _weatherRepository.SaveOrUpdateAsync(entity);
-
-            var result = saved.MapToWeatherForecastDTO();
-
-            // Real-time broadcast (reuses the same event as elsewhere)
-            await _hubContext.Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.ReceiveForecast, result, ct);
-
-            return Ok(result);
+            return Ok(await _app.UpdateAsync(id, dto, ct));
         }
     }
 }
+
+
 
 
 

@@ -5,7 +5,10 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CitizenHackathon2025.Shared.Resilience
+// ✅ Explicit alias to the CLASS, not the namespace
+using ResilienceExec = CitizenHackathon2025.Shared.Resilience.ResilienceExec;
+
+namespace CitizenHackathon2025.Infrastructure.Resilience
 {
     public sealed class ResilienceHandler : DelegatingHandler
     {
@@ -26,8 +29,7 @@ namespace CitizenHackathon2025.Shared.Resilience
                 service: request.RequestUri?.Host ?? "unknown",
                 operation: $"{request.Method} {request.RequestUri?.AbsolutePath}");
 
-            // ExecuteLoggedAsync attend un Func<CancellationToken, ValueTask<T>>
-            return Resilience.ExecuteLoggedAsync(
+            return ResilienceExec.ExecuteLoggedAsync(
                 _pipeline,
                 token => new ValueTask<HttpResponseMessage>(base.SendAsync(request, token)),
                 ctx,
@@ -37,6 +39,7 @@ namespace CitizenHackathon2025.Shared.Resilience
         }
     }
 }
+
 
 
 

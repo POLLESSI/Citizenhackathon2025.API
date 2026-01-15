@@ -58,8 +58,8 @@ public class CrowdCalendarRepository : ICrowdCalendarRepository
     public Task<int> InsertAsync(CrowdCalendarEntry e) =>
         _db.ExecuteAsync(
             @"INSERT INTO dbo.CrowdCalendar
-              (DateUtc, RegionCode, PlaceId, EventName, ExpectedLevel, Confidence, StartLocalTime, EndLocalTime, LeadHours, MessageTemplate, Tags, Active)
-              VALUES (@DateUtc, @RegionCode, @PlaceId, @EventName, @ExpectedLevel, @Confidence, @StartLocalTime, @EndLocalTime, @LeadHours, @MessageTemplate, @Tags, @Active);",
+              (DateUtc, RegionCode, PlaceId, EventName, ExpectedLevel, Confidence, Latitude, Longitude, StartLocalTime, EndLocalTime, LeadHours, MessageTemplate, Tags, Active)
+              VALUES (@DateUtc, @RegionCode, @PlaceId, @EventName, @ExpectedLevel, @Confidence, @Latitude, @Longitude, @StartLocalTime, @EndLocalTime, @LeadHours, @MessageTemplate, @Tags, @Active);",
             new
             {
                 e.DateUtc,
@@ -68,6 +68,8 @@ public class CrowdCalendarRepository : ICrowdCalendarRepository
                 e.EventName,
                 ExpectedLevel = (byte)e.ExpectedLevel,
                 e.Confidence,
+                e.Latitude,
+                e.Longitude,
                 e.StartLocalTime,
                 e.EndLocalTime,
                 e.LeadHours,
@@ -126,7 +128,7 @@ public class CrowdCalendarRepository : ICrowdCalendarRepository
         _db.ExecuteAsync(
             @"EXEC dbo.CrowdCalendar_Upsert
                 @DateUtc=@DateUtc, @RegionCode=@RegionCode, @PlaceId=@PlaceId, @EventName=@EventName,
-                @ExpectedLevel=@ExpectedLevel, @Confidence=@Confidence, @StartLocalTime=@StartLocalTime,
+                @ExpectedLevel=@ExpectedLevel, @Confidence=@Confidence, @Latitude=@Latitude, @Longitude=@Longitude, @StartLocalTime=@StartLocalTime,
                 @EndLocalTime=@EndLocalTime, @LeadHours=@LeadHours, @MessageTemplate=@MessageTemplate,
                 @Tags=@Tags, @Active=@Active;",
             new
@@ -137,6 +139,8 @@ public class CrowdCalendarRepository : ICrowdCalendarRepository
                 e.EventName,
                 ExpectedLevel = (byte)e.ExpectedLevel,
                 e.Confidence,
+                e.Latitude,
+                e.Longitude,
                 e.StartLocalTime,
                 e.EndLocalTime,
                 e.LeadHours,

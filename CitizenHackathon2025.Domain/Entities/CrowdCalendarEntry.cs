@@ -11,6 +11,8 @@ namespace CitizenHackathon2025.Domain.Entities
         public string? EventName { get; set; }
         public CrowdLevelEnum ExpectedLevel { get; set; }
         public byte? Confidence { get; set; }
+        public decimal Latitude { get; set; }
+        public decimal Longitude { get; set; }
         public TimeSpan? StartLocalTime { get; set; }
         public TimeSpan? EndLocalTime { get; set; }
         public int LeadHours { get; set; }

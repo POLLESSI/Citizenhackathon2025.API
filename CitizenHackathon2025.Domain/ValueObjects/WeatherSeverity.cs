@@ -49,9 +49,10 @@ namespace CitizenHackathon2025.Domain.ValueObjects
     /// </summary>
     public enum SeverityLevel
     {
-        Mild = 0,        // Normal conditions
-        Moderate = 1,    // Limited risk
-        Severe = 2       // Significant danger
+        Mild = 1,        // Normal conditions
+        Moderate = 2,    // Limited risk
+        Severe = 3,       // Significant danger
+        Critical = 4     // Extreme hazard
     }
 }
 

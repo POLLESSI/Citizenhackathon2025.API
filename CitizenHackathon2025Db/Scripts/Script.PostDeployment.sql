@@ -3,7 +3,7 @@
    Does NOT create databases or tables. Only takes care of:
    - Index WeatherForecast
    - Trigger OnDeleteWeatherForecast (create if missing)
-   - Colonnes/seed TokenHash/TokenSalt de RefreshTokens
+   - Colonnes/seed TokenHash/TokenSalt de RefreshTokensC:\Users\Pol PC\Downloads\CitizeHackathon2025V3.API\CitizenHackathon2025Db\Programmability\Views
    - Index/contrainte GptInteractions (cleaning + filtered index)
    - Procédures d’UPSERT (CREATE OR ALTER)
    - Procédures d’archivage (CREATE OR ALTER) — corrected
@@ -404,6 +404,47 @@ BEGIN
 END
 GO
 
+IF OBJECT_ID('dbo.TrafficCondition','U') IS NULL
+BEGIN
+    PRINT 'dbo.TrafficCondition missing - skip migration.';
+    RETURN;
+END
+GO
+
+-- 1) Add missing columns (safe)
+IF COL_LENGTH('dbo.TrafficCondition','Provider') IS NULL
+    ALTER TABLE dbo.TrafficCondition ADD Provider NVARCHAR(16) NULL;
+IF COL_LENGTH('dbo.TrafficCondition','ExternalId') IS NULL
+    ALTER TABLE dbo.TrafficCondition ADD ExternalId NVARCHAR(128) NULL;
+IF COL_LENGTH('dbo.TrafficCondition','Fingerprint') IS NULL
+    ALTER TABLE dbo.TrafficCondition ADD Fingerprint VARBINARY(32) NULL;
+IF COL_LENGTH('dbo.TrafficCondition','LastSeenAt') IS NULL
+    ALTER TABLE dbo.TrafficCondition ADD LastSeenAt DATETIME2(0) NULL;
+GO
+
+-- 2) Add defaults (safe)
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE name = 'DF_TrafficCondition_Provider')
+    ALTER TABLE dbo.TrafficCondition
+    ADD CONSTRAINT DF_TrafficCondition_Provider DEFAULT('odwb') FOR Provider;
+
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE name = 'DF_TrafficCondition_LastSeenAt')
+    ALTER TABLE dbo.TrafficCondition
+    ADD CONSTRAINT DF_TrafficCondition_LastSeenAt DEFAULT (SYSUTCDATETIME()) FOR LastSeenAt;
+GO
+
+-- 3) Backfill BEFORE NOT NULL
+UPDATE dbo.TrafficCondition SET Provider='legacy' WHERE Provider IS NULL;
+UPDATE dbo.TrafficCondition SET ExternalId=CONCAT('legacy-', Id) WHERE ExternalId IS NULL;
+UPDATE dbo.TrafficCondition SET Fingerprint=HASHBYTES('SHA2_256', CONCAT('legacy|', Id)) WHERE Fingerprint IS NULL;
+UPDATE dbo.TrafficCondition SET LastSeenAt=SYSUTCDATETIME() WHERE LastSeenAt IS NULL;
+GO
+
+-- 4) Now enforce NOT NULL
+ALTER TABLE dbo.TrafficCondition ALTER COLUMN Provider NVARCHAR(16) NOT NULL;
+ALTER TABLE dbo.TrafficCondition ALTER COLUMN ExternalId NVARCHAR(128) NOT NULL;
+ALTER TABLE dbo.TrafficCondition ALTER COLUMN Fingerprint VARBINARY(32) NOT NULL;
+ALTER TABLE dbo.TrafficCondition ALTER COLUMN LastSeenAt DATETIME2(0) NOT NULL;
+GO
 
 
 

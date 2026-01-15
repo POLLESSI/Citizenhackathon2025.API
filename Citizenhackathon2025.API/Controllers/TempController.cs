@@ -1,5 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
-using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Mvc;
@@ -31,11 +31,11 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(result);
         }
         [HttpPost("seed")]
-        public async Task<IActionResult> Seed()
+        public async Task<IActionResult> Seed(CancellationToken ct)
         {
             var fakeWeather = new WeatherForecastDTO
             {
-                DateWeather = DateTime.Now,
+                DateWeather = DateTime.UtcNow, // WHY: avoid timezone bugs (and be consistent with the rest)
                 TemperatureC = 18,
                 Summary = "Sunny test",
                 Humidity = 70,
@@ -43,7 +43,7 @@ namespace CitizenHackathon2025.API.Controllers
                 WindSpeedKmh = 10
             };
 
-            await _weatherRepository.SaveWeatherForecastAsync(fakeWeather.MapToWeatherForecast());
+            await _weatherRepository.SaveOrUpdateAsync(fakeWeather.MapToWeatherForecast(), ct);
 
             return Ok("Seed inserted");
         }

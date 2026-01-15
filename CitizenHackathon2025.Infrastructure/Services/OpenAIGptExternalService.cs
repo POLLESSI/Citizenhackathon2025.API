@@ -1,46 +1,32 @@
-﻿using CitizenHackathon2025.Shared.Resilience;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using Microsoft.Extensions.Logging;
-using Polly;
-using Polly.Wrap;
 using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-
-public class OpenAIGptExternalService
+using System.Text;
+using System.Text.Json;
+public sealed class OpenAIGptExternalService : IGptExternalService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<OpenAIGptExternalService> _logger;
-    private readonly AsyncPolicyWrap<HttpResponseMessage> _openAiPolicy;
 
-    public OpenAIGptExternalService(HttpClient httpClient, ILogger<OpenAIGptExternalService> logger, AsyncPolicyWrap<HttpResponseMessage> openAiPolicy)
+    public OpenAIGptExternalService(HttpClient httpClient, ILogger<OpenAIGptExternalService> logger)
+        => (_httpClient, _logger) = (httpClient, logger);
+    public async Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
     {
-        _httpClient = httpClient;
-        _logger = logger;
-        _openAiPolicy = openAiPolicy;
-    }
-
-    public async Task<string> AskChatGptAsync(string prompt, string userId, CancellationToken ct = default)
-    {
-        var ctx = new Context
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
         {
-            ["service"] = "api.openai.com",
-            ["operation"] = "POST /v1/chat/completions",
-            ["userId"] = userId ?? "anon",
-            ["correlationId"] = Guid.NewGuid().ToString("N")
+            Content = new StringContent(
+                JsonSerializer.Serialize(new { prompt }),
+                Encoding.UTF8,
+                "application/json")
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
-        {
-            Content = new StringContent($"{{\"prompt\":\"{prompt}\"}}", System.Text.Encoding.UTF8, "application/json")
-        };
-
-        var response = await _openAiPolicy.ExecuteAsync(
-            (_, token) => _httpClient.SendAsync(request, token),
-            ctx,
-            ct);
-
-        return await response.Content.ReadAsStringAsync();
+        using var resp = await _httpClient.SendAsync(req, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadAsStringAsync(ct);
     }
+
+    public Task<string> RefineSuggestionAsync(string raw, CancellationToken ct = default)
+        => CompleteAsync(raw, ct);
 }
 
 

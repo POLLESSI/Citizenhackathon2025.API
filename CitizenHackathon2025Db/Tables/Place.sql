@@ -4,8 +4,8 @@
 	[Name] NVARCHAR (64),
 	[Type] NVARCHAR (32),
 	[Indoor] BIT,
-	[Latitude] DECIMAL(9, 3),
-	[Longitude] DECIMAL(9, 3),
+	[Latitude] DECIMAL(9, 6),
+	[Longitude] DECIMAL(9, 6),
 	[Capacity] INT,
 	[Tag] NVARCHAR(16),
 	[Active] BIT DEFAULT 1

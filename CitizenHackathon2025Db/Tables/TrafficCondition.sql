@@ -1,25 +1,27 @@
 ﻿CREATE TABLE [dbo].[TrafficCondition]
 (
-	[Id] INT IDENTITY,
-	[Latitude] DECIMAL(9, 2),
-	[Longitude] DECIMAL(9, 3),
-	[DateCondition] DATETIME2(0),
-	[CongestionLevel] NVARCHAR(16),
-	[IncidentType] NVARCHAR(64),
-	[Provider] NVARCHAR(16),
-	[ExternalId] NVARCHAR(128),
-	[Fingerprint] VARBINARY(32),
-	[Title] NVARCHAR(256) NULL,
-	[Road] NVARCHAR(128) NULL,
-	[Severity] TINYINT NULL,
-	[LastSeenAt] DATETIME2(0),
-	[GeomWkt] NVARCHAR(MAX) NULL,
-	[Active] BIT DEFAULT 1
+    [Id] INT IDENTITY(1,1) NOT NULL,
+    [Latitude] DECIMAL(9, 6) NOT NULL,
+    [Longitude] DECIMAL(9, 6) NOT NULL,
+    [DateCondition] DATETIME2(0) NOT NULL,
+    [CongestionLevel] NVARCHAR(16) NOT NULL,
+    [IncidentType] NVARCHAR(64) NOT NULL,
 
-	CONSTRAINT [PK_TrafficCondition] PRIMARY KEY ([Id]),
-	CONSTRAINT [UQ_TrafficCondition_ExternalId_Provider] UNIQUE ([ExternalId], [Provider])
-)
+    [Provider] NVARCHAR(16) NOT NULL CONSTRAINT DF_TrafficCondition_Provider DEFAULT('odwb'),
+    [ExternalId] NVARCHAR(128) NOT NULL,
+    [Fingerprint] VARBINARY(32) NOT NULL,
+    [LastSeenAt] DATETIME2(0) NOT NULL CONSTRAINT DF_TrafficCondition_LastSeenAt DEFAULT (SYSUTCDATETIME()),
 
+    [Title] NVARCHAR(256) NULL,
+    [Road] NVARCHAR(128) NULL,
+    [Severity] TINYINT NULL,
+    [GeomWkt] NVARCHAR(MAX) NULL,
+
+    [Active] BIT NOT NULL CONSTRAINT DF_TrafficCondition_Active DEFAULT(1),
+
+    CONSTRAINT [PK_TrafficCondition] PRIMARY KEY ([Id]),
+    CONSTRAINT [UQ_TrafficCondition_ExternalId_Provider] UNIQUE ([ExternalId], [Provider])
+);
 GO
 
 CREATE TRIGGER [dbo].[OnDeleteTrafficCondition]

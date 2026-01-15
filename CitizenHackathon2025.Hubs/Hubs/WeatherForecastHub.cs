@@ -1,28 +1,18 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using CitizenHackathon2025.Contracts.Hubs;
-using System.Threading.Tasks;
+﻿using CitizenHackathon2025.Contracts.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
     public class WeatherForecastHub : Hub
     {
-#nullable disable
-        public async Task RefreshWeatherForecast(string message)
-        {
-            await Clients.All.SendAsync(
-                WeatherForecastHubMethods.ToClient.ReceiveForecast,
-                message);
-        }
+        public Task RefreshWeatherForecast(string message)
+            => Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.ReceiveForecast, message);
 
-        public async Task Notify(string message)
-        {
-            await Clients.All.SendAsync(
-                WeatherForecastHubMethods.ToClient.EventArchived,
-                message);
-        }
+        public Task Notify(string message)
+            => Clients.All.SendAsync(WeatherForecastHubMethods.ToClient.EventArchived, message);
     }
-
 }
+
 
 
 

@@ -1,13 +1,15 @@
-﻿using System.Globalization;
-using System.Net.Http.Json;
-using System.Text.Json;
-using CitizenHackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenWeather;
 using CitizenHackathon2025.Shared.Json;
-using CitizenHackathon2025.Shared.Options;               
+using CitizenHackathon2025.Shared.Options;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Serilog;
+using System.Globalization;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -21,25 +23,29 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private const string CurrentWeatherPath = "/data/2.5/weather";
         private const string ForecastPath = "/data/2.5/forecast";
 
-        public OpenWeatherService(
-            HttpClient http,
-            ILogger<OpenWeatherService> logger,
-            IOptions<OpenWeatherOptions> options)
-        {
-            _http = http;
-            _logger = logger;
-            _opt = options.Value ?? throw new ArgumentNullException(nameof(options));
+        public OpenWeatherService(HttpClient http, ILogger<OpenWeatherService> logger, IOptions<OpenWeatherOptions> opt)
+            => (_http, _logger, _opt) = (http, logger, opt.Value);
 
-            if (_http.BaseAddress is null)
-                _http.BaseAddress = new Uri(_opt.BaseUrl ?? "https://api.openweathermap.org");
-        }
-
-        public async Task<(double lat, double lon)?> GetCoordinatesAsync(string city)
+        public async Task<(double lat, double lon)?> GetCoordinatesAsync(string city, CancellationToken ct = default)
         {
             try
             {
-                var url = $"{GeoPath}?q={Uri.EscapeDataString(city)}&limit=1&appid={_opt.ApiKey}";
-                var response = await _http.GetFromJsonAsync<List<GeoLocationDTO>>(url, JsonDefaults.Options);
+                var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
+
+                var url = QueryHelpers.AddQueryString(
+                    $"{baseUrl}/geo/1.0/direct",
+                    new Dictionary<string, string?>
+                    {
+                        ["q"] = city,
+                        ["limit"] = "1",
+                        ["appid"] = _opt.ApiKey
+                    });
+
+                var response = await _http.GetFromJsonAsync<List<GeoLocationDTO>>(
+                    url,
+                    JsonDefaults.Options,
+                    ct
+                );
                 var loc = response?.FirstOrDefault();
                 return loc is null ? null : (loc.Lat, loc.Lon);
             }
@@ -183,6 +189,38 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public class GeoLocationDTO { public double Lat { get; set; } public double Lon { get; set; } }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

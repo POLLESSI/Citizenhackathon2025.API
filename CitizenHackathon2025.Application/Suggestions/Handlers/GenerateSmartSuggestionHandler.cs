@@ -8,11 +8,11 @@ namespace CitizenHackathon2025.Application.Suggestions.Handlers
 {
     public class GenerateSmartSuggestionHandler : IRequestHandler<GenerateSmartSuggestionCommand, string>
     {
-        private readonly AstroIAService _astro;
+        private readonly IAggregateSuggestionService _astro;
         private readonly IGptExternalService _gpt;
         private readonly ILogger<GenerateSmartSuggestionHandler> _log;
 
-        public GenerateSmartSuggestionHandler(AstroIAService astro, IGptExternalService gpt, ILogger<GenerateSmartSuggestionHandler> log)
+        public GenerateSmartSuggestionHandler(IAggregateSuggestionService astro, IGptExternalService gpt, ILogger<GenerateSmartSuggestionHandler> log)
             => (_astro, _gpt, _log) = (astro, gpt, log);
 
         public async Task<string> Handle(GenerateSmartSuggestionCommand request, CancellationToken cancellationToken)

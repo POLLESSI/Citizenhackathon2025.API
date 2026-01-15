@@ -18,7 +18,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<RainAlertDTO?> CheckRainfallAlertAsync(WeatherForecast wf, CancellationToken ct = default);
         Task SendWeatherToAllClientsAsync(CancellationToken ct = default);
         Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default);
-        Task<int> ArchivePastWeatherForecastsAsync();
+        Task<int> ArchivePastWeatherForecastsAsync(CancellationToken ct = default);
     }
 }
 
