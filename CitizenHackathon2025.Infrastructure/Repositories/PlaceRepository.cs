@@ -32,7 +32,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return _connection.QueryAsync<Place>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
-        public async Task<Place> SavePlaceAsync(Place place)
+        public async Task<Place> SavePlaceAsync(Place place, CancellationToken ct = default)
         {
             try
             {
@@ -57,28 +57,31 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
-        public async Task<Place?> GetPlaceByIdAsync(int id)
+
+        public async Task<Place> GetByIdAsync(int id, CancellationToken ct = default)
         {
+            const string sql = @"
+                                SELECT TOP(1) *
+                                FROM dbo.Place
+                                WHERE Id = @Id /* AND Active = 1 si tu as ce champ */
+                            ";
             try
             {
-                const string sql = "SELECT [Id], [Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag] FROM [Place] WHERE [Id] = @Id AND Active = 1";
-
                 DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@id", id, DbType.Int64);
+                parameters.Add("@Id", id, DbType.Int32);
 
-                var place = await _connection.QueryFirstOrDefaultAsync<Place>(sql, parameters);
+                var cmd = new CommandDefinition(sql, parameters, cancellationToken: ct);
 
-                return place;
+                return await _connection.QueryFirstOrDefaultAsync<Place>(cmd);
             }
             catch (Exception ex)
             {
 
-                Console.WriteLine($"Error geting Place : {ex.ToString}");
+                _logger.LogError(ex, "Error getting Place by Id={Id}", id);
                 return null;
             }
-
         }
-
+        
         public Place UpdatePlace(Place place)
         {
             if (place == null || place.Id <= 0)
@@ -116,7 +119,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return null;
         }
 
-        public async Task<Place?> UpdateAsync(Place p)
+        public async Task<Place> UpdateAsync(Place place, CancellationToken ct = default)
         {
             const string sql = @"
                             UPDATE dbo.Place
@@ -132,16 +135,18 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             SELECT TOP 1 *
                               FROM dbo.Place
                              WHERE Id = @Id AND Active = 1;
-";
+                            ";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", place.Id, DbType.Int64);
             try
             {
-                var res = await _connection.QueryFirstOrDefaultAsync<Place>(sql, p);
+                var res = await _connection.QueryFirstOrDefaultAsync<Place>(sql, parameters);
                 return res; // null if not found/inactive
             }
             catch (SqlException ex) when (ex.Number == 2627 || ex.Number == 2601) // single violation
             {
                 // single violation
-                throw new InvalidOperationException($"Place name '{p.Name}' already exists.", ex);
+                throw new InvalidOperationException($"Place name '{parameters}' already exists.", ex);
             }
         }
     }

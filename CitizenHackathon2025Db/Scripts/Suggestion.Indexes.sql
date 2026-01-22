@@ -1,4 +1,5 @@
-﻿CREATE INDEX [IX_Suggestion_User_Active_Date]
+﻿--Suggestion.Indexes.sql
+CREATE INDEX [IX_Suggestion_User_Active_Date]
 ON [dbo].[Suggestion]([User_Id], [DateSuggestion] DESC)
 INCLUDE ([Active])
 WHERE [Active] = 1;

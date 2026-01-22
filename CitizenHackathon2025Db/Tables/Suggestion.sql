@@ -13,7 +13,14 @@
     [PlaceId]              INT NULL,
     [TrafficId]            INT NULL,
     [ForecastId]           INT NULL,
-    [LocationName]         NVARCHAR(128) NULL
+    [LocationName]         NVARCHAR(128) NULL,
+    Latitude      DECIMAL(9,6) NULL,
+    Longitude     DECIMAL(9,6) NULL,
+    DistanceKm    FLOAT NULL,
+    LocationLabel NVARCHAR(128) NULL,
+    Title         NVARCHAR(256) NULL,
+    Message       NVARCHAR(512) NULL,
+    Context       NVARCHAR(1024) NULL
 
     CONSTRAINT [PK_Suggestion] PRIMARY KEY ([Id]),
     CONSTRAINT [FK_Suggestion_User] FOREIGN KEY ([User_Id]) REFERENCES [dbo].[Users]([Id]),

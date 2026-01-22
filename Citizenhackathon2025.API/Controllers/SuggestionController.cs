@@ -31,30 +31,35 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly ISuggestionRepository _repo;
         private readonly IHubContext<SuggestionHub> _hub;
         private readonly ISuggestionService _service;
+        private readonly CitizenHackathon2025.Domain.Interfaces.IPlaceRepository _placeRepo;
+        private readonly CitizenHackathon2025.Domain.Interfaces.IEventRepository _eventRepo;
 
         private const string HubMethod_ReceiveSuggestionUpdate = "ReceiveSuggestionUpdate";
 
-        public SuggestionsController(ISuggestionRepository repo, IHubContext<SuggestionHub> hub, ISuggestionService service)
+        public SuggestionsController(ISuggestionRepository repo, IHubContext<SuggestionHub> hub, ISuggestionService service, IPlaceRepository placeRepo, IEventRepository eventRepo)
         {
             _repo = repo;
             _hub = hub;
             _service = service;
+            _placeRepo = placeRepo;
+            _eventRepo = eventRepo;
         }
+
+        
 
         [HttpGet("all")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetAll([FromQuery] int? userId, [FromQuery] bool all = false, CancellationToken ct = default)
+        public async Task<ActionResult<IEnumerable<SuggestionDTO>>> GetAll([FromQuery] int limit = 100, CancellationToken ct = default)
         {
-            if (userId.HasValue)
-                return Ok(await _repo.GetSuggestionsByUserAsync(userId.Value));
-
-            if (all)
-            {
-                var entities = await _repo.GetAllSuggestionsAsync();
-                var dtos = entities.Select(s => s.MapToSuggestionDTO()).ToList();
-                return Ok(dtos);
-            }
-            return Ok(await _repo.GetLatestSuggestionAsync());
+            //if (userId.HasValue)
+            //    return Ok(await _repo.GetSuggestionsByUserAsync(userId.Value));
+            //if (all)
+            //{   
+            //}
+            var rows = await _repo.GetAllSuggestionsAsync(limit, ct);
+            var dtos = rows.Select(r => r.MapToSuggestionDTO()).ToList();
+            return Ok(dtos);
+            //return Ok(await _repo.GetLatestSuggestionAsync());
         }
 
         [HttpGet]
@@ -97,19 +102,36 @@ namespace CitizenHackathon2025.API.Controllers
         {
             if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
-            // … normalization / mapping / save …
-            var saved = await _repo.SaveSuggestionAsync(dto.MapToSuggestion(), ct);
+            // ✅ Resolution “name” (optional)
+            string? locationName = null;
+
+            if (dto.PlaceId is not null)
+            {
+                var place = (await _placeRepo.GetByIdAsync(dto.PlaceId.Value, ct)); // adapt to your repo
+                locationName = place?.Name;
+                dto.OriginalPlace ??= place?.Name; // optional
+                dto.Latitude ??= (double?)place?.Latitude;
+                dto.Longitude ??= (double?)place?.Longitude;
+            }
+            else if (dto.EventId is not null)
+            {
+                var ev = (await _eventRepo.GetByIdAsync(dto.EventId.Value, ct));
+                locationName = ev?.Name;
+                dto.OriginalPlace ??= ev?.Name; // optional
+                dto.Latitude ??= (double?)ev?.Latitude;
+                dto.Longitude ??= (double?)ev?.Longitude;
+            }
+
+            var entity = dto.MapToSuggestion();
+            entity.LocationName = locationName ?? entity.LocationName;
+
+            var saved = await _repo.SaveSuggestionAsync(entity, ct);
             if (saved is null) return Conflict("Already exists.");
 
             var resultDto = saved.MapToSuggestionDTO();
 
-            // ✅ broadcast with shared constants
-            await _hub.Clients.All
-                .SendAsync(HubEvents.ToClient.ReceiveSuggestion, resultDto, ct);
-
-            // ping “refresh” optional
-            await _hub.Clients.All
-                .SendAsync(HubEvents.ToClient.NewSuggestion, ct);
+            await _hub.Clients.All.SendAsync(HubEvents.ToClient.ReceiveSuggestion, resultDto, ct);
+            await _hub.Clients.All.SendAsync(HubEvents.ToClient.NewSuggestion, ct);
 
             return CreatedAtAction(nameof(GetById), new { id = saved.Id }, resultDto);
         }

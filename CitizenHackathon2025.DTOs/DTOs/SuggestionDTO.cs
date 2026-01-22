@@ -1,45 +1,60 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace CitizenHackathon2025.DTOs.DTOs
 {
-    public class SuggestionDTO
+    public class SuggestionDTO : IValidatableObject
     {
-#nullable disable
+    #nullable disable
         public int Id { get; set; }
-        [Required(ErrorMessage = "User ID is required.")]
-        [Range(1, int.MaxValue, ErrorMessage = "User ID must be greater than 0.")]
+
+        [Required, Range(1, int.MaxValue)]
         [DisplayName("User ID : ")]
         public int UserId { get; set; }
-        [Required(ErrorMessage = "The date of the suggestion is mandatory.")]
-        [DataType(DataType.Date)]
+
+        [Required]
         [DisplayName("Date of Suggestion : ")]
         public DateTime DateSuggestion { get; set; }
-        [Required(ErrorMessage = "Original location is required.")]
-        [StringLength(64, ErrorMessage = "The original location cannot exceed 64 characters.")]
-        [DisplayName("Original Place : ")]
-        public string OriginalPlace { get; set; }
-        [Required(ErrorMessage = "Alternatives are required.")]
-        [StringLength(256, ErrorMessage = "The alternative suggestion cannot exceed 256 characters.")]
-        [DisplayName("Suggested Alternatives : ")]
-        public string SuggestedAlternatives { get; set; }
-        [Required(ErrorMessage = "The reason for the suggestion is required.")]
-        [StringLength(256, ErrorMessage = "The reason cannot exceed 256 characters.")]
-        [DisplayName("Reason : ")]
-        //[NoProfanity]
+
+        // ✅ You can make these texts optional on the API side.
+        // because the “source of truth” becomes PlaceId/EventId.
+        [StringLength(128)]
+        public string? OriginalPlace { get; set; }
+
+        [StringLength(256)]
+        public string? SuggestedAlternatives { get; set; }
+
+        [Required, StringLength(256)]
         public string Reason { get; set; }
+
         public bool Active { get; set; } = true;
-        public string Message { get; set; }
-        public string Context { get; set; }
+
+        public string? Message { get; set; }
+        public string? Context { get; set; }
+
+        // ✅ Strong references
         public int? EventId { get; set; }
         public int? PlaceId { get; set; }
 
+        // ✅ If you want to continue transporting coordinates to the front: OK, but not mandatory
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
+        public string? LocationLabel { get; set; }
         public double? DistanceKm { get; set; }
         public string? Title { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (EventId is null && PlaceId is null)
+            {
+                yield return new ValidationResult(
+                    "Either EventId or PlaceId must be provided.",
+                    new[] { nameof(EventId), nameof(PlaceId) });
+            }
+        }
     }
 }
+
 
 
 

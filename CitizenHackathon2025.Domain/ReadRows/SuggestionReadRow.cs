@@ -1,8 +1,7 @@
-﻿namespace CitizenHackathon2025.Domain.Entities
+﻿namespace CitizenHackathon2025.Domain.ReadRows
 {
-    public class Suggestion
+    public sealed class SuggestionReadRow
     {
-    #nullable disable
         public int Id { get; set; }
         public int User_Id { get; set; }
         public DateTime DateSuggestion { get; set; }
@@ -10,117 +9,17 @@
         public string? SuggestedAlternatives { get; set; }
         public string? Reason { get; set; }
         public bool Active { get; set; }
-        public string Message { get; set; } 
-        public string Context { get; set; }
         public DateTime? DateDeleted { get; set; }
-
-        // Links to external entities
         public int? EventId { get; set; }
         public int? PlaceId { get; set; }
         public int? ForecastId { get; set; }
         public int? TrafficId { get; set; }
         public string? LocationName { get; set; }
+
+        // enrichment
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
-        public double? DistanceKm { get; set; }
         public string? LocationLabel { get; set; }
     }
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

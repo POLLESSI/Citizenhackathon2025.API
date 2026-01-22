@@ -4,10 +4,10 @@ using System;
 
 namespace CitizenHackathon2025.Domain.Entities
 {
-    public class WeatherForecast
+    public sealed class WeatherForecast
     {
-        public int Id { get; set; }
-        public DateTime DateWeather { get; set; }
+        public long Id { get; set; }
+        public DateTimeOffset DateWeather { get; set; }
         public decimal? Latitude { get; set; }
         public decimal? Longitude { get; set; }
         public int TemperatureC { get; set; }

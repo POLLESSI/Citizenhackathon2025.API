@@ -5,11 +5,11 @@ using System.Text.Json.Serialization;
 
 namespace CitizenHackathon2025.DTOs.DTOs
 {
-    public class WeatherForecastDTO
+    public sealed class WeatherForecastDTO
     {
     #nullable disable
-        public int Id { get; set; }
-        public DateTime DateWeather { get; set; }
+        public long Id { get; set; }
+        public DateTimeOffset DateWeather { get; set; }
         [DisplayName("Latitude : ")]
         public decimal Latitude { get; set; }
         [DisplayName("Longitude : ")]

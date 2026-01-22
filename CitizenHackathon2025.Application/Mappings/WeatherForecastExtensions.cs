@@ -38,8 +38,8 @@ namespace CitizenHackathon2025.Application.Mappings
                 LocationName = "City", 
                 Latitude = 0,          
                 Longitude = 0,
-                CrowdLevel = forecast.Humidity > 80 ? 3 : 1, 
-                Timestamp = forecast.DateWeather
+                CrowdLevel = forecast.Humidity > 80 ? 3 : 1,
+                Timestamp = forecast.DateWeather.UtcDateTime
             };
         }
 

@@ -4,13 +4,14 @@ namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface IEventRepository
     {
-    #nullable disable
         Task<IEnumerable<Event?>> GetLatestEventAsync(int limit = 10, CancellationToken ct = default);
-        Task<Event> SaveEventAsync(Event @event);
-        Task<Event> CreateEventAsync(Event newEvent);
-        Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync();
-        Task<Event?> GetByIdAsync(int id);
-        Task<int> ArchivePastEventsAsync();
+        Task<Event> SaveEventAsync(Event @event, CancellationToken ct = default);
+        Task<Event> CreateEventAsync(Event newEvent, CancellationToken ct = default);
+        Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync(CancellationToken ct = default);
+
+        Task<Event?> GetByIdAsync(int id, CancellationToken ct = default);
+
+        Task<int> ArchivePastEventsAsync(CancellationToken ct = default);
         Event UpdateEvent(Event @event);
     }
 }

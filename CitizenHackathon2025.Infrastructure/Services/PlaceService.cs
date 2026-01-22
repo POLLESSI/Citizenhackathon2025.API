@@ -35,7 +35,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<Place?> GetPlaceByIdAsync(int id)
         {
-            return await _repo.GetPlaceByIdAsync(id);
+            return await _repo.GetByIdAsync(id);
         }
 
         public Task<Place> SaveAsync(Place place, CancellationToken ct = default)

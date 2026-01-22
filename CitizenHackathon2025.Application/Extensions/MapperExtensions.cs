@@ -1,6 +1,7 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Contracts.Enums;
-using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.ReadRows;
 using CitizenHackathon2025.Domain.ValueObjects;
 using CitizenHackathon2025.DTOs.DTOs;
 using Volo.Abp.Domain.Entities;
@@ -13,7 +14,16 @@ namespace CitizenHackathon2025.Application.Extensions
         private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 6);
         private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 6);
         private static DateTime TruncateToSecond(DateTime dt)
-            => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond), dt.Kind);
+        {
+            var ticks = dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond);
+            return new DateTime(ticks, dt.Kind);
+        }
+        private static DateTimeOffset TruncateToSecond(DateTimeOffset dto)
+        {
+            var ticks = dto.UtcTicks - (dto.UtcTicks % TimeSpan.TicksPerSecond);
+            return new DateTimeOffset(ticks, TimeSpan.Zero); // normalisé UTC
+        }
+
 
         // DTO -> Entity (WeatherForecastDTO -> Domain.Entities.WeatherForecast)
         public static CitizenHackathon2025.Domain.Entities.WeatherForecast MapToWeatherForecast(
@@ -100,7 +110,7 @@ namespace CitizenHackathon2025.Application.Extensions
                 WeatherDescription = dto.Summary,
                 WindSpeedKmh = dto.WindSpeedKmh,
                 HumidityPercent = dto.Humidity,
-                RetrievedAt = dto.DateWeather
+                RetrievedAt = dto.DateWeather.UtcDateTime
                 // Sunrise / Sunset : only if available elsewhere
             };
         }
@@ -309,11 +319,36 @@ namespace CitizenHackathon2025.Application.Extensions
             };
         }
 
+        // SuggestionReadRow → DTO
+        public static SuggestionDTO MapToSuggestionDTO(this SuggestionReadRow row)
+        {
+            if (row is null) return null!;
+            return new SuggestionDTO
+            {
+                Id = row.Id,
+                UserId = row.User_Id,
+                DateSuggestion = row.DateSuggestion,
+                OriginalPlace = row.OriginalPlace,
+                SuggestedAlternatives = row.SuggestedAlternatives,
+                Reason = row.Reason ?? "",
+                Active = row.Active,
+
+                EventId = row.EventId,
+                PlaceId = row.PlaceId,
+
+                Latitude = row.Latitude,
+                Longitude = row.Longitude,
+                LocationLabel = row.LocationLabel,
+
+                // what you want to display on the map / popup
+                Title = row.LocationLabel ?? row.OriginalPlace ?? row.LocationName
+            };
+        }
 
         // Suggestion → DTO
         public static SuggestionDTO MapToSuggestionDTO(this Suggestion entity)
         {
-            if (entity is null) return null;
+            if (entity is null) return null!;
             return new SuggestionDTO
             {
                 Id = entity.Id,
@@ -321,19 +356,18 @@ namespace CitizenHackathon2025.Application.Extensions
                 DateSuggestion = entity.DateSuggestion,
                 OriginalPlace = entity.OriginalPlace,
                 SuggestedAlternatives = entity.SuggestedAlternatives,
-                Reason = entity.Reason,
+                Reason = entity.Reason ?? "",
                 Active = entity.Active,
                 Message = entity.Message,
                 Context = entity.Context,
                 EventId = entity.EventId,
                 PlaceId = entity.PlaceId,
-                // Optional 
-                // Latitude = entity.Latitude,
-                // Longitude = entity.Longitude,
-                // DistanceKm = entity.DistanceKm,
-                // Title = entity.OriginalPlace
+
+                // Latitude/Longitude not shown here as it's not in the Suggestion.
+                Title = entity.OriginalPlace ?? entity.LocationName
             };
         }
+
         //DTO → Suggestion
         public static Suggestion MapToSuggestion(this SuggestionDTO dto)
         {
@@ -343,7 +377,14 @@ namespace CitizenHackathon2025.Application.Extensions
                 DateSuggestion = dto.DateSuggestion,
                 OriginalPlace = dto.OriginalPlace,
                 SuggestedAlternatives = dto.SuggestedAlternatives,
-                Reason = dto.Reason
+                Reason = dto.Reason,
+                Active = dto.Active,
+                Message = dto.Message ?? "",
+                Context = dto.Context ?? "",
+                EventId = dto.EventId,
+                PlaceId = dto.PlaceId,
+                LocationName = dto.Title ?? dto.OriginalPlace
+                // ForecastId / TrafficId if you add them to the DTO later
             };
         }
 
@@ -371,8 +412,7 @@ namespace CitizenHackathon2025.Application.Extensions
                 Id = dto.Id,
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude,
-                DateCondition = dto.DateCondition == default ? DateTime.UtcNow
-                                                                  : TruncateToSecond(dto.DateCondition),
+                DateCondition = dto.DateCondition == default ? DateTime.UtcNow : TruncateToSecond(dto.DateCondition),
                 CongestionLevel = dto.CongestionLevel,
                 IncidentType = dto.IncidentType
             };

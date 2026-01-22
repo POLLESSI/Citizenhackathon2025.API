@@ -47,7 +47,7 @@ namespace CitizenHackathon2025.API.Controllers
             if (id <= 0)
                 return BadRequest("The provided ID is invalid.");
 
-            var place = await _placeRepository.GetPlaceByIdAsync(id);
+            var place = await _placeRepository.GetByIdAsync(id);
             if (place is null)
                 return NotFound($"Place with ID {id} not found.");
 

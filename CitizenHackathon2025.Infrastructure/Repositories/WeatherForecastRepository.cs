@@ -80,7 +80,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             var args = new
             {
-                entity.DateWeather,
+                entity.DateWeather.UtcDateTime,
                 entity.Latitude,
                 entity.Longitude,
                 entity.TemperatureC,

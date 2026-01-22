@@ -19,7 +19,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             _connection = connection;
             _logger = logger;
         }
-        public async Task<Event> CreateEventAsync(Event newEvent)
+
+        public async Task<Event> CreateEventAsync(Event newEvent, CancellationToken ct = default)
         {
             const string sql = @"
                 INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
@@ -39,41 +40,32 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
                 var newId = await _connection.ExecuteScalarAsync<int>(sql, parameters);
 
-                newEvent.Id = newId; 
-                newEvent.Active = true; 
+                newEvent.Id = newId;
+                newEvent.Active = true;
 
                 return newEvent;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error creating Event: {ex.Message}");
-                throw; 
+                throw;
             }
         }
-
-        public async Task<Event?> GetByIdAsync(int id)
+        
+        public async Task<Event?> GetByIdAsync(int id, CancellationToken ct = default)
         {
+            const string sql = @"
+                                SELECT TOP(1) *
+                                FROM dbo.Event
+                                WHERE Id = @Id /* AND Active = 1 si applicable */
+                            ";
             try
             {
-                const string sql = @"
-            SELECT [Id],
-                   [Name],
-                   [PlaceId],
-                   [Latitude],
-                   [Longitude],
-                   [DateEvent],
-                   [ExpectedCrowd],
-                   [IsOutdoor]
-            FROM [Event]
-            WHERE [Id] = @Id
-              AND [Active] = 1";
-
-                var parameters = new DynamicParameters();
+                DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", id, DbType.Int32);
 
-                var @event = await _connection.QueryFirstOrDefaultAsync<Event>(sql, parameters);
-
-                return @event;
+                var cmd = new CommandDefinition(sql, parameters, cancellationToken: ct);
+                return await _connection.QueryFirstOrDefaultAsync<Event>(cmd);
             }
             catch (Exception ex)
             {
@@ -81,6 +73,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
+       
 
 
         public Task<IEnumerable<Event>> GetLatestEventAsync(int limit = 10, CancellationToken ct = default)
@@ -95,6 +88,36 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return _connection.QueryAsync<Event>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
+        public async Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync(CancellationToken ct = default)
+        {
+            string sql = @"
+            SELECT [Id],
+                   [Name],
+                   [PlaceId],
+                   [Latitude],
+                   [Longitude],
+                   [DateEvent],
+                   [ExpectedCrowd],
+                   [IsOutdoor],
+                   [Active]
+            FROM [Event]
+            WHERE [IsOutdoor] = 1
+              AND [Active] = 1
+              AND [DateEvent] >= CAST(GETDATE() AS DATE)
+            ORDER BY [DateEvent] ASC;";
+
+            try
+            {
+                var cmd = new CommandDefinition(sql, cancellationToken: ct);
+                return await _connection.QueryAsync<Event>(cmd);
+
+            }
+            catch (Exception ex)
+            {
+                // Error handling: log or raise a custom exception if needed
+                throw new Exception("Error retrieving upcoming external events.", ex);
+            }
+        }
         public async Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync()
         {
             string sql = @"
@@ -126,7 +149,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
         }
 
-        public async Task<Event> SaveEventAsync(Event @event)
+        public async Task<Event> SaveEventAsync(Event @event, CancellationToken ct = default)
         {
             const string sql = @"
                     INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
@@ -145,13 +168,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
                 var newId = await _connection.ExecuteScalarAsync<int>(sql, parameters);
                 @event.Id = newId;
-                @event.Active = true; 
+                @event.Active = true;
                 return @event;
             }
             catch (SqlException sqlEx) when (sqlEx.Number == 2627 || sqlEx.Number == 2601) // UNIQUE constraint
             {
                 _logger.LogWarning(sqlEx, "Duplicate (Name, DateEvent) for event {Name} @ {DateEvent}", @event.Name, @event.DateEvent);
-                return null; 
+                return null;
             }
             catch (Exception ex)
             {
@@ -160,7 +183,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 return null;
             }
         }
-
+         
         public Event UpdateEvent(Event @event)
         {
             if (@event == null || @event.Id <= 0)
@@ -210,7 +233,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 throw;
             }
         }
-        public async Task<int> ArchivePastEventsAsync() 
+
+        public async Task<int> ArchivePastEventsAsync(CancellationToken ct = default)
         {
             const string sql = @"
                         UPDATE [Event]
