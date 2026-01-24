@@ -11,7 +11,7 @@ namespace CitizenHackathon2025.Application.Mappings
             return new WeatherForecastDTO
             {
                 Id = forecast.Id,
-                DateWeather = forecast.DateWeather,
+                DateWeather = forecast.DateWeatherUtc,
                 Summary = forecast.Summary,
                 TemperatureC = forecast.TemperatureC,
                 RainfallMm = forecast.RainfallMm,
@@ -39,7 +39,7 @@ namespace CitizenHackathon2025.Application.Mappings
                 Latitude = 0,          
                 Longitude = 0,
                 CrowdLevel = forecast.Humidity > 80 ? 3 : 1,
-                Timestamp = forecast.DateWeather.UtcDateTime
+                Timestamp = forecast.DateWeatherUtc
             };
         }
 

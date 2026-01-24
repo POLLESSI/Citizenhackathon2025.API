@@ -6,7 +6,13 @@
     @Summary         NVARCHAR(256),
     @RainfallMm      FLOAT = NULL,
     @Humidity        INT   = NULL,
-    @WindSpeedKmh    FLOAT = NULL
+    @WindSpeedKmh    FLOAT = NULL,
+    @WeatherMain    NVARCHAR(64)  = NULL,
+    @Description    NVARCHAR(256) = NULL,
+    @Icon           NVARCHAR(16)  = NULL,
+    @IconUrl        NVARCHAR(256) = NULL,
+    @WeatherType    INT           = 0,
+    @IsSevere       BIT           = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -62,6 +68,20 @@ BEGIN
             @WindSpeedKmh,
             1
         );
+        SELECT
+            Id,
+            DateWeather AS DateWeatherUtc,
+            Latitude,
+            Longitude,
+            TemperatureC,
+            Summary,
+            RainfallMm,
+            Humidity,
+            WindSpeedKmh,
+            Active
+        FROM dbo.WeatherForecast
+        WHERE Id = @ExistingId;
+
     END
 END
 GO

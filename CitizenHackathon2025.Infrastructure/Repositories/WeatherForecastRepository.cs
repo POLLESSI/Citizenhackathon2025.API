@@ -1,8 +1,10 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.ReadRows;
 using Dapper;
 using Microsoft.Extensions.Logging;
 using System.Data;
+using System.Data.Common;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -22,10 +24,21 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             SELECT TOP(1)
-                                Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
-                            ORDER BY DateWeather DESC;";
+                            ORDER BY DateWeather DESC;
+                            ";
 
             return _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
                 new CommandDefinition(sql, cancellationToken: ct));
@@ -35,7 +48,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             SELECT
-                                Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
                             ORDER BY DateWeather DESC;";
@@ -45,12 +68,21 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             return rows.ToList();
         }
-
         public async Task<List<WeatherForecast>> GetHistoryAsync(int limit = 128, CancellationToken ct = default)
         {
             const string sql = @"
                             SELECT TOP(@Limit)
-                                Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
                             ORDER BY DateWeather DESC;";
@@ -60,49 +92,107 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             return rows.ToList();
         }
-
         public Task<WeatherForecast?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             const string sql = @"
                             SELECT
-                                Id, DateWeather, Latitude, Longitude, TemperatureC, TemperatureF, Summary, RainfallMm, Humidity, WindSpeedKmh, Active
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                Active
                             FROM dbo.WeatherForecast
                             WHERE Id = @Id AND Active = 1;";
 
             return _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
                 new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
         }
-
         public async Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity, CancellationToken ct = default)
         {
-            const string sql = @"EXEC dbo.sp_WeatherForecast_Upsert
-                            @DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh;";
+            const string sql = @"
+                            EXEC dbo.sp_WeatherForecast_Upsert
+                                @DateWeather,
+                                @Latitude,
+                                @Longitude,
+                                @TemperatureC,
+                                @Summary,
+                                @RainfallMm,
+                                @Humidity,
+                                @WindSpeedKmh,
+                                @WeatherMain,
+                                @Description,
+                                @Icon,
+                                @IconUrl,
+                                @WeatherType,
+                                @IsSevere;";
 
-            var args = new
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@DateWeather", entity.DateWeatherUtc);
+            parameters.Add("@Latitude", entity.Latitude);
+            parameters.Add("@Longitude", entity.Longitude);
+            parameters.Add("@TemperatureC", entity.TemperatureC);
+            parameters.Add("@Summary", entity.Summary);
+            parameters.Add("@RainfallMm", entity.RainfallMm);
+            parameters.Add("@Humidity", entity.Humidity);
+            parameters.Add("@WindSpeedKmh", entity.WindSpeedKmh);
+            parameters.Add("@WeatherMain", entity.WeatherMain);
+            parameters.Add("@Description", entity.Description);
+            parameters.Add("@Icon", entity.Icon);
+            parameters.Add("@IconUrl", entity.IconUrl);
+            parameters.Add("@WeatherType", (int)entity.WeatherType);
+            parameters.Add("@IsSevere", entity.IsSevere);
+
+
+            var dateUtc = entity.DateWeatherUtc.Kind == DateTimeKind.Utc
+                ? entity.DateWeatherUtc
+                : DateTime.SpecifyKind(entity.DateWeatherUtc, DateTimeKind.Utc);
+
+            dateUtc = new DateTime(dateUtc.Ticks - (dateUtc.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Utc);
+
+            // ✅ Here: we read the SQL return "as a database".
+            var row = await _connection.QuerySingleAsync<WeatherForecastReadRow>(
+                new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+            // ✅ Here: we rebuild your Domain Entity "as a Domain"
+            return new WeatherForecast
             {
-                entity.DateWeather.UtcDateTime,
-                entity.Latitude,
-                entity.Longitude,
-                entity.TemperatureC,
-                entity.Summary,
-                entity.RainfallMm,
-                entity.Humidity,
-                entity.WindSpeedKmh
+                Id = row.Id,
+                DateWeatherUtc = DateTime.SpecifyKind(row.DateWeather, DateTimeKind.Utc),
+                Latitude = row.Latitude,
+                Longitude = row.Longitude,
+                TemperatureC = row.TemperatureC,
+                Humidity = row.Humidity ?? 0,
+                WindSpeedKmh = row.WindSpeedKmh ?? 0,
+                RainfallMm = row.RainfallMm ?? 0,
+                Summary = row.Summary,
+                WeatherMain = row.WeatherMain,
+                Description = row.Description,
+                Icon = row.Icon,
+                IconUrl = row.IconUrl,
+                WeatherType = (Contracts.Enums.WeatherType)row.WeatherType,
+                IsSevere = row.IsSevere
+                // The OpenWeather fields (Icon/WeatherMain/WeatherType…) cannot be filled in.
+                // as long as your table/SP doesn't handle them.
             };
-
-            // WHY: QuerySingleAsync + ct => annulation propre si le client coupe
-            return await _connection.QuerySingleAsync<WeatherForecast>(
-                new CommandDefinition(sql, args, cancellationToken: ct));
         }
 
-        public async Task<WeatherForecast> GenerateNewForecastAsync(CancellationToken ct = default)
+
+
+
+    public async Task<WeatherForecast> GenerateNewForecastAsync(CancellationToken ct = default)
         {
             decimal lat = 50.2m + (decimal)_rng.NextDouble() * 0.7m;
             decimal lon = 4.0m + (decimal)_rng.NextDouble() * 1.1m;
 
             var wf = new WeatherForecast
             {
-                DateWeather = DateTime.UtcNow,
+                DateWeatherUtc = DateTime.UtcNow,
                 Latitude = lat,
                 Longitude = lon,
                 TemperatureC = _rng.Next(-10, 35),
@@ -153,16 +243,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                               AND ABS(Latitude  - @Lat) <= @Delta
                               AND ABS(Longitude - @Lon) <= @Delta;";
 
-            var args = new
-            {
-                Now = asOfUtc,
-                Lat = latitude,
-                Lon = longitude,
-                Delta = 0.05m // WHY: “proximité” ~ 5km (approx)
-            };
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Now", asOfUtc);
+            parameters.Add("@Lat", latitude);
+            parameters.Add("@Lon", longitude);
+            parameters.Add("@Delta", 0.05m); // WHY: “proximity” ~ 5km (approx)
 
             var result = await _connection.QuerySingleAsync<(double LastHour, double Last72h)>(
-                new CommandDefinition(sql, args, cancellationToken: ct));
+                new CommandDefinition(sql, parameters, cancellationToken: ct));
 
             return result;
         }

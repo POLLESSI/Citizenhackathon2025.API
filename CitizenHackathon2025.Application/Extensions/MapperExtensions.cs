@@ -1,7 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.ReadRows;
 using CitizenHackathon2025.Domain.ValueObjects;
 using CitizenHackathon2025.DTOs.DTOs;
 using Volo.Abp.Domain.Entities;
@@ -10,7 +9,7 @@ namespace CitizenHackathon2025.Application.Extensions
 {
     public static class MapperExtensions
     {
-#nullable disable
+    #nullable disable
         private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 6);
         private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 6);
         private static DateTime TruncateToSecond(DateTime dt)
@@ -21,63 +20,52 @@ namespace CitizenHackathon2025.Application.Extensions
         private static DateTimeOffset TruncateToSecond(DateTimeOffset dto)
         {
             var ticks = dto.UtcTicks - (dto.UtcTicks % TimeSpan.TicksPerSecond);
-            return new DateTimeOffset(ticks, TimeSpan.Zero); // normalisé UTC
+            return new DateTimeOffset(ticks, TimeSpan.Zero); // standardized UTC
         }
 
 
         // DTO -> Entity (WeatherForecastDTO -> Domain.Entities.WeatherForecast)
-        public static CitizenHackathon2025.Domain.Entities.WeatherForecast MapToWeatherForecast(
-            this WeatherForecastDTO dto)
+        public static WeatherForecast MapToWeatherForecast(this WeatherForecastDTO dto)
         {
-            if (dto is null) return null!;
-
-            // If you want to allow the DEFAULT SQL to run for 50.89 / 4.34,
-            // You can convert 0/0 to null. Otherwise, remove this logic.
-            decimal? lat = dto.Latitude == 0 ? null : dto.Latitude;
-            decimal? lon = dto.Longitude == 0 ? null : dto.Longitude;
-
-            return new CitizenHackathon2025.Domain.Entities.WeatherForecast
+            return new WeatherForecast
             {
                 Id = dto.Id,
-                DateWeather = TruncateToSecond(dto.DateWeather),
-
-                Latitude = lat,
-                Longitude = lon,
-
+                DateWeatherUtc = dto.DateWeather.UtcDateTime, // ✅ UTC normalization
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
                 TemperatureC = dto.TemperatureC,
                 Humidity = dto.Humidity,
                 WindSpeedKmh = dto.WindSpeedKmh,
                 RainfallMm = dto.RainfallMm,
-
                 Summary = dto.Summary,
                 WeatherMain = dto.WeatherMain,
                 Description = dto.Description,
-
                 Icon = dto.Icon,
                 IconUrl = dto.IconUrl,
-
                 IsSevere = dto.IsSevere,
-                WeatherType = dto.WeatherType,
-                // Severity : to calculate in your business department if you want intelligent weather logic
-                // Active : We leave the default (true) to be managed by the entity/DB
+                WeatherType = dto.WeatherType
             };
         }
 
         // Entity -> DTO (Domain.Entities.WeatherForecast -> WeatherForecastDTO)
-        public static WeatherForecastDTO MapToWeatherForecastDTO(
-            this CitizenHackathon2025.Domain.Entities.WeatherForecast entity)
+        public static WeatherForecastDTO MapToWeatherForecastDTO(this WeatherForecast entity)
         {
             if (entity is null) return null!;
 
-            // In practice, your table has DEFAULT values ​​(50.89 / 4.34),
-            // Therefore, entity.Latitude/Longitude should not be null.
             var lat = entity.Latitude ?? 50.89m;
             var lon = entity.Longitude ?? 4.34m;
+
+            // UTC normalization + second
+            var dtUtc = entity.DateWeatherUtc.Kind == DateTimeKind.Utc
+                ? entity.DateWeatherUtc
+                : DateTime.SpecifyKind(entity.DateWeatherUtc, DateTimeKind.Utc);
+
+            dtUtc = new DateTime(dtUtc.Ticks - (dtUtc.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Utc);
 
             return new WeatherForecastDTO
             {
                 Id = entity.Id,
-                DateWeather = entity.DateWeather,
+                DateWeather = new DateTimeOffset(dtUtc, TimeSpan.Zero),
 
                 Latitude = lat,
                 Longitude = lon,
@@ -98,8 +86,6 @@ namespace CitizenHackathon2025.Application.Extensions
                 WeatherType = entity.WeatherType
             };
         }
-
-
         public static WeatherInfoDTO MapToWeatherInfoDTO(this WeatherForecastDTO dto, string city)
         {
             return new WeatherInfoDTO
@@ -319,8 +305,8 @@ namespace CitizenHackathon2025.Application.Extensions
             };
         }
 
-        // SuggestionReadRow → DTO
-        public static SuggestionDTO MapToSuggestionDTO(this SuggestionReadRow row)
+        // Suggestion → DTO
+        public static SuggestionDTO MapToSuggestionDTO(this Suggestion row)
         {
             if (row is null) return null!;
             return new SuggestionDTO
@@ -345,48 +331,37 @@ namespace CitizenHackathon2025.Application.Extensions
             };
         }
 
-        // Suggestion → DTO
-        public static SuggestionDTO MapToSuggestionDTO(this Suggestion entity)
-        {
-            if (entity is null) return null!;
-            return new SuggestionDTO
-            {
-                Id = entity.Id,
-                UserId = entity.User_Id,
-                DateSuggestion = entity.DateSuggestion,
-                OriginalPlace = entity.OriginalPlace,
-                SuggestedAlternatives = entity.SuggestedAlternatives,
-                Reason = entity.Reason ?? "",
-                Active = entity.Active,
-                Message = entity.Message,
-                Context = entity.Context,
-                EventId = entity.EventId,
-                PlaceId = entity.PlaceId,
-
-                // Latitude/Longitude not shown here as it's not in the Suggestion.
-                Title = entity.OriginalPlace ?? entity.LocationName
-            };
-        }
-
         //DTO → Suggestion
         public static Suggestion MapToSuggestion(this SuggestionDTO dto)
         {
+            if (dto is null) return null!;
+
             return new Suggestion
             {
+                Id = dto.Id,
                 User_Id = dto.UserId,
                 DateSuggestion = dto.DateSuggestion,
                 OriginalPlace = dto.OriginalPlace,
                 SuggestedAlternatives = dto.SuggestedAlternatives,
                 Reason = dto.Reason,
                 Active = dto.Active,
+
                 Message = dto.Message ?? "",
                 Context = dto.Context ?? "",
+
                 EventId = dto.EventId,
                 PlaceId = dto.PlaceId,
-                LocationName = dto.Title ?? dto.OriginalPlace
-                // ForecastId / TrafficId if you add them to the DTO later
+
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DistanceKm = dto.DistanceKm,
+                LocationLabel = dto.LocationLabel,
+
+                LocationName = dto.LocationLabel ?? dto.Title ?? dto.OriginalPlace
+                // si tu as Title en DB : ajoute Title dans l'entity aussi
             };
         }
+
 
         // TrafficCondition → DTO
         public static TrafficConditionDTO MapToTrafficConditionDTO(this TrafficCondition entity)

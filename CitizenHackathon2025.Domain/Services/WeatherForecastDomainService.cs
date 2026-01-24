@@ -21,7 +21,7 @@ namespace CitizenHackathon2025.Domain.Services
 
         public bool IsForecastValid(WeatherForecast forecast)
         {
-            return forecast.DateWeather >= DateTime.Today &&
+            return forecast.DateWeatherUtc >= DateTime.Today &&
                    forecast.TemperatureC > -60 && forecast.TemperatureC < 60 &&
                    !string.IsNullOrWhiteSpace(forecast.Summary);
         }

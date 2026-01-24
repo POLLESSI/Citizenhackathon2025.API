@@ -46,7 +46,7 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
 
             return new WeatherForecast
             {
-                DateWeather = dt,
+                DateWeatherUtc = dt,
                 Latitude = lat,
                 Longitude = lon,
                 TemperatureC = (int)Math.Round(cur.Temp),
@@ -69,7 +69,7 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
 
             return new WeatherForecast
             {
-                DateWeather = dt,
+                DateWeatherUtc = dt,
                 Latitude = cur.coord.lat,
                 Longitude = cur.coord.lon,
                 TemperatureC = (int)Math.Round(cur.main?.temp ?? 0),

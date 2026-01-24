@@ -22,8 +22,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync(CancellationToken ct = default)
             => await _suggestionRepository.GetLatestSuggestionAsync();
-        public async Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
-            => await _suggestionRepository.GetAllSuggestionsAsync(limit, ct);
+        public Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
+             => _suggestionRepository.GetAllSuggestionsAsync(limit, ct);
         public async Task<Suggestion?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             try

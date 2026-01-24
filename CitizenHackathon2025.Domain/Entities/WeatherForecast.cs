@@ -7,7 +7,7 @@ namespace CitizenHackathon2025.Domain.Entities
     public sealed class WeatherForecast
     {
         public long Id { get; set; }
-        public DateTimeOffset DateWeather { get; set; }
+        public DateTime DateWeatherUtc { get; set; }
         public decimal? Latitude { get; set; }
         public decimal? Longitude { get; set; }
         public int TemperatureC { get; set; }

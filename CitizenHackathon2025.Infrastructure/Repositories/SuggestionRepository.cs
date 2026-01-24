@@ -1,6 +1,5 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Domain.ReadRows;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -20,7 +19,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             _logger = logger;
         }
 
-        public async Task<IEnumerable<SuggestionReadRow>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
+        public async Task<IEnumerable<Suggestion?>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
         {
             const string sql = @"
                             SELECT TOP(@Limit)
@@ -40,13 +39,16 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Latitude,
                                 Longitude,
                                 DistanceKm,
-                                LocationLabel
+                                LocationLabel,
+                                Title,
+                                Message,
+                                Context
                             FROM dbo.Suggestion 
                             WHERE Active = 1
-                            ORDER BY s.DateSuggestion DESC;";
+                            ORDER BY DateSuggestion DESC;";
 
             var cmd = new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct);
-            return await _connection.QueryAsync<SuggestionReadRow>(cmd);
+            return await _connection.QueryAsync<Suggestion>(cmd);
         }
 
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync()
@@ -105,9 +107,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             const string sql = @"
                             INSERT INTO dbo.Suggestion
-                            (User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, EventId, PlaceId, ForecastId, TrafficId, LocationName, Latitude, Longitude, DistanceKm, LocationLabel)
+                            (User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, EventId, PlaceId, ForecastId, TrafficId, LocationName, Latitude, Longitude, DistanceKm, LocationLabel, Title, Message, Context)
                             OUTPUT INSERTED.*
-                            VALUES (@User_Id, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason, @EventId, @PlaceId, @ForecastId, @TrafficId, @LocationName, @Latitude, @Longitude, @DistanceKm, @LocationLabel);";
+                            VALUES (@User_Id, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason, @EventId, @PlaceId, @ForecastId, @TrafficId, @LocationName, @Latitude, @Longitude, @DistanceKm, @LocationLabel, @Title, @Message, @Context);";
             DynamicParameters parameters = new();
             parameters.Add("User_Id", suggestion.User_Id, DbType.Int32);
             parameters.Add("DateSuggestion", suggestion.DateSuggestion, DbType.DateTime2);
@@ -123,6 +125,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("Longitude", suggestion.Longitude, DbType.Double);
             parameters.Add("DistanceKm", suggestion.DistanceKm, DbType.Double);
             parameters.Add("LocationLabel", suggestion.LocationLabel, DbType.String);
+            parameters.Add("Title", suggestion.Title, DbType.String);
+            parameters.Add("Message", suggestion.Message, DbType.String);
+            parameters.Add("Context", suggestion.Context, DbType.String);
 
             try
             {
@@ -157,7 +162,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 PlaceId = @PlaceId,
                                 ForecastId = @ForecastId,
                                 TrafficId = @TrafficId,
-                                LocationName = @LocationName
+                                LocationName = @LocationName,
+                                Title = @Title,
+                                Message = @Message,
+                                Context = @Context
                             WHERE Id = @Id AND Active = 1;";
             DynamicParameters parameters = new();
             parameters.Add("Id", suggestion.Id, DbType.Int32);
@@ -171,7 +179,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("ForecastId", suggestion.ForecastId, DbType.Int32);
             parameters.Add("TrafficId", suggestion.TrafficId, DbType.Int32);
             parameters.Add("LocationName", suggestion.LocationName, DbType.String);
-
+            parameters.Add("Title", suggestion.Title, DbType.String);
+            parameters.Add("Message", suggestion.Message, DbType.String);
+            parameters.Add("Context", suggestion.Context, DbType.String);
 
             try
             {

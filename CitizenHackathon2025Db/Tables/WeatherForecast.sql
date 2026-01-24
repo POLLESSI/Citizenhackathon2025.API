@@ -10,6 +10,12 @@
     [RainfallMm] FLOAT NULL,
     [Humidity] INT NULL,
     [WindSpeedKmh] FLOAT NULL,
+    WeatherMain NVARCHAR(64) NULL,
+    [Description] NVARCHAR(256) NULL,
+    [Icon] NVARCHAR(16) NULL,
+    [IconUrl] NVARCHAR(256) NULL,
+    [WeatherType] INT NOT NULL DEFAULT(0),
+    [IsSevere] BIT NOT NULL DEFAULT(0),
     [Active] BIT NOT NULL CONSTRAINT DF_WeatherForecast_Active DEFAULT(1),
 
     CONSTRAINT [PK_WeatherForecast] PRIMARY KEY CLUSTERED ([Id])

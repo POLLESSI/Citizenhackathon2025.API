@@ -10,8 +10,6 @@
         public string? SuggestedAlternatives { get; set; }
         public string? Reason { get; set; }
         public bool Active { get; set; }
-        public string Message { get; set; } 
-        public string Context { get; set; }
         public DateTime? DateDeleted { get; set; }
 
         // Links to external entities
@@ -24,6 +22,9 @@
         public double? Longitude { get; set; }
         public double? DistanceKm { get; set; }
         public string? LocationLabel { get; set; }
+        public string? Title { get; set; }
+        public string Message { get; set; }
+        public string Context { get; set; }
     }
 }
 

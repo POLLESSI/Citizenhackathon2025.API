@@ -1,12 +1,11 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.ReadRows;
 
 namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface ISuggestionRepository
     {
         Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
-        Task<IEnumerable<SuggestionReadRow>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default);
+        Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default);
         Task<IEnumerable<Suggestion>> GetActiveSinceAsync(DateTime since, CancellationToken ct = default);
         /// <summary>
         /// Retrieves active suggestions for a given user.
@@ -22,7 +21,6 @@ namespace CitizenHackathon2025.Domain.Interfaces
         /// <param name="id">ID of the suggestion to disable</param>
         /// <returns>True if the operation was performed, false otherwise</returns>
         Task<bool> SoftDeleteSuggestionAsync(int id);
-        
         Task<Suggestion> SaveSuggestionAsync(Suggestion @suggestion, CancellationToken ct = default);
         Suggestion? UpdateSuggestion(Suggestion @suggestion);
     }
