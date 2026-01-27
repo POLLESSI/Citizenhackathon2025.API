@@ -1,0 +1,9 @@
+﻿CREATE TYPE [dbo].[CrowdInfoAntennaSnapshotTvp] AS TABLE
+(
+    [AntennaId]         INT          NOT NULL,
+    [WindowStartUtc]    DATETIME2(3) NOT NULL,
+    [WindowSeconds]     SMALLINT     NOT NULL,
+    [ActiveConnections] INT          NOT NULL,
+    [Confidence]        TINYINT      NOT NULL,
+    [Source]            TINYINT      NOT NULL
+);

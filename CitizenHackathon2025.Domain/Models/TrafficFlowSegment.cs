@@ -8,7 +8,7 @@
         int? SpeedKmh,
         int? FreeFlowSpeedKmh,
         int? JamFactor,
-        string? GeometryWkt // option simple sans geography
+        string? GeometryWkt // simple option without geography
     );
 }
 

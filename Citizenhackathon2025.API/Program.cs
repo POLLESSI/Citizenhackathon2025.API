@@ -634,7 +634,6 @@ internal class Program
         services.AddHostedService<OdwbTrafficCollector>();
         services.AddHostedService<WeatherService>();
         services.AddHostedService<SessionJanitor>();
-        services.AddHostedService<WeatherService>();
 
         // ---------- Autorisation ----------
         services.AddAuthorization(o =>
@@ -1030,6 +1029,8 @@ internal class Program
 
         hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<CrowdCalendarHub>(CrowdCalendarHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();

@@ -65,6 +65,8 @@
     <Folder Include="obj\" />
     <Folder Include="Programmability\Views" />
     <Folder Include="sql" />
+    <Folder Include="Types" />
+    <Folder Include="Scripts\Post-Deployement" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="Tables\CrowdInfo.sql" />
@@ -98,6 +100,12 @@
     <Build Include="Tables\UserMessage.sql" />
     <Build Include="Tables\WeatherAlert.sql" />
     <Build Include="Programmability\Procedures\sp_WeatherAlert_Upsert.sql" />
+    <Build Include="Programmability\Procedures\sp_CrowdInfoAntenna_Upsert.sql" />
+    <Build Include="Programmability\Procedures\sp_AntennaConnection_Heartbeat.sql" />
+    <Build Include="Tables\CrowdInfoAntennaSnapshot.sql" />
+    <Build Include="Programmability\Procedures\sp_CrowdInfoAntennaSnapshot_Purge.sql" />
+    <Build Include="Programmability\Procedures\sp_CrowdInfoAntennaSnapshot_BulkUpsert.sql" />
+    <Build Include="Types\CrowdInfoAntennaSnapshotTvp.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
@@ -116,5 +124,6 @@
     <None Include="sql\01_fix_gpt_indexes.sql" />
     <None Include="sql\99_post_deploy.sql" />
     <None Include="Scripts\EvolutionScript.sql" />
+    <None Include="Scripts\Post-Deployement\Script.PostDeployment.sql" />
   </ItemGroup>
 </Project>

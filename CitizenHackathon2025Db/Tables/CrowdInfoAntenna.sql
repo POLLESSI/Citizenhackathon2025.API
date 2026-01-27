@@ -1,13 +1,14 @@
 ﻿CREATE TABLE [dbo].[CrowdInfoAntenna]
 (
 	[Id] INT IDENTITY,
-	Name NVARCHAR(64) NULL,
-    Latitude DECIMAL(9,6) NOT NULL,
-    Longitude DECIMAL(9,6) NOT NULL,
-    GeoLocation AS geography::Point(CONVERT(float, Latitude), CONVERT(float, Longitude), 4326) PERSISTED,
-    Active BIT DEFAULT(1),
-    CreatedUtc DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
-    Description NVARCHAR(256) NULL
+	[Name] NVARCHAR(64) NULL,
+    [Latitude] DECIMAL(9,6) NOT NULL,
+    [Longitude] DECIMAL(9,6) NOT NULL,
+    [GeoLocation] AS geography::Point(CONVERT(float, Latitude), CONVERT(float, Longitude), 4326) PERSISTED,
+    [Active] BIT DEFAULT(1),
+    [CreatedUtc] DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+    [Description] NVARCHAR(256) NULL,
+	[MaxCapacity] INT NULL
 
 	CONSTRAINT [PK_CrowdInfoAntenna] PRIMARY KEY ([Id])
 )
