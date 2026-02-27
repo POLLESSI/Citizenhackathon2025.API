@@ -13,8 +13,11 @@ namespace CitizenHackathon2025.Hubs.Services
 
         // Use-case “événement -> antenne la plus proche -> counts”
         Task<EventAntennaCrowdDTO?> GetEventCrowdAsync(int eventId, int windowMinutes, double maxRadiusMeters, CancellationToken ct);
+        Task<CrowdInfoAntennaDTO> CreateAntennaAsync(CreateCrowdInfoAntennaDTO dto, CancellationToken ct);
+        Task<bool> DeleteAntennaAsync(int id, CancellationToken ct);
     }
 }
+
 
 
 

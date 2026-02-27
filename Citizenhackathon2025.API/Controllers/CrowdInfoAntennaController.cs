@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Hubs.Services;
+﻿using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CitizenHackathon2025.API.Controllers
@@ -44,6 +45,28 @@ namespace CitizenHackathon2025.API.Controllers
             var dto = await _svc.GetEventCrowdAsync(eventId, windowMinutes, maxRadiusMeters, ct);
             return dto is null ? NotFound() : Ok(dto);
         }
+
+        // POST api/crowdinfoantenna
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateCrowdInfoAntennaDTO dto, CancellationToken ct)
+        {
+            if (!ModelState.IsValid) return ValidationProblem(ModelState);
+
+            var created = await _svc.CreateAntennaAsync(dto, ct);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+
+        // DELETE api/crowdinfoantenna/5
+        //[HttpDelete("{id:int}")]
+        //public async Task<IActionResult> Delete(int id, CancellationToken ct)
+        //{
+        //    var deleted = await _svc.DeleteAntennaAsync(id, ct);
+
+        //    if (!deleted)
+        //        return NotFound();
+
+        //    return NoContent();
+        //}
     }
 }
 

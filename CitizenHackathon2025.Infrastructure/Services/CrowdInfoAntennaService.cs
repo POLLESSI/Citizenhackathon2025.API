@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Services;
 
@@ -107,6 +108,45 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 DistanceMeters = nearest.DistanceMeters,
                 Counts = counts
             };
+        }
+
+        public async Task<CrowdInfoAntennaDTO> CreateAntennaAsync(CreateCrowdInfoAntennaDTO dto, CancellationToken ct)
+        {
+            // Hard validation (useful even if you have DataAnnotations on the API side)
+            if (dto.Latitude is < -90 or > 90) throw new ArgumentOutOfRangeException(nameof(dto.Latitude));
+            if (dto.Longitude is < -180 or > 180) throw new ArgumentOutOfRangeException(nameof(dto.Longitude));
+            if (dto.MaxCapacity is not null && dto.MaxCapacity <= 0) throw new ArgumentOutOfRangeException(nameof(dto.MaxCapacity));
+
+            var entity = new CrowdInfoAntenna
+            {
+                Name = dto.Name?.Trim() ?? "",
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                Description = dto.Description?.Trim(),
+                MaxCapacity = dto.MaxCapacity,
+                Active = true
+            };
+
+            var created = await _antRepo.CreateAntennaAsync(entity, ct);
+
+            return new CrowdInfoAntennaDTO
+            {
+                Id = created.Id,
+                Name = created.Name,
+                Latitude = created.Latitude,
+                Longitude = created.Longitude,
+                CreatedUtc = created.CreatedUtc,
+                Description = created.Description,
+                MaxCapacity = created.MaxCapacity
+            };
+        }
+
+        public async Task<bool> DeleteAntennaAsync(int id, CancellationToken ct)
+        {
+            if (id <= 0)
+                throw new ArgumentOutOfRangeException(nameof(id));
+
+            return await _antRepo.DeleteAntennaAsync(id, ct);
         }
     }
 

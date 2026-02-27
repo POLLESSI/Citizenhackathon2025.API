@@ -1,4 +1,6 @@
-﻿namespace CitizenHackathon2025.Application.Interfaces
+﻿using CitizenHackathon2025.DTOs.DTOs;
+
+namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface ICrowdInfoAntennaConnectionService
     {
@@ -13,6 +15,9 @@
             string? band,
             string? additionalJson,
             CancellationToken ct);
+
+        Task<IReadOnlyList<DeletedAntennaConnectionDTO>> GetDeletedAsync(
+            int antennaId, DateTime sinceUtc, int take, long? cursorDeletedId, CancellationToken ct);
     }
 }
 

@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -9,6 +10,20 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public CrowdInfoAntennaConnectionService(ICrowdInfoAntennaConnectionRepository repo) => _repo = repo;
 
+        public Task<IReadOnlyList<DeletedAntennaConnectionDTO>> GetDeletedAsync(int antennaId, DateTime sinceUtc, int take, long? cursorDeletedId, CancellationToken ct)
+        {
+            //    if (antennaId <= 0) throw new ArgumentOutOfRangeException(nameof(antennaId));
+            //    if (take is < 1 or > 500) take = Math.Clamp(take, 1, 500);
+
+            //    // sinceUtc doit être UTC
+            //    if (sinceUtc.Kind == DateTimeKind.Unspecified)
+            //        sinceUtc = DateTime.SpecifyKind(sinceUtc, DateTimeKind.Utc);
+            //    else if (sinceUtc.Kind == DateTimeKind.Local)
+            //        sinceUtc = sinceUtc.ToUniversalTime();
+
+            //    return _repo.GetDeletedAsync(antennaId, sinceUtc, take, cursorDeletedId, ct);
+            throw new NotImplementedException();
+        }
         public Task PingAsync(
             int antennaId,
             byte[] deviceHash,

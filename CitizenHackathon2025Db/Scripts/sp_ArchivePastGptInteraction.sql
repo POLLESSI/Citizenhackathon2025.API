@@ -1,4 +1,5 @@
-﻿SET ANSI_NULLS ON
+﻿--sp_ArchivePastGptInteraction.sql
+SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO

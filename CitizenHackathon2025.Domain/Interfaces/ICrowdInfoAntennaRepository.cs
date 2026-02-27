@@ -9,8 +9,11 @@ namespace CitizenHackathon2025.Domain.Interfaces
 
         Task<(CrowdInfoAntenna Antenna, double DistanceMeters)?> GetNearestAsync(
             double lat, double lng, double maxRadiusMeters, CancellationToken ct);
+        Task<CrowdInfoAntenna> CreateAntennaAsync(CrowdInfoAntenna antenna, CancellationToken ct);
+        Task<bool> DeleteAntennaAsync(int id, CancellationToken ct);
     }
 }
+ 
 
 
 

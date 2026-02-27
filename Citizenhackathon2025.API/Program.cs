@@ -4,6 +4,7 @@
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using CitizenHackathon2025.API.Azure.Security.KeyVault;
+using CitizenHackathon2025.API.BackgroundWorkers;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Hubs;
 using CitizenHackathon2025.API.Hubs.Serilog.Sinks;
@@ -243,6 +244,8 @@ internal class Program
         services.Configure<SessionJanitorOptions>(configuration.GetSection("Sessions:Janitor"));
         services.Configure<TrafficApiOptions>(configuration.GetSection("TrafficApi"));
         //services.Configure<OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
+        builder.Services.Configure<CitizenHackathon2025.API.Options.AntennaCleanupOptions>(builder.Configuration.GetSection("AntennaCleanup"));
+        builder.Services.Configure<AntennaArchiveRetentionOptions>(builder.Configuration.GetSection("AntennaArchiveRetention"));
 
         services.Configure<TrafficHmacOptions>(configuration.GetSection("Security"));
 
@@ -372,9 +375,11 @@ internal class Program
         // Hosted Services
         builder.Services.AddSingleton<IDeviceHasher, DeviceHasher>();
         builder.Services.AddHostedService<CrowdInfoArchiverService>();
+        builder.Services.AddHostedService<AntennaConnectionCleanupWorker>();
         builder.Services.AddHostedService<GptInteractionArchiverService>();
         builder.Services.AddHostedService<TrafficConditionArchiverService>();
         builder.Services.AddHostedService<WeatherForecastArchiverService>();
+        builder.Services.AddHostedService<AntennaArchivePurgeWorker>();
         builder.Services.AddScoped<IOpenWeatherIngestionService, OpenWeatherIngestionService>();
         // Application
         builder.Services.AddScoped<IWeatherForecastAppService, CitizenHackathon2025.Application.Services.WeatherForecastAppService>();
@@ -444,7 +449,7 @@ internal class Program
         services.AddScoped<IUserSessionRepository, UserSessionRepository>();
         services.AddScoped<IWeatherForecastRepository, WeatherForecastRepository>();
         services.AddScoped<IWeatherAlertRepository, WeatherAlertRepository>();
-
+      
         // ----------- Singletons -------------
         services.AddSingleton<INotifierAdmin, NotifierAdmin>();
         services.AddSingleton<ITimeZoneConverter, DefaultTimeZoneConverter>();
@@ -1030,6 +1035,7 @@ internal class Program
         hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdCalendarHub>(CrowdCalendarHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<CrowdInfoAntennaHub>(CrowdInfoAntennaHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
@@ -1047,11 +1053,6 @@ internal class Program
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         }).RequireAuthorization();
-
-        // New antenna hubs :
-        app.MapHub<CrowdInfoAntennaHub>(CrowdInfoAntennaHubMethods.HubPath).RequireAuthorization();
-        app.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
-
 
         //app.MapGet("/csp-report/health", () => Results.Ok(new { status = "ok" }))
         //    .WithMetadata(new Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute { IgnoreApi = true });

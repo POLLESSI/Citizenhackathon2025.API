@@ -494,6 +494,40 @@ namespace CitizenHackathon2025.Application.Extensions
             user.Activate();
             return user;
         }
+        // ============================
+        // CrowdInfoAntenna mappings
+        // ============================
+
+        public static CrowdInfoAntennaDTO MapToCrowdInfoAntennaDTO(this CrowdInfoAntenna entity)
+        {
+            if (entity is null) return null!;
+
+            return new CrowdInfoAntennaDTO
+            {
+                Id = entity.Id,
+                Name = entity.Name ?? string.Empty,
+                Latitude = entity.Latitude,
+                Longitude = entity.Longitude,
+                CreatedUtc = entity.CreatedUtc,
+                Description = entity.Description,
+                MaxCapacity = entity.MaxCapacity
+            };
+        }
+
+        public static CrowdInfoAntenna MapToCrowdInfoAntenna(this CreateCrowdInfoAntennaDTO dto)
+        {
+            if (dto is null) return null!;
+
+            return new CrowdInfoAntenna
+            {
+                Name = dto.Name?.Trim() ?? string.Empty,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                Description = dto.Description?.Trim(),
+                MaxCapacity = dto.MaxCapacity,
+                Active = true
+            };
+        }
     }     
 }
 

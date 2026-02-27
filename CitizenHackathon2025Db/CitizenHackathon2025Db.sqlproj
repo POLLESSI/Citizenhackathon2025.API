@@ -106,6 +106,7 @@
     <Build Include="Programmability\Procedures\sp_CrowdInfoAntennaSnapshot_Purge.sql" />
     <Build Include="Programmability\Procedures\sp_CrowdInfoAntennaSnapshot_BulkUpsert.sql" />
     <Build Include="Types\CrowdInfoAntennaSnapshotTvp.sql" />
+    <Build Include="Programmability\Procedures\ArchiveAndDeleteExpiredAntennaConnections.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
@@ -125,5 +126,9 @@
     <None Include="sql\99_post_deploy.sql" />
     <None Include="Scripts\EvolutionScript.sql" />
     <None Include="Scripts\Post-Deployement\Script.PostDeployment.sql" />
+    <None Include="Scripts\CrowdAntennaSeedCheckScript.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <PreDeploy Include="Scripts\CrowdAntennaSeedScript.sql" />
   </ItemGroup>
 </Project>

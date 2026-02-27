@@ -9,6 +9,7 @@
         public double Longitude { get; set; }
         public DateTime CreatedUtc { get; set; }
         public string? Description { get; set; }
+        public int? MaxCapacity { get; set; }
     }
 }
 
