@@ -1,8 +1,8 @@
 ﻿-- CrowdInfoAntenna seed (Belgium)
-INSERT INTO dbo.CrowdInfoAntenna
-    ([Name], [Latitude], [Longitude], [Description], [MaxCapacity], [Active])
-VALUES
-    (N'Antenna Dev - Brussels', CAST(50.850300 AS DECIMAL(9,6)), CAST(4.351700 AS DECIMAL(9,6)), N'Seed dev', 200, 1),
-    (N'Antenna Dev - Namur',    CAST(50.467400 AS DECIMAL(9,6)), CAST(4.871800 AS DECIMAL(9,6)), N'Seed dev', 150, 1),
-    (N'Antenna Dev - Liège',    CAST(50.632600 AS DECIMAL(9,6)), CAST(5.579700 AS DECIMAL(9,6)), N'Seed dev', 180, 1),
-    (N'Antenna Dev - Charleroi',CAST(50.410800 AS DECIMAL(9,6)), CAST(4.444600 AS DECIMAL(9,6)), N'Seed dev', 160, 1);
+--INSERT INTO dbo.CrowdInfoAntenna
+--    ([Name], [Latitude], [Longitude], [Description], [MaxCapacity], [Active])
+--VALUES
+--    (N'Antenna Dev - Brussels', CAST(50.850300 AS DECIMAL(9,6)), CAST(4.351700 AS DECIMAL(9,6)), N'Seed dev', 200, 1),
+--    (N'Antenna Dev - Namur',    CAST(50.467400 AS DECIMAL(9,6)), CAST(4.871800 AS DECIMAL(9,6)), N'Seed dev', 150, 1),
+--    (N'Antenna Dev - Liège',    CAST(50.632600 AS DECIMAL(9,6)), CAST(5.579700 AS DECIMAL(9,6)), N'Seed dev', 180, 1),
+--    (N'Antenna Dev - Charleroi',CAST(50.410800 AS DECIMAL(9,6)), CAST(4.444600 AS DECIMAL(9,6)), N'Seed dev', 160, 1);

@@ -28,7 +28,6 @@ CREATE TRIGGER [dbo].[OnDeleteCrowdInfoAntenna]
 		UPDATE CrowdInfoAntenna SET Active = 0
 		WHERE Id IN (SELECT Id FROM deleted)
 	END
-
 GO
 
 
