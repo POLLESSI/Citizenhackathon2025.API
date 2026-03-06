@@ -6,6 +6,9 @@
 	[Response] NVARCHAR(MAX),
 	[CreatedAt] DATETIME DEFAULT GETDATE(),
 	[DateDeleted] DATETIME2(0) NULL,
+	[Model] NVARCHAR(64) NULL, 
+	[Temperature] FLOAT NULL, 
+	[TokenCount] INT NULL, 
 	[Active] BIT DEFAULT 1,
 
 	CONSTRAINT [PK_GptInteractions] PRIMARY KEY ([Id] ASC),

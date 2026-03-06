@@ -148,6 +148,25 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return await GetUserByEmailAsync(email);
         }
 
+        public async Task AnonymizeUserAsync(int userId, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            UPDATE dbo.Users
+                            SET Email = CONCAT('deleted-', Id, '@example.com'),
+                                PasswordHash = NULL,
+                                SecurityStamp = NEWID()
+                            WHERE Id = @UserId";
+            dynamic parameters = new DynamicParameters();
+            parameters.Add("@UserId", userId, DbType.Int32);
+            parameters.Add("@Email", DbType.String, size: 64);
+            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
+            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
+            parameters.Add("@Role", dbType: DbType.Int32);
+            parameters.Add("@Status", dbType: DbType.Int32);
+
+            await _connection.ExecuteAsync(sql, new { UserId = userId }, commandType: CommandType.Text);
+        }
+
         // =========================================
         // UPDATE / COMMANDES
         // =========================================

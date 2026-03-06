@@ -11,6 +11,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<bool> LoginAsync(string email, string password);
         Task<Users?> LoginUsingProcedureAsync(string email, string password);
         Task DeactivateUserAsync(int id);
+        Task AnonymizeUserAsync(int userId, CancellationToken ct = default);
         void SetRole(int id, string? role);
         Users? UpdateUser(Users user);
     }

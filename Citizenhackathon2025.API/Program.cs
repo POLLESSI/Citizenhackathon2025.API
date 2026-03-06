@@ -401,6 +401,7 @@ internal class Program
         services.AddScoped<IGeoService, GeoService>();
         services.AddScoped<IGPTService, GPTService>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
+        services.AddScoped<IMistralAIService, MistralAIService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IPlaceService, PlaceService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
@@ -460,6 +461,20 @@ internal class Program
         services.AddMemoryCache();
         services.AddScoped<MemoryCacheService>();
         // WeatherSuggestionOrchestrator already recorded above
+
+        services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(config["MistralAI:ApiUrl"] ?? "https://api.mistral.ai");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+        })
+        .AddHttpMessageHandler(sp =>
+        {
+            var pipelines = sp.GetRequiredService<ResiliencePipelines>();
+            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
+            return new ResilienceHandler(pipelines.OpenAi, logger); // Use the appropriate resilience pipeline
+        });
+
 
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
         {

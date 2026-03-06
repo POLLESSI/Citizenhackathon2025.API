@@ -55,19 +55,18 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = @"
                     INSERT INTO Suggestion (User_Id, DateSuggestion, OriginalPlace, SuggestedAlternatives, Reason, Active, LocationName, EventId, ForecastId, TrafficId)
                     VALUES (@User_Id, @DateSuggestion, @OriginalPlace, @SuggestedAlternatives, @Reason, 1, @LocationName, @EventId, @ForecastId, @TrafficId);";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@User_Id", suggestion.User_Id, DbType.Int32);
+            parameters.Add("@DateSuggestion", suggestion.DateSuggestion, DbType.DateTime2);
+            parameters.Add("@OriginalPlace", suggestion.OriginalPlace, DbType.String);
+            parameters.Add("@SuggestedAlternatives", suggestion.SuggestedAlternatives, DbType.String);
+            parameters.Add("@Reason", suggestion.Reason, DbType.String);
+            parameters.Add("@LocationName", suggestion.LocationName, DbType.String);
+            parameters.Add("@EventId", suggestion.EventId, DbType.Int32);
+            parameters.Add("@ForecastId", suggestion.ForecastId, DbType.Int32);
+            parameters.Add("@TrafficId", suggestion.TrafficId, DbType.Int32);
 
-            await _connection.ExecuteAsync(sql, new
-            {
-                suggestion.User_Id,
-                suggestion.DateSuggestion,
-                suggestion.OriginalPlace,
-                suggestion.SuggestedAlternatives,
-                suggestion.Reason,
-                suggestion.LocationName,
-                suggestion.EventId,
-                suggestion.ForecastId,
-                suggestion.TrafficId
-            });
+            await _connection.ExecuteAsync(sql, parameters);
         }
 
         public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync()
@@ -79,27 +78,39 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByEventIdAsync(int id)
         {
             const string sql = @"SELECT * FROM Suggestion WHERE EventId = @Id AND Active = 1 ORDER BY DateSuggestion DESC;";
-            return await _connection.QueryAsync<Suggestion>(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+
+            return await _connection.QueryAsync<Suggestion>(sql, parameters);
         }
 
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByForecastIdAsync(int id)
         {
             const string sql = @"SELECT * FROM Suggestion WHERE ForecastId = @Id AND Active = 1 ORDER BY DateSuggestion DESC;";
-            return await _connection.QueryAsync<Suggestion>(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+
+            return await _connection.QueryAsync<Suggestion>(sql, parameters);
         }
 
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByTrafficIdAsync(int id)
         {
             const string sql = @"SELECT * FROM Suggestion WHERE TrafficId = @Id AND Active = 1 ORDER BY DateSuggestion DESC;";
-            return await _connection.QueryAsync<Suggestion>(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+
+            return await _connection.QueryAsync<Suggestion>(sql, parameters);
         }
 
         public async Task DeleteSuggestionAsync(int id)
         {
             const string sql = @"UPDATE Suggestion SET Active = 0, DateDeleted = SYSUTCDATETIME() WHERE Id = @Id;";
-            var n = await _connection.ExecuteAsync(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+
+            var n = await _connection.ExecuteAsync(sql, parameters);
             if (n == 0)
-                throw new KeyNotFoundException($"Suggestion #{id} inexistante ou déjà supprimée.");
+                throw new KeyNotFoundException($"Suggestion #{id} non-existent or already deleted.");
         }
 
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByPlaceCrowdAsync(string placeName)
@@ -111,7 +122,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             INNER JOIN Place p     ON p.Name = c.LocationName AND p.Active = 1
                             WHERE LOWER(p.Name) = LOWER(@PlaceName) AND s.Active = 1
                             ORDER BY s.DateSuggestion DESC;";
-            return await _connection.QueryAsync<Suggestion>(sql, new { PlaceName = placeName });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@PlaceName", placeName, DbType.String);
+
+            return await _connection.QueryAsync<Suggestion>(sql, parameters);
         }
 
         public async Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetSuggestionsGroupedByPlaceAsync(
@@ -134,6 +148,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 /**WHERE_FILTER**/
                                 GROUP BY s.OriginalPlace
                                 ORDER BY LastSuggestedAt DESC;";
+            DynamicParameters parameters = new DynamicParameters();
 
             var filters = new List<string>();
             var param = new DynamicParameters();
@@ -174,24 +189,32 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var promptHash = HmacSha256Hex(normalized, pepper);
 
             const string sql = @"
-                        MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
-                        USING (SELECT @PromptHash AS PromptHash) AS s
-                        ON (t.PromptHash = s.PromptHash)
-                        WHEN MATCHED THEN
-                            UPDATE SET Response = @Response,
-                                       CreatedAt = SYSUTCDATETIME(),
-                                       Active = 1
-                        WHEN NOT MATCHED THEN
-                            INSERT (Prompt, PromptHash, Response, CreatedAt, Active)
-                            VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1);";
+                            MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
+                            USING (SELECT @PromptHash AS PromptHash) AS s
+                            ON (t.PromptHash = s.PromptHash)
+                            WHEN MATCHED THEN
+                                UPDATE SET
+                                    Response = @Response,
+                                    CreatedAt = SYSUTCDATETIME(),
+                                    Active = 1,
+                                    Model = @Model,
+                                    Temperature = @Temperature,
+                                    TokenCount = @TokenCount
+                            WHEN NOT MATCHED THEN
+                                INSERT (Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount)
+                                VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount);";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Prompt", interaction.Prompt, DbType.String);
+            parameters.Add("@PromptHash", promptHash, DbType.String);
+            parameters.Add("@Response", interaction.Response, DbType.String);
+            parameters.Add("@Model", interaction.Model ?? "mistral-small-latest", DbType.String);
+            parameters.Add("@Temperature", interaction.Temperature ?? 0.7f, DbType.Single);
+            parameters.Add("@TokenCount", interaction.TokenCount, DbType.Int32);
 
-            await _connection.ExecuteAsync(sql, new
-            {
-                Prompt = interaction.Prompt,
-                PromptHash = promptHash,
-                Response = interaction.Response
-            });
+
+            await _connection.ExecuteAsync(sql, parameters);
         }
+
 
 
         public async Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync()
@@ -203,13 +226,20 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<GPTInteraction?> GetByIdAsync(int id)
         {
             const string sql = @"SELECT * FROM [GptInteractions] WHERE Id = @Id AND Active = 1;";
-            return await _connection.QueryFirstOrDefaultAsync<GPTInteraction>(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+
+            return await _connection.QueryFirstOrDefaultAsync<GPTInteraction>(sql, parameters);
+
+            
         }
 
-        // Simulation (remplace par appel IA réel si besoin)
+        // Simulation (replace with real AI call if needed)
         public async Task<string> AskAsync(string question)
         {
             string simulatedResponse = $"(Simulated GPT Response) You asked : \"{question}\"";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Prompt", question, DbType.String);
             await SaveInteractionAsync(new GPTInteraction
             {
                 Prompt = question,
@@ -224,7 +254,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             UPDATE [GptInteractions]
                             SET Active = 0
                             WHERE Id = @Id AND Active = 1;";
-            var n = await _connection.ExecuteAsync(sql, new { Id = id });
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id, DbType.Int32);
+
+            var n = await _connection.ExecuteAsync(sql, parameters);
             return n > 0;
         }
 
@@ -235,6 +268,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             SET [Active] = 0
                             WHERE [Active] = 1
                               AND [CreatedAt] < DATEADD(DAY, -1, SYSUTCDATETIME());";
+            DynamicParameters parameters = new DynamicParameters();
+
             try
             {
                 var affected = await _connection.ExecuteAsync(sql);
@@ -283,6 +318,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 CreatedAt = timestamp,
                 Active = true
             };
+            DynamicParameters parameters = new DynamicParameters();
+
             // We're reusing your existing hash/merge logic.
             await SaveInteractionAsync(interaction);
         }

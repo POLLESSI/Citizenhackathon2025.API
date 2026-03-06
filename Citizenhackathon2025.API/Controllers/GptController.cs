@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
@@ -19,11 +20,15 @@ namespace CitizenHackathon2025.API.Controllers
     {
         private readonly IGPTRepository _gptRepository;
         private readonly IHubContext<GPTHub> _hubContext;
+        private readonly IMistralAIService _mistralAIService;
+        private readonly ILogger<GptController> _logger;
 
-        public GptController(IGPTRepository gptRepository, IHubContext<GPTHub> hubContext)
+        public GptController(IGPTRepository gptRepository, IHubContext<GPTHub> hubContext, IMistralAIService mistralAIService, ILogger<GptController> logger)
         {
             _gptRepository = gptRepository;
             _hubContext = hubContext;
+            _mistralAIService = mistralAIService;
+            _logger = logger;
         }
 
         [HttpGet("all")]
@@ -76,45 +81,54 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(dto);
         }
-
-        [HttpPost("ask-gpt")]
+        
+        [HttpPost("ask-mistral")]
         [Consumes("application/json")]
-        public async Task<IActionResult> AskGpt([FromBody] GptPrompt prompt)
+        public async Task<IActionResult> AskMistral([FromBody] GptPrompt prompt)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            if (string.IsNullOrWhiteSpace(prompt.Prompt))
-                return BadRequest("Prompt cannot be empty");
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-            var generatedResponse = $"[Simulated GPT] Response to: \"{prompt.Prompt}\"";
-
-            var interaction = new GPTInteraction
+            try
             {
-                Prompt = prompt.Prompt,
-                Response = generatedResponse,
-                Active = true
-                // CreatedAt is set by SQL
-            };
+                // 1. Call Mistral via Ollama (local)
+                var mistralResponse = await _mistralAIService.GenerateSuggestionAsync(prompt.Prompt);
 
-            // ⬇️ remplace SaveInteractionAsync par l’UPSERT (archive + insert)
-            var saved = await _gptRepository.UpsertInteractionAsync(interaction);
+                // 2. Save the interaction with Ollama/Mistral metadata
+                var interaction = new GPTInteraction
+                {
+                    Prompt = prompt.Prompt,
+                    Response = mistralResponse,
+                    Active = true,
+                    Model = "mistral", // Model used (Ollama)
+                    Temperature = 0.7f, // Default value (to be configured)
+                    SourceType = "MistralLocal" // To distinguish Cloud calls
+                };
 
-            await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
+                var saved = await _gptRepository.UpsertInteractionAsync(interaction);
+
+                // 3. Broadcast via SignalR
+                await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
+                {
+                    prompt = saved.Prompt,
+                    response = saved.Response,
+                    createdAt = saved.CreatedAt,
+                    model = saved.Model
+                });
+
+                return Ok(new GptAnswerDTO
+                {
+                    Id = saved.Id,
+                    Prompt = saved.Prompt,
+                    Response = saved.Response,
+                    CreatedAt = saved.CreatedAt
+                });
+            }
+            catch (Exception ex)
             {
-                prompt = saved?.Prompt ?? interaction.Prompt,
-                response = saved?.Response ?? interaction.Response,
-                createdAt = saved?.CreatedAt ?? DateTime.UtcNow
-            });
-
-            var groupedSuggestions = await _gptRepository.GetSuggestionsGroupedByPlaceAsync(
-                typeFilter: "Swimming area", indoorFilter: false, sinceDate: DateTime.UtcNow.AddDays(-1));
-
-            return Ok(new
-            {
-                prompt = saved?.Prompt ?? interaction.Prompt,
-                response = saved?.Response ?? interaction.Response,
-                createdAt = saved?.CreatedAt ?? DateTime.UtcNow,
-                groupedSuggestions
-            });
+                _logger.LogError(ex, "Erreur lors de l'appel à Mistral (Ollama)");
+                return StatusCode(500, $"Erreur: {ex.Message}");
+            }
         }
 
         [HttpGet("test-gpt")]

@@ -3,27 +3,47 @@ using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Infrastructure.Repositories;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Dapper;
+using CitizenHackathon2025.Infrastructure.Extensions;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class SuggestionService : ISuggestionService
     {
+    #nullable disable
         private readonly ISuggestionRepository _suggestionRepository;
         private readonly IPlaceRepository _placeRepository;
         private readonly IEventRepository _eventRepository;
+        private readonly IMistralAIService _mistralService;
+        private readonly IUserRepository _userRepository;
+        private readonly IMemoryCache _cache;
+        private readonly ILogger<SuggestionService> _logger;
 
-        public SuggestionService(ISuggestionRepository suggestionRepository, IPlaceRepository placeRepository, IEventRepository eventRepository)
+        public SuggestionService(ISuggestionRepository suggestionRepository, IPlaceRepository placeRepository, IEventRepository eventRepository, IMistralAIService mistralService, IUserRepository userRepository, IMemoryCache cache, ILogger<SuggestionService> logger)
         {
             _suggestionRepository = suggestionRepository;
             _placeRepository = placeRepository;
             _eventRepository = eventRepository;
+            _mistralService = mistralService;
+            _userRepository = userRepository;
+            _cache = cache;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync(CancellationToken ct = default)
             => await _suggestionRepository.GetLatestSuggestionAsync();
-        public Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default)
-             => _suggestionRepository.GetAllSuggestionsAsync(limit, ct);
+        public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(string prompt, int limit = 100, CancellationToken ct = default)
+        {
+            var cacheKey = $"Mistral_{prompt.Hash()}";
+            if (_cache.TryGetValue(cacheKey, out IEnumerable<Suggestion> cachedResponse))
+                return cachedResponse;
+
+            var response = await _mistralService.GetAllSuggestionsAsync(prompt, ct);
+            _cache.Set(cacheKey, response, TimeSpan.FromHours(1));
+            return response;
+        }
         public async Task<Suggestion?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             try
@@ -42,6 +62,69 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public async Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion, CancellationToken ct = default)
             => await _suggestionRepository.SaveSuggestionAsync(suggestion);
 
+        public async Task<IEnumerable<Suggestion>> GenerateSuggestionAsync(string context, CancellationToken ct)
+        {
+            var prompt = $"Generates a suggestion for a user in this context : {context}. " +
+                         "Complies with GDPR regulations and does not store any personal data.";
+            //var anonymizedPrompt = $"A user (ID: {userId.Hash()}) looking for suggestions for {location}. " +
+            //"Offers alternatives without using personal data.";
+            
+            return await _mistralService.GetAllSuggestionsAsync(prompt, ct);
+        }
+
+        public async Task<Suggestion?> GenerateAndSaveSuggestionAsync(
+            string context,
+            int userId,
+            string? originalPlace = null,
+            string? suggestedAlternatives = null,
+            string? reason = null,
+            int? eventId = null,
+            int? placeId = null,
+            int? forecastId = null,
+            int? trafficId = null,
+            string? locationName = null,
+            double? latitude = null,
+            double? longitude = null,
+            double? distanceKm = null,
+            string? locationLabel = null,
+            string? title = null,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var prompt = $"Generates a suggestion for a user (ID: {userId}) in this context: {context}. Respecte le RGPD.";
+                var suggestionText = await _mistralService.GenerateSuggestionAsync(prompt, ct);
+
+                var suggestion = new Suggestion
+                {
+                    User_Id = userId,
+                    Message = suggestionText,
+                    Context = context,
+                    DateSuggestion = DateTime.UtcNow,
+                    Active = true,
+                    OriginalPlace = originalPlace,
+                    SuggestedAlternatives = suggestedAlternatives,
+                    Reason = reason,
+                    EventId = eventId,
+                    PlaceId = placeId,
+                    ForecastId = forecastId,
+                    TrafficId = trafficId,
+                    LocationName = locationName,
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    DistanceKm = distanceKm,
+                    LocationLabel = locationLabel,
+                    Title = title
+                };
+
+                return await _suggestionRepository.SaveSuggestionAsync(suggestion, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating and saving suggestion for user {UserId}.", userId);
+                return null;
+            }
+        }
         public async Task<IEnumerable<Suggestion>> GetSuggestionsByUserAsync(int userId, CancellationToken ct = default)
             => await _suggestionRepository.GetSuggestionsByUserAsync(userId);
 
@@ -151,6 +234,26 @@ namespace CitizenHackathon2025.Infrastructure.Services
                       .ThenByDescending(x => x.LastSuggestedAt)
                       .ToList();
         }
+        public async Task<bool> DeleteUserDataAsync(int userId, CancellationToken ct)
+        {
+            // Removing user suggestions
+            var suggestions = await _suggestionRepository.GetSuggestionsByUserAsync(userId);
+            foreach (var suggestion in suggestions)
+            {
+                await _suggestionRepository.SoftDeleteSuggestionAsync(suggestion.Id);
+            }
+
+            // User anonymization
+            await _userRepository.AnonymizeUserAsync(userId, ct);
+            return true;
+        }
+
+        public bool IsPromptCompliant(string prompt)
+        {
+            var forbiddenPatterns = new[] { "email:", "phone:", "address:" };
+            return !forbiddenPatterns.Any(p => prompt.Contains(p, StringComparison.OrdinalIgnoreCase));
+        }
+
     }
 }
 

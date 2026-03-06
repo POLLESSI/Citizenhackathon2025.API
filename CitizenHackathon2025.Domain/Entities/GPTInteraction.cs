@@ -9,6 +9,9 @@
         public DateTime CreatedAt { get; set; }
         public bool Active { get; set; } = true;
         public string PromptHash { get; set; }
+        public string Model { get; set; }
+        public float? Temperature { get; set; }
+        public int? TokenCount { get; set; }
 
         // --- Evolution script; Optional links to other aggregates ---
         public int? EventId { get; set; }

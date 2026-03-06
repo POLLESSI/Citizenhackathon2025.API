@@ -10,9 +10,9 @@ namespace CitizenHackathon2025.Application.Extensions
     public static class MapperExtensions
     {
     #nullable disable
-        private static decimal RoundLat(double lat) => Math.Round((decimal)lat, 6);
-        private static decimal RoundLon(double lon) => Math.Round((decimal)lon, 6);
-        private static DateTime TruncateToSecond(DateTime dt)
+        public static decimal RoundLat(double lat) => Math.Round((decimal)lat, 6);
+        public static decimal RoundLon(double lon) => Math.Round((decimal)lon, 6);
+        public static DateTime TruncateToSecond(DateTime dt)
         {
             var ticks = dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond);
             return new DateTime(ticks, dt.Kind);
@@ -358,7 +358,7 @@ namespace CitizenHackathon2025.Application.Extensions
                 LocationLabel = dto.LocationLabel,
 
                 LocationName = dto.LocationLabel ?? dto.Title ?? dto.OriginalPlace
-                // si tu as Title en DB : ajoute Title dans l'entity aussi
+                // If you have Title in the database: add Title to the entity as well
             };
         }
 
