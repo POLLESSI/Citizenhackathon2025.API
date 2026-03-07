@@ -346,6 +346,29 @@ internal class Program
             services.AddAuthorization();
 
         }
+        // Add this policy for the Ollama client (without timeout)
+        //builder.Services.AddHttpClient("OllamaClient", c =>
+        //{
+        //    c.BaseAddress = new Uri(apiRestBase);
+        //    c.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (CitizenHackathon2025V5.Blazor)");
+        //})
+        //.AddHttpMessageHandler<JwtAttachHandler>()
+        //.AddPolicyHandler(GetRetryPolicy()) // ✅ Keep the retry policy
+        //.AddPolicyHandler(GetCircuitBreakerPolicy()); // ✅ Keep the circuit breaker
+
+        builder.Services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(config["MistralAI:ApiUrl"] ?? "http://localhost:11434");
+            client.Timeout = TimeSpan.FromSeconds(300);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+        })
+        .AddHttpMessageHandler(sp =>
+        {
+            var pipelines = sp.GetRequiredService<ResiliencePipelines>();
+            return new ResilienceHandler(pipelines.Ollama); // ✅ A single argument
+        });
+
 
         // ---------- Auth / JWT ----------
         // // Simple variant (commented) :
@@ -374,6 +397,7 @@ internal class Program
 
         // Hosted Services
         builder.Services.AddSingleton<IDeviceHasher, DeviceHasher>();
+        builder.Services.AddSingleton<ResiliencePipelines>(sp => ResiliencePipelinesFactory.Create(sp));
         builder.Services.AddHostedService<CrowdInfoArchiverService>();
         builder.Services.AddHostedService<AntennaConnectionCleanupWorker>();
         builder.Services.AddHostedService<GptInteractionArchiverService>();
@@ -471,8 +495,7 @@ internal class Program
         .AddHttpMessageHandler(sp =>
         {
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
-            return new ResilienceHandler(pipelines.OpenAi, logger); // Use the appropriate resilience pipeline
+            return new ResilienceHandler(pipelines.Ollama); // ✅ A single argument
         });
 
 
@@ -497,8 +520,7 @@ internal class Program
         .AddHttpMessageHandler(sp =>
         {
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
-            return new ResilienceHandler(pipelines.Traffic, logger);
+            return new ResilienceHandler(pipelines.Ollama); // ✅ A single argument
         });
 
         services.AddHttpClient<IOpenWeatherService, OpenWeatherService>((sp, client) =>
@@ -547,8 +569,7 @@ internal class Program
         .AddHttpMessageHandler(sp =>
         {
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            var logger = sp.GetRequiredService<ILogger<ResilienceHandler>>();
-            return new ResilienceHandler(pipelines.OpenAi, logger);
+            return new ResilienceHandler(pipelines.Ollama); // ✅ A single argument
         });
 
         //services.AddHttpClient<OpenWeatherService>()
@@ -596,6 +617,7 @@ internal class Program
             options.AddPolicy("AllowBlazor", p =>
                     p.WithOrigins(
                         "https://localhost:7101", // HTTPS
+                        "http://localhost:11434",
                         "https://localhost:7254",
                         "https://app.wallonie-en-poche.example" // prod
                      )
@@ -1102,6 +1124,15 @@ internal class Program
         // Small query log (as before)
         app.Use(async (context, next) =>
         {
+            context.Response.Headers.Append("Content-Security-Policy",
+        "default-src 'self'; " +
+        "connect-src 'self' https://localhost:7254 http://localhost:11434 wss://localhost:7254 wss://localhost:11434; " + // ✅ Add http://localhost:11434
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; " +
+        "font-src 'self' data:; " +
+        "frame-ancestors 'none'");
+            //await next();
             Console.WriteLine($"Request {context.Request.Method} {context.Request.Path}");
             await next.Invoke();
         });

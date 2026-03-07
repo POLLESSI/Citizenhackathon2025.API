@@ -1,44 +1,37 @@
-﻿using CitizenHackathon2025.Shared.Observability;
-using Microsoft.Extensions.Logging;
-using Polly;
+﻿using Polly;
+using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
-// ✅ Explicit alias to the CLASS, not the namespace
-using ResilienceExec = CitizenHackathon2025.Shared.Resilience.ResilienceExec;
-
 namespace CitizenHackathon2025.Infrastructure.Resilience
 {
-    public sealed class ResilienceHandler : DelegatingHandler
+    public class ResilienceHandler : DelegatingHandler
     {
-        private readonly ResiliencePipeline<HttpResponseMessage> _pipeline;
-        private readonly ILogger<ResilienceHandler> _logger;
+        private readonly AsyncPolicy<HttpResponseMessage> _policy;
 
-        public ResilienceHandler(
-            ResiliencePipeline<HttpResponseMessage> pipeline,
-            ILogger<ResilienceHandler> logger)
+        public ResilienceHandler(AsyncPolicy<HttpResponseMessage> policy)
         {
-            _pipeline = pipeline;
-            _logger = logger;
+            _policy = policy;
         }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
-            var (ctx, _) = ObservabilityContext.Create(
-                service: request.RequestUri?.Host ?? "unknown",
-                operation: $"{request.Method} {request.RequestUri?.AbsolutePath}");
-
-            return ResilienceExec.ExecuteLoggedAsync(
-                _pipeline,
-                token => new ValueTask<HttpResponseMessage>(base.SendAsync(request, token)),
-                ctx,
-                _logger,
-                policyName: "http",
-                cancellationToken: ct);
+            // Use an empty Context and pass the CancellationToken separately
+            return await _policy.ExecuteAsync(
+                async (ctx, ct) => await base.SendAsync(request, ct),
+                new Context(),  // ✅ Empty context
+                cancellationToken);
         }
     }
 }
+
+
+
+
+
 
 
 

@@ -1,30 +1,48 @@
-﻿using CitizenHackathon2025.Shared.Notifications;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Polly;
+using System;
 using System.Net.Http;
 
-namespace CitizenHackathon2025.Infrastructure.Resilience;
-
-public static class ResiliencePipelinesFactory
+namespace CitizenHackathon2025.Infrastructure.Resilience
 {
-    public static ResiliencePipelines Create(IServiceProvider sp)
+    public static class ResiliencePipelinesFactory
     {
-        var lf = sp.GetRequiredService<ILoggerFactory>();
-        var logger = lf.CreateLogger("Polly");
-        var notifier = sp.GetRequiredService<INotifierAdmin>();
-
-        return new ResiliencePipelines
+        public static ResiliencePipelines Create(IServiceProvider sp)
         {
-            OpenAi = CitizenHackathon2025.Infrastructure.Resilience.Resilience.BuildHttpPipeline(
-                        logger, notifier, "openai", retry: 3, breakerFailures: 5, openSeconds: 30, timeoutSeconds: 25),
+            var logger = sp.GetRequiredService<ILogger<ResiliencePipelines>>();
+            return new ResiliencePipelines
+            {
+                OpenAi = CreatePipeline("OpenAI", logger, timeoutSeconds: 25),
+                Traffic = CreatePipeline("Traffic", logger, timeoutSeconds: 10),
+                Weather = CreatePipeline("Weather", logger, timeoutSeconds: 8),
+                Ollama = CreatePipeline("Ollama", logger, timeoutSeconds: 300)
+            };
+        }
 
-            Weather = CitizenHackathon2025.Infrastructure.Resilience.Resilience.BuildHttpPipeline(
-                        logger, notifier, "openweather", retry: 2, breakerFailures: 4, openSeconds: 20, timeoutSeconds: 8),
+        private static AsyncPolicy<HttpResponseMessage> CreatePipeline(
+            string name,
+            ILogger logger,
+            int retryCount = 3,
+            int timeoutSeconds = 20)
+        {
+            var retryPolicy = Policy<HttpResponseMessage>
+                .Handle<HttpRequestException>()
+                .OrResult(msg => !msg.IsSuccessStatusCode)
+                .WaitAndRetryAsync(
+                    retryCount,
+                    retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    onRetry: (response, delay, retryCount, context) =>
+                    {
+                        logger.LogWarning("Retry {RetryCount} for {PolicyName}: {StatusCode}. Delay: {Delay}s",
+                            retryCount, name, response.Result?.StatusCode, delay.TotalSeconds);
+                    });
 
-            Traffic = CitizenHackathon2025.Infrastructure.Resilience.Resilience.BuildHttpPipeline(
-                        logger, notifier, "trafficapi", retry: 3, breakerFailures: 5, openSeconds: 30, timeoutSeconds: 10),
-        };
+            var timeoutPolicy = Policy.TimeoutAsync<HttpResponseMessage>(
+                TimeSpan.FromSeconds(timeoutSeconds));
+
+            return Policy.WrapAsync(retryPolicy, timeoutPolicy);
+        }
     }
 }
 

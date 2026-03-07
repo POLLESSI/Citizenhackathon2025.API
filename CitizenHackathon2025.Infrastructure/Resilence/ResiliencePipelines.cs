@@ -1,14 +1,18 @@
 ﻿using Polly;
 using System.Net.Http;
 
-namespace CitizenHackathon2025.Infrastructure.Resilience;
-
-public sealed class ResiliencePipelines
+namespace CitizenHackathon2025.Infrastructure.Resilience
 {
-    public required ResiliencePipeline<HttpResponseMessage> OpenAi { get; init; }
-    public required ResiliencePipeline<HttpResponseMessage> Weather { get; init; }
-    public required ResiliencePipeline<HttpResponseMessage> Traffic { get; init; }
+    public class ResiliencePipelines
+    {
+    #nullable disable
+        public AsyncPolicy<HttpResponseMessage> OpenAi { get; set; }
+        public AsyncPolicy<HttpResponseMessage> Traffic { get; set; }
+        public AsyncPolicy<HttpResponseMessage> Weather { get; set; }
+        public AsyncPolicy<HttpResponseMessage> Ollama { get; set; }
+    }
 }
+
 
 
 

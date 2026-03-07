@@ -54,10 +54,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             new { role = "user", content = prompt }
         },
                 stream = false, // Disable streaming for a complete response
-                options = new
-                {
-                    temperature = _config.GetValue<float>("MistralAI:Temperature", 0.7f)
-                }
+                options = new { temperature = 0.7f, num_predict = 500 }
             };
 
             try
@@ -65,15 +62,20 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 _httpClient.DefaultRequestHeaders.Remove("Authorization"); // Ollama local does not need an API key
                 _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
 
-                var response = await _httpClient.PostAsJsonAsync(apiUrl, request, ct);
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(240)); // ✅ Local timeout of 240s
+
+                var response = await _httpClient.PostAsJsonAsync(apiUrl, request, cts.Token);
                 response.EnsureSuccessStatusCode();
 
-                // Ollama response format (different from Mistral Cloud)
-                var responseContent = await response.Content.ReadFromJsonAsync<JsonDocument>(ct);
-                return responseContent?.RootElement
-                    .GetProperty("message")
-                    .GetProperty("content")
-                    .GetString() ?? "No response generated.";
+                var responseContent = await response.Content.ReadFromJsonAsync<JsonDocument>(cts.Token);
+                return responseContent?.RootElement.GetProperty("message").GetProperty("content").GetString()
+                       ?? "No response from Ollama (timeout or error).";
+            }
+            catch (TaskCanceledException)
+            {
+                _logger.LogWarning("Ollama request timed out after 240s.");
+                return "Request to Ollama timed out. Please try again with a shorter prompt.";
             }
             catch (Exception ex)
             {
