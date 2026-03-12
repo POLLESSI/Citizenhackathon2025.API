@@ -9,6 +9,7 @@ namespace CitizenHackathon2025.Domain.DTOs
     /// </summary>
     public class SuggestionContextDTO
     {
+    #nullable disable
         /// <summary>
         /// Current weather status ("sunny", "rainy", "cloudy", etc.).
         /// </summary>
@@ -47,6 +48,10 @@ namespace CitizenHackathon2025.Domain.DTOs
         /// <summary>
         /// Optional: Preferred language for response (e.g. "fr", "en", "nl").
         /// </summary>
+        public string UserPrompt { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public int RadiusKm { get; set; } = 25;
         public string? Language { get; set; } = "fr";
         /// <summary>
         /// Generates a text prompt to GPT based on context.

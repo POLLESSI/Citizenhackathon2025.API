@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.Services;
@@ -15,8 +16,12 @@ namespace CitizenHackathon2025.API.Tests
         {
             // Arrange
             var mockMistralService = new Mock<IMistralAIService>();
-            mockMistralService.Setup(s => s.GenerateSuggestionAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                              .ReturnsAsync("Test suggestion");
+            mockMistralService.Setup(s => s.GenerateSuggestionAsync(
+                It.IsAny<string>(),
+                It.IsAny<double?>(),  // latitude
+                It.IsAny<double?>(),  // longitude
+                It.IsAny<CancellationToken>()))
+                .ReturnsAsync("Test suggestion");
 
             var suggestionService = new SuggestionService(
                 Mock.Of<ISuggestionRepository>(),
@@ -56,8 +61,9 @@ namespace CitizenHackathon2025.API.Tests
                 mockHttpClient.Object,
                 mockConfig.Object,
                 mockLogger.Object,
+                Mock.Of<MistralContextBuilder>(),  
                 mockRepo.Object,
-                mockCache.Object  // Pass the mock
+                mockCache.Object  
             );
 
             var suggestion = new Suggestion

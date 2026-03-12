@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
+﻿using CitizenHackathon2025.Contracts.Hubs;
+using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
-using CitizenHackathon2025.Contracts.Hubs;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
@@ -19,6 +20,10 @@ namespace CitizenHackathon2025.Hubs.Hubs
         {
             _logger.LogInformation("RefreshGPT called");
             await Clients.All.SendAsync(GptInteractionHubMethods.ToClient.NotifyNewGpt, message);
+        }
+        public async Task NotifyNewGpt(GptInteractionDTO dto)
+        {
+            await Clients.All.SendAsync("ReceiveGptResponse", dto);
         }
     }
 }

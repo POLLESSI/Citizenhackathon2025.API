@@ -1,9 +1,9 @@
 ﻿CREATE TABLE [dbo].[GptInteractions]
 (
 	[Id] INT IDENTITY,
-	[Prompt] NVARCHAR(MAX),
-	[PromptHash] NVARCHAR(64),
-	[Response] NVARCHAR(MAX),
+	[Prompt] NVARCHAR(MAX) NOT NULL,
+	[PromptHash] NVARCHAR(64) NOT NULL,
+	[Response] NVARCHAR(MAX) NOT NULL,
 	[CreatedAt] DATETIME DEFAULT GETDATE(),
 	[DateDeleted] DATETIME2(0) NULL,
 	[Model] NVARCHAR(64) NULL, 

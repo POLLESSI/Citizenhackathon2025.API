@@ -29,6 +29,29 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return affectedRows > 0;
         }
 
+        public async Task<IEnumerable<CrowdInfo>> GetNearbyCrowdInfoAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default)
+        {
+            if (!latitude.HasValue || !longitude.HasValue)
+                return Enumerable.Empty<CrowdInfo>();
+
+            var sql = @"
+                    SELECT * FROM CrowdInfo
+                    WHERE Active = 1
+                    AND (6371 * ACOS(
+                        COS(RADIANS(@Lat)) * COS(RADIANS(Latitude)) *
+                        COS(RADIANS(Longitude) - RADIANS(@Lon)) +
+                        SIN(RADIANS(@Lat)) * SIN(RADIANS(Latitude))
+                    )) <= @RadiusKm
+                    ORDER BY Timestamp DESC";
+
+            return await _connection.QueryAsync<CrowdInfo>(sql, new
+            {
+                Lat = latitude.Value,
+                Lon = longitude.Value,
+                RadiusKm = radiusKm
+            });
+        }
+
         public Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default)
         {
             const string sql = @"

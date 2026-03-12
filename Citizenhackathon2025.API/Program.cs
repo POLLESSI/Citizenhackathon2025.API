@@ -90,6 +90,9 @@ internal class Program
 #nullable disable
     private static async Task Main(string[] args)
     {
+        // Ajoutez ceci au début de la méthode Main :
+        System.Environment.SetEnvironmentVariable("ASPNETCORE_BROWSERLINK_ENABLED", "false");
+
         // ---------- Serilog ----------
         var builder = WebApplication.CreateBuilder(args);
 
@@ -366,9 +369,8 @@ internal class Program
         .AddHttpMessageHandler(sp =>
         {
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            return new ResilienceHandler(pipelines.Ollama); // ✅ A single argument
+            return new ResilienceHandler(pipelines.Ollama);
         });
-
 
         // ---------- Auth / JWT ----------
         // // Simple variant (commented) :
@@ -404,6 +406,11 @@ internal class Program
         builder.Services.AddHostedService<TrafficConditionArchiverService>();
         builder.Services.AddHostedService<WeatherForecastArchiverService>();
         builder.Services.AddHostedService<AntennaArchivePurgeWorker>();
+
+        builder.Services.AddScoped<MistralContextBuilder>();
+        builder.Services.AddScoped<IMistralAIService, MistralAIService>();
+
+
         builder.Services.AddScoped<IOpenWeatherIngestionService, OpenWeatherIngestionService>();
         // Application
         builder.Services.AddScoped<IWeatherForecastAppService, CitizenHackathon2025.Application.Services.WeatherForecastAppService>();
@@ -425,7 +432,7 @@ internal class Program
         services.AddScoped<IGeoService, GeoService>();
         services.AddScoped<IGPTService, GPTService>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
-        services.AddScoped<IMistralAIService, MistralAIService>();
+        //services.AddScoped<IMistralAIService, MistralAIService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IPlaceService, PlaceService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
@@ -612,13 +619,15 @@ internal class Program
                 });
             }));
         // ---------- CORS ----------
-        services.AddCors(options =>
+        builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowBlazor", p =>
                     p.WithOrigins(
                         "https://localhost:7101", // HTTPS
-                        "http://localhost:11434",
+                        "http://localhost:7101",
                         "https://localhost:7254",
+                        "http://localhost:7254",
+                        "http://localhost:11434",
                         "https://app.wallonie-en-poche.example" // prod
                      )
                      .AllowAnyHeader()
@@ -660,7 +669,7 @@ internal class Program
         // ---------- SignalR ----------
         services.AddSignalR(o =>
         {
-            o.EnableDetailedErrors = false;                // less information leakage
+            o.EnableDetailedErrors = true;                // less information leakage
             o.MaximumReceiveMessageSize = 64 * 1024;       // 64 KB by default
             o.HandshakeTimeout = TimeSpan.FromSeconds(5);
             o.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
@@ -816,23 +825,22 @@ internal class Program
             app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase),
                 b => b.UseMiddleware<OutZenTokenMiddleware>());
         }
-        app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api"),
-    b => b.Use(async (ctx, next) =>
-    {
-        if (HttpMethods.IsGet(ctx.Request.Method))
+        app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api"), b => b.Use(async (ctx, next) =>
         {
-            var af = ctx.RequestServices.GetRequiredService<IAntiforgery>();
-            var tokens = af.GetAndStoreTokens(ctx);
-
-            ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
+            if (HttpMethods.IsGet(ctx.Request.Method))
             {
-                HttpOnly = false,
-                Secure = true,                 // ✅ even in development if https
-                SameSite = SameSiteMode.Lax    // ✅ consistent
-            });
-        }
-        await next();
-    }));
+                var af = ctx.RequestServices.GetRequiredService<IAntiforgery>();
+                var tokens = af.GetAndStoreTokens(ctx);
+
+                ctx.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
+                {
+                    HttpOnly = false,
+                    Secure = true,                 // ✅ even in development if https
+                    SameSite = SameSiteMode.Lax    // ✅ consistent
+                });
+            }
+            await next();
+        }));
 
         //if (!app.Environment.IsDevelopment())
         //{
@@ -1071,12 +1079,15 @@ internal class Program
 
         hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<CrowdCalendarHub>(CrowdCalendarHubMethods.HubPath).RequireAuthorization();
+        //hubs.MapHub<CrowdCalendarHub>(CrowdCalendarHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<CrowdCalendarHub>("/hubs/crowdCalendarHub").RequireAuthorization();
         hubs.MapHub<CrowdInfoAntennaHub>(CrowdInfoAntennaHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
+        //hubs.MapHub<GPTHub>("/hubs/gptHub").RequireAuthorization();
+        //hubs.MapHub<GPTHub>("/hubs/gptHub");
         hubs.MapHub<MessageHub>(MessageHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
@@ -1125,18 +1136,15 @@ internal class Program
         app.Use(async (context, next) =>
         {
             context.Response.Headers.Append("Content-Security-Policy",
-        "default-src 'self'; " +
-        "connect-src 'self' https://localhost:7254 http://localhost:11434 wss://localhost:7254 wss://localhost:11434; " + // ✅ Add http://localhost:11434
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-        "style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data:; " +
-        "font-src 'self' data:; " +
-        "frame-ancestors 'none'");
-            //await next();
-            Console.WriteLine($"Request {context.Request.Method} {context.Request.Path}");
-            await next.Invoke();
+                "default-src 'self'; " +
+                "connect-src 'self' https://localhost:7254 http://localhost:11434 https://localhost:7101 wss://localhost:7254 wss://localhost:11434 wss://localhost:44304; " +
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "img-src 'self' data:; " +
+                "font-src 'self' data:; " +
+                "frame-ancestors 'none'");
+            await next();
         });
-
         //app.Use(async (context, next) =>
         //{
         //    context.Response.Headers.Add("X-API-Copyright", "© 2025 POLLESSI / CitizenHackathon2025. All rights reserved.");

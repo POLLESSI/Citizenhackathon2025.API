@@ -5,6 +5,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     public interface ISuggestionRepository
     {
         Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync();
+        Task<IEnumerable<Suggestion>> GetRecentSuggestionsAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default);
         Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(int limit = 100, CancellationToken ct = default);
         Task<IEnumerable<Suggestion>> GetActiveSinceAsync(DateTime since, CancellationToken ct = default);
         /// <summary>

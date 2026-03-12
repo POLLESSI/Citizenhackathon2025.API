@@ -296,19 +296,35 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@PromptHash", promptHash, DbType.String);
             parameters.Add("@Response", interaction.Response, DbType.String);
 
-            var result = await _connection.QuerySingleOrDefaultAsync<GPTInteraction>(
-                "dbo.sp_GptInteraction_Upsert",
-                parameters,
-                commandType: CommandType.StoredProcedure);
+            if (!string.IsNullOrEmpty(interaction.Model))
+                parameters.Add("@Model", interaction.Model, DbType.String);
+            if (interaction.Temperature.HasValue)
+                parameters.Add("@Temperature", interaction.Temperature.Value, DbType.Single);
+            if (interaction.TokenCount.HasValue)
+                parameters.Add("@TokenCount", interaction.TokenCount.Value, DbType.Int32);
 
-            // Optional: Reflect the calculated hash in the returned entity
-            if (result != null)
+            try
             {
-                result.PromptHash = promptHash;
-            }
+                var result = await _connection.QuerySingleOrDefaultAsync<GPTInteraction>(
+                    "dbo.sp_GptInteraction_Upsert",
+                    parameters,
+                    commandType: CommandType.StoredProcedure);
 
-            return result;
+                if (result == null)
+                {
+                    _logger.LogError("sp_GptInteraction_Upsert returned null for prompt: {Prompt}", interaction.Prompt);
+                    throw new InvalidOperationException("Failed to upsert GPT interaction.");
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing sp_GptInteraction_Upsert for prompt: {Prompt}", interaction.Prompt);
+                throw;
+            }
         }
+
         public async Task SaveInteractionAsync(string prompt, string response, DateTime timestamp)
         {
             var interaction = new GPTInteraction
@@ -323,7 +339,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             // We're reusing your existing hash/merge logic.
             await SaveInteractionAsync(interaction);
         }
-
     }
 }
 

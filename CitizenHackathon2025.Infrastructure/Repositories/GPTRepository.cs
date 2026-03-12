@@ -99,12 +99,16 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 throw;
             }
         }
+        public Task SaveInteractionAsync(string prompt, string response, DateTime timestamp)
+        {
+            throw new NotImplementedException();
+        }
         public async Task SaveInteractionAsync(GPTInteraction interaction)
         {
             var sql = @"
             INSERT INTO GptInteractions (Prompt, Response, CreatedAt, Active)
             VALUES (@Prompt, @Response, @CreatedAt, @Active);
-        ";
+            ";
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("Prompt", interaction.Prompt);
             parameters.Add("Response", interaction.Response);
@@ -211,11 +215,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         }
 
         public Task<GPTInteraction?> UpsertInteractionAsync(GPTInteraction interaction)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task SaveInteractionAsync(string prompt, string response, DateTime timestamp)
         {
             throw new NotImplementedException();
         }

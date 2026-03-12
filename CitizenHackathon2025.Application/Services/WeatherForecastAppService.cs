@@ -93,17 +93,13 @@ namespace CitizenHackathon2025.Application.Services
                 .ToList();
         }
 
-        public async Task<List<WeatherForecastDTO>> GetHistoryAsync(
-            int limit,
-            CancellationToken ct = default)
+        public async Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit, CancellationToken ct = default)
         {
             limit = Math.Clamp(limit, 1, 500);
-
-            var entities = await _repo.GetHistoryAsync(limit, ct);
-            return entities
-                .Select(e => e.MapToWeatherForecastDTO())
-                .ToList();
+            var entities = await _repo.GetHistoryAsync(limit, ct); // ✅ OK
+            return entities.Select(e => e.MapToWeatherForecastDTO()).ToList();
         }
+
 
         public async Task<WeatherForecastDTO?> GetByIdAsync(
             int id,

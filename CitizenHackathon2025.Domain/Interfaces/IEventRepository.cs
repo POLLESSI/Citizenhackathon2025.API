@@ -8,7 +8,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<Event> SaveEventAsync(Event @event, CancellationToken ct = default);
         Task<Event> CreateEventAsync(Event newEvent, CancellationToken ct = default);
         Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync(CancellationToken ct = default);
-
+        Task<IEnumerable<Event>> GetUpcomingEventsAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default);
         Task<Event?> GetByIdAsync(int id, CancellationToken ct = default);
 
         Task<int> ArchivePastEventsAsync(CancellationToken ct = default);

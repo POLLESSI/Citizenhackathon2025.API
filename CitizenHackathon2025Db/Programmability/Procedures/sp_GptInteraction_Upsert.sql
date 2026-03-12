@@ -1,33 +1,30 @@
 ﻿CREATE PROCEDURE dbo.sp_GptInteraction_Upsert
-    @Prompt      NVARCHAR(MAX),
-    @PromptHash  NVARCHAR(64),
-    @Response    NVARCHAR(MAX)
+    @Prompt NVARCHAR(MAX),
+    @PromptHash NVARCHAR(64),
+    @Response NVARCHAR(MAX),
+    @Model NVARCHAR(100) = NULL,
+    @Temperature FLOAT = NULL,
+    @TokenCount INT = NULL
 AS
 BEGIN
-    SET NOCOUNT ON;
-
-    DECLARE @Now DATETIME2(0) = SYSUTCDATETIME();
-
-    MERGE dbo.GptInteractions AS T
-    USING (SELECT @PromptHash AS PromptHash) AS S
-        ON (T.PromptHash = S.PromptHash)
+    MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
+    USING (SELECT @PromptHash AS PromptHash) AS s
+    ON (t.PromptHash = s.PromptHash)
     WHEN MATCHED THEN
-        UPDATE SET 
-            T.Prompt      = @Prompt,
-            T.Response    = @Response,
-            T.CreatedAt   = @Now,
-            T.Active      = 1,
-            T.DateDeleted = NULL
+        UPDATE SET
+            Response = @Response,
+            CreatedAt = SYSUTCDATETIME(),
+            Active = 1,
+            Model = ISNULL(@Model, t.Model),
+            Temperature = ISNULL(@Temperature, t.Temperature),
+            TokenCount = ISNULL(@TokenCount, t.TokenCount)
     WHEN NOT MATCHED THEN
-        INSERT (Prompt, PromptHash, Response, CreatedAt, Active)
-        VALUES (@Prompt, @PromptHash, @Response, @Now, 1);
+        INSERT (Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount)
+        VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount);
 
-    -- Returns the record for the C# mapping
-    SELECT TOP (1) *
-    FROM dbo.GptInteractions
-    WHERE PromptHash = @PromptHash;
-END;
-GO
+    SELECT * FROM [GptInteractions] WHERE PromptHash = @PromptHash;
+END
+
 
 
 

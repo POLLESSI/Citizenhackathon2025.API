@@ -19,7 +19,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             _connection = connection;
             _logger = logger;
         }
-
+        public Task<IEnumerable<TrafficCondition>> GetRecentTrafficConditionsAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
         public Task<IEnumerable<TrafficCondition>> GetLatestTrafficConditionAsync(int limit = 10, CancellationToken ct = default)
         {
             const string sql = @"

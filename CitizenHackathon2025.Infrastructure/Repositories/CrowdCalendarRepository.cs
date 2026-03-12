@@ -7,10 +7,14 @@ using System.Text;
 
 public class CrowdCalendarRepository : ICrowdCalendarRepository
 {
+    # nullable disable
     private readonly IDbConnection _db;
     private readonly ITimeZoneConverter _tz; // optional if you manage TZ
 
-    public CrowdCalendarRepository(IDbConnection db /*, ITimeZoneConverter tz */) { _db = db; /* _tz = tz; */ }
+    public CrowdCalendarRepository(IDbConnection db)
+    {
+        _db = db;
+    }
 
     public Task<IEnumerable<CrowdCalendarEntry>> GetByDateAsync(DateTime dateUtc, string regionCode, int? placeId = null)
     {

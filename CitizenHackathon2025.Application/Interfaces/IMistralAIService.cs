@@ -15,7 +15,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetRecommendationsForSwimmingAreasAsync();
         Task<Suggestion?> SaveSuggestionAsync(Suggestion suggestion, CancellationToken ct = default);
         Task DeleteSuggestionAsync(int id);
-        Task<string> GenerateSuggestionAsync(string prompt, CancellationToken ct = default);
+        Task<string> GenerateSuggestionAsync(string prompt, double? latitude = null, double? longitude = null, CancellationToken ct = default);
         Task<int> ArchivePastGptInteractionsAsync();
     }
 }

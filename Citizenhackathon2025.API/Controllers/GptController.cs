@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -6,6 +7,7 @@ using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
@@ -14,16 +16,16 @@ using HubEvents = CitizenHackathon2025.Contracts.Hubs.GptInteractionHubMethods;
 namespace CitizenHackathon2025.API.Controllers
 {
     [EnableRateLimiting("per-user")]
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class GptController : ControllerBase
     {
-        private readonly IGPTRepository _gptRepository;
+        private readonly IGptInteractionRepository _gptRepository;
         private readonly IHubContext<GPTHub> _hubContext;
         private readonly IMistralAIService _mistralAIService;
         private readonly ILogger<GptController> _logger;
 
-        public GptController(IGPTRepository gptRepository, IHubContext<GPTHub> hubContext, IMistralAIService mistralAIService, ILogger<GptController> logger)
+        public GptController(IGptInteractionRepository gptRepository, IHubContext<GPTHub> hubContext, IMistralAIService mistralAIService, ILogger<GptController> logger)
         {
             _gptRepository = gptRepository;
             _hubContext = hubContext;
@@ -31,13 +33,19 @@ namespace CitizenHackathon2025.API.Controllers
             _logger = logger;
         }
 
+        //[HttpGet("all")]
+        //public async Task<IActionResult> GetAllInteractions()
+        //{
+        //    var interactions = await _gptRepository.GetAllInteractionsAsync();
+        //    // Secure null and avoid double mapping if the repo already returned DTOs
+        //    var dtos = interactions?.Select(e => e.MapToGptInteractionDTO()).ToList() ?? new List<GptInteractionDTO>();
+        //    return Ok(dtos);
+        //}
         [HttpGet("all")]
-        public async Task<IActionResult> GetAllInteractions()
+        public async Task<IActionResult> GetAll()
         {
             var interactions = await _gptRepository.GetAllInteractionsAsync();
-            // Secure null and avoid double mapping if the repo already returned DTOs
-            var dtos = interactions?.Select(e => e.MapToGptInteractionDTO()).ToList() ?? new List<GptInteractionDTO>();
-            return Ok(dtos);
+            return Ok(interactions);
         }
 
         [HttpGet("{id:int}")]
@@ -81,28 +89,34 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(dto);
         }
-        
+
+        //[Consumes("application/json")]
         [HttpPost("ask-mistral")]
-        [Consumes("application/json")]
-        public async Task<IActionResult> AskMistral([FromBody] GptPrompt prompt)
+        public async Task<IActionResult> AskMistral([FromBody] GptPromptRequest request)
         {
+        #nullable disable
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
-                // 1. Call Mistral via Ollama (local)
-                var mistralResponse = await _mistralAIService.GenerateSuggestionAsync(prompt.Prompt);
+                // 1. Call Mistral via Ollama
+                var mistralResponse = await _mistralAIService.GenerateSuggestionAsync(
+                    request.Prompt,
+                    request.Latitude,
+                    request.Longitude,
+                    HttpContext.RequestAborted
+                );
 
-                // 2. Save the interaction with Ollama/Mistral metadata
+                // 2. Save the interaction
                 var interaction = new GPTInteraction
                 {
-                    Prompt = prompt.Prompt,
+                    Prompt = request.Prompt,
                     Response = mistralResponse,
                     Active = true,
-                    Model = "mistral", // Model used (Ollama)
-                    Temperature = 0.7f, // Default value (to be configured)
-                    SourceType = "MistralLocal" // To distinguish Cloud calls
+                    Model = "mistral",
+                    Temperature = 0.7f,
+                    SourceType = "MistralLocal"
                 };
 
                 var saved = await _gptRepository.UpsertInteractionAsync(interaction);
@@ -126,8 +140,8 @@ namespace CitizenHackathon2025.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erreur lors de l'appel à Mistral (Ollama)");
-                return StatusCode(500, $"Erreur: {ex.Message}");
+                _logger.LogError(ex, "Error calling Mistral (Ollama)");
+                return StatusCode(500, $"Error: {ex.Message}");
             }
         }
 
@@ -145,6 +159,27 @@ namespace CitizenHackathon2025.API.Controllers
                 throw;
             }
             
+        }
+        [HttpPost("suggest")]
+        public async Task<IActionResult> SuggestAlternative([FromBody] GptPromptRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Prompt))
+                return BadRequest("The prompt cannot be empty.");
+
+            try
+            {
+                var response = await _mistralAIService.GenerateSuggestionAsync(
+                    request.Prompt,
+                    request.Latitude,
+                    request.Longitude);
+
+                return Ok(new { Suggestion = response });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating suggestion");
+                return StatusCode(500, $"Error: {ex.Message}");
+            }
         }
 
         [HttpDelete("{id}")]

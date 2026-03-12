@@ -31,7 +31,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 ORDER BY Id DESC;";
             return _connection.QueryAsync<Place>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
-
+        public Task<IEnumerable<Place>> GetNearbyPlacesAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
         public async Task<Place> SavePlaceAsync(Place place, CancellationToken ct = default)
         {
             try

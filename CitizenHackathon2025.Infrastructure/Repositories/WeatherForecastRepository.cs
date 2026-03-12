@@ -19,8 +19,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             _connection = connection;
             _logger = logger;
         }
-
-        public Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default)
+        public async Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default)
         {
             const string sql = @"
                             SELECT TOP(1)
@@ -40,10 +39,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             ORDER BY DateWeather DESC;
                             ";
 
-            return _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
-                new CommandDefinition(sql, cancellationToken: ct));
+            return await _connection.QueryFirstOrDefaultAsync<WeatherForecast>(sql);
         }
-
+        
         public async Task<List<WeatherForecast>> GetAllAsync(CancellationToken ct = default)
         {
             const string sql = @"
@@ -112,6 +110,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             return _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
                 new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
+        }
+        public Task<WeatherForecast> GetCurrentWeatherAsync(double? latitude, double? longitude, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
         }
         public async Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity, CancellationToken ct = default)
         {
@@ -185,7 +187,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
 
 
-    public async Task<WeatherForecast> GenerateNewForecastAsync(CancellationToken ct = default)
+        public async Task<WeatherForecast> GenerateNewForecastAsync(CancellationToken ct = default)
         {
             decimal lat = 50.2m + (decimal)_rng.NextDouble() * 0.7m;
             decimal lon = 4.0m + (decimal)_rng.NextDouble() * 1.1m;

@@ -10,7 +10,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public class EventRepository : IEventRepository
     {
-#nullable disable
+    #nullable disable
         private readonly IDbConnection _connection;
         private readonly ILogger<EventRepository> _logger;
 
@@ -51,13 +51,37 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 throw;
             }
         }
-        
+
+        public async Task<IEnumerable<Event>> GetUpcomingEventsAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default)
+        {
+            var sql = @"
+                    SELECT * FROM [Event]
+                    WHERE Active = 1
+                    AND DateEvent >= @Today
+                    AND (
+                        @Lat IS NULL OR @Lon IS NULL OR
+                        (6371 * ACOS(
+                            COS(RADIANS(@Lat)) * COS(RADIANS(Latitude)) *
+                            COS(RADIANS(Longitude) - RADIANS(@Lon)) +
+                            SIN(RADIANS(@Lat)) * SIN(RADIANS(Latitude))
+                        )) <= @RadiusKm
+                    )
+                    ORDER BY DateEvent ASC";
+
+            return await _connection.QueryAsync<Event>(sql, new
+            {
+                Today = DateTime.UtcNow.Date,
+                Lat = latitude,
+                Lon = longitude,
+                RadiusKm = radiusKm
+            });
+        }
         public async Task<Event?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             const string sql = @"
                                 SELECT TOP(1) *
                                 FROM dbo.Event
-                                WHERE Id = @Id /* AND Active = 1 si applicable */
+                                WHERE Id = @Id 
                             ";
             try
             {
@@ -121,20 +145,20 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync()
         {
             string sql = @"
-            SELECT [Id],
-                   [Name],
-                   [PlaceId],
-                   [Latitude],
-                   [Longitude],
-                   [DateEvent],
-                   [ExpectedCrowd],
-                   [IsOutdoor],
-                   [Active]
-            FROM [Event]
-            WHERE [IsOutdoor] = 1
-              AND [Active] = 1
-              AND [DateEvent] >= CAST(GETDATE() AS DATE)
-            ORDER BY [DateEvent] ASC;";
+                        SELECT [Id],
+                               [Name],
+                               [PlaceId],
+                               [Latitude],
+                               [Longitude],
+                               [DateEvent],
+                               [ExpectedCrowd],
+                               [IsOutdoor],
+                               [Active]
+                        FROM [Event]
+                        WHERE [IsOutdoor] = 1
+                          AND [Active] = 1
+                          AND [DateEvent] >= CAST(GETDATE() AS DATE)
+                        ORDER BY [DateEvent] ASC;";
 
             try
             {
@@ -144,7 +168,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
             catch (Exception ex)
             {
-                // Gestion d'erreur : log ou remonter une exception customisée si besoin
+                // Error handling: log or raise a custom exception if needed
                 throw new Exception("Error retrieving upcoming external events.", ex);
             }
         }

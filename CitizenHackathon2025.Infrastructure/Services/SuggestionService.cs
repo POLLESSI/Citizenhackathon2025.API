@@ -93,7 +93,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
             try
             {
                 var prompt = $"Generates a suggestion for a user (ID: {userId}) in this context: {context}. Respecte le RGPD.";
-                var suggestionText = await _mistralService.GenerateSuggestionAsync(prompt, ct);
+                var suggestionText = await _mistralService.GenerateSuggestionAsync(
+                    prompt,
+                    latitude: null,  
+                    longitude: null, 
+                    ct               
+                );
 
                 var suggestion = new Suggestion
                 {

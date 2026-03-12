@@ -7,6 +7,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity, CancellationToken ct = default);
 
         Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default);
+        Task<WeatherForecast> GetCurrentWeatherAsync(double? latitude, double? longitude, CancellationToken ct = default);
         Task<List<WeatherForecast>> GetAllAsync(CancellationToken ct = default);
         Task<List<WeatherForecast>> GetHistoryAsync(int limit = 128, CancellationToken ct = default);
         Task<WeatherForecast?> GetByIdAsync(int id, CancellationToken ct = default);

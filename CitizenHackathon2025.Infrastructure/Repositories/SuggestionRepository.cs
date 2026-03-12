@@ -50,7 +50,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var cmd = new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct);
             return await _connection.QueryAsync<Suggestion>(cmd);
         }
-
+        public Task<IEnumerable<Suggestion>> GetActiveSinceAsync(DateTime since, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
+        public Task<IEnumerable<Suggestion>> GetRecentSuggestionsAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
         public async Task<IEnumerable<Suggestion?>> GetLatestSuggestionAsync()
         {
             const string sql = @"
@@ -215,11 +222,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 _logger.LogError(ex, "Error during soft delete Id={Id}", id);
                 return false;
             }
-        }
-
-        public Task<IEnumerable<Suggestion>> GetActiveSinceAsync(DateTime since, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
         }
     }
 }

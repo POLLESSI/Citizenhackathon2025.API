@@ -5,6 +5,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     public interface IPlaceRepository
     {
         Task<IEnumerable<Place?>> GetLatestPlaceAsync(int limit = 200, CancellationToken ct = default);
+        Task<IEnumerable<Place>> GetNearbyPlacesAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default);
 
         Task<Place?> GetByIdAsync(int id, CancellationToken ct = default);
 
