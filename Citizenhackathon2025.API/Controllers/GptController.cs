@@ -45,7 +45,8 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> GetAll()
         {
             var interactions = await _gptRepository.GetAllInteractionsAsync();
-            return Ok(interactions);
+            var dtos = interactions?.Select(x => x.MapToGptInteractionDTO()).ToList() ?? new();
+            return Ok(dtos);
         }
 
         [HttpGet("{id:int}")]
@@ -94,13 +95,14 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("ask-mistral")]
         public async Task<IActionResult> AskMistral([FromBody] GptPromptRequest request)
         {
-        #nullable disable
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
-                // 1. Call Mistral via Ollama
+                _logger.LogInformation("AskMistral received. Prompt='{Prompt}', Lat={Lat}, Lng={Lng}",
+                    request.Prompt, request.Latitude, request.Longitude);
+
                 var mistralResponse = await _mistralAIService.GenerateSuggestionAsync(
                     request.Prompt,
                     request.Latitude,
@@ -108,7 +110,8 @@ namespace CitizenHackathon2025.API.Controllers
                     HttpContext.RequestAborted
                 );
 
-                // 2. Save the interaction
+                _logger.LogInformation("AskMistral response received from Ollama.");
+
                 var interaction = new GPTInteraction
                 {
                     Prompt = request.Prompt,
@@ -121,22 +124,30 @@ namespace CitizenHackathon2025.API.Controllers
 
                 var saved = await _gptRepository.UpsertInteractionAsync(interaction);
 
-                // 3. Broadcast via SignalR
-                await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
+                var dto = new GptAnswerDTO
                 {
-                    prompt = saved.Prompt,
-                    response = saved.Response,
-                    createdAt = saved.CreatedAt,
-                    model = saved.Model
-                });
+                    Id = saved?.Id,
+                    Prompt = saved?.Prompt ?? request.Prompt,
+                    Response = saved?.Response ?? mistralResponse,
+                    CreatedAt = saved?.CreatedAt ?? DateTime.UtcNow
+                };
 
-                return Ok(new GptAnswerDTO
+                try
                 {
-                    Id = saved.Id,
-                    Prompt = saved.Prompt,
-                    Response = saved.Response,
-                    CreatedAt = saved.CreatedAt
-                });
+                    await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new GptInteractionDTO
+                    {
+                        Id = dto.Id ?? 0,
+                        Prompt = dto.Prompt,
+                        Response = dto.Response,
+                        CreatedAt = dto.CreatedAt
+                    });
+                }
+                catch (Exception hubEx)
+                {
+                    _logger.LogWarning(hubEx, "GPT saved but SignalR broadcast failed.");
+                }
+
+                return Ok(dto);
             }
             catch (Exception ex)
             {
@@ -214,6 +225,7 @@ namespace CitizenHackathon2025.API.Controllers
 
                 await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
                 {
+                    Id = interaction.Id,
                     prompt = interaction.Prompt,
                     response = interaction.Response,
                     createdAt = interaction.CreatedAt

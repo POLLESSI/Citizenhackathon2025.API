@@ -359,19 +359,6 @@ internal class Program
         //.AddPolicyHandler(GetRetryPolicy()) // ✅ Keep the retry policy
         //.AddPolicyHandler(GetCircuitBreakerPolicy()); // ✅ Keep the circuit breaker
 
-        builder.Services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
-        {
-            var config = sp.GetRequiredService<IConfiguration>();
-            client.BaseAddress = new Uri(config["MistralAI:ApiUrl"] ?? "http://localhost:11434");
-            client.Timeout = TimeSpan.FromSeconds(300);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
-        })
-        .AddHttpMessageHandler(sp =>
-        {
-            var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            return new ResilienceHandler(pipelines.Ollama);
-        });
-
         // ---------- Auth / JWT ----------
         // // Simple variant (commented) :
         // var secretKey = builder.Configuration["JwtSettings:SecretKey"];
@@ -446,6 +433,7 @@ internal class Program
         services.AddScoped<ITrafficConditionService, TrafficConditionService>();
         services.AddScoped<ITrafficIngestionService, TrafficIngestionService>();
         services.AddScoped<ITrafficOdwbIngestionService, TrafficOdwbIngestionService>();
+        services.AddScoped<ILocalAiContextService, LocalAiContextService>();
         services.AddScoped<IUserMessageService, UserMessageService>();
         services.AddScoped<NotificationService>();
         services.AddScoped<OpenAiSuggestionService>();
@@ -472,6 +460,7 @@ internal class Program
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
         services.AddScoped<IGPTRepository, GptInteractionsRepository>();
+        services.AddScoped<ILocalAiDataRepository, LocalAiDataRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
@@ -496,15 +485,14 @@ internal class Program
         services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
-            client.BaseAddress = new Uri(config["MistralAI:ApiUrl"] ?? "https://api.mistral.ai");
+            client.Timeout = TimeSpan.FromSeconds(300);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
         })
         .AddHttpMessageHandler(sp =>
         {
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            return new ResilienceHandler(pipelines.Ollama); // ✅ A single argument
+            return new ResilienceHandler(pipelines.Ollama);
         });
-
 
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
         {
@@ -1077,27 +1065,22 @@ internal class Program
         // ---------- Hubs ----------
         var hubs = app.MapGroup("/hubs");
 
-        hubs.MapHub<WeatherForecastHub>(WeatherForecastHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<CrowdHub>(CrowdHubMethods.HubPath).RequireAuthorization();
-        //hubs.MapHub<CrowdCalendarHub>(CrowdCalendarHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<CrowdCalendarHub>("/hubs/crowdCalendarHub").RequireAuthorization();
-        hubs.MapHub<CrowdInfoAntennaHub>(CrowdInfoAntennaHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
-        //hubs.MapHub<GPTHub>("/hubs/gptHub").RequireAuthorization();
-        //hubs.MapHub<GPTHub>("/hubs/gptHub");
-        hubs.MapHub<MessageHub>(MessageHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<UserHub>(UserHubMethods.HubPath).RequireAuthorization();
-
-        hubs.MapHub<EventHub>("events"); 
+        hubs.MapHub<WeatherForecastHub>("weatherforecastHub").RequireAuthorization();
+        hubs.MapHub<CrowdHub>("crowdHub").RequireAuthorization();
+        hubs.MapHub<CrowdCalendarHub>("crowdCalendarHub").RequireAuthorization();
+        hubs.MapHub<CrowdInfoAntennaHub>("crowdInfoAntennaHub").RequireAuthorization();
+        hubs.MapHub<CrowdInfoAntennaConnectionHub>("crowdInfoAntennaConnectionHub").RequireAuthorization();
+        hubs.MapHub<SuggestionHub>("suggestionHub").RequireAuthorization();
+        hubs.MapHub<TrafficHub>("trafficHub").RequireAuthorization();
+        hubs.MapHub<GPTHub>("gptHub").RequireAuthorization();
+        hubs.MapHub<MessageHub>("messageHub").RequireAuthorization();
+        hubs.MapHub<PlaceHub>("placeHub").RequireAuthorization();
+        hubs.MapHub<UpdateHub>("updateHub").RequireAuthorization();
+        hubs.MapHub<UserHub>("userHub").RequireAuthorization();
+        hubs.MapHub<EventHub>("events");
         hubs.MapHub<NotificationHub>("notificationHub").RequireAuthorization();
 
-        // OutZen with options
-        hubs.MapHub<OutZenHub>(OutZenHubMethods.HubPath, o =>
+        hubs.MapHub<OutZenHub>("outzenHub", o =>
         {
             o.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
         }).RequireAuthorization();

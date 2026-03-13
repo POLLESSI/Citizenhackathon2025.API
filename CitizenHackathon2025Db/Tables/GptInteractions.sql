@@ -4,7 +4,7 @@
 	[Prompt] NVARCHAR(MAX) NOT NULL,
 	[PromptHash] NVARCHAR(64) NOT NULL,
 	[Response] NVARCHAR(MAX) NOT NULL,
-	[CreatedAt] DATETIME DEFAULT GETDATE(),
+	[CreatedAt] DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(),
 	[DateDeleted] DATETIME2(0) NULL,
 	[Model] NVARCHAR(64) NULL, 
 	[Temperature] FLOAT NULL, 
@@ -31,7 +31,10 @@ BEGIN
 END;
 GO
 
+CREATE UNIQUE INDEX UX_GptInteractions_PromptHash
+ON dbo.GptInteractions(PromptHash);
 
+GO
 
 
 

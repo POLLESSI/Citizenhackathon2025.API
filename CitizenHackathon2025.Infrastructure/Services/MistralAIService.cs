@@ -24,14 +24,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly MistralContextBuilder _contextBuilder;
         private readonly ISuggestionRepository _suggestionRepository;
         private readonly IMemoryCache _cache;
+        private readonly ILocalAiContextService _localAiContextService;
 
-        public MistralAIService(
-            HttpClient httpClient,
-            IConfiguration config,
-            ILogger<MistralAIService> logger,
-            MistralContextBuilder contextBuilder,
-            ISuggestionRepository suggestionRepository,
-            IMemoryCache cache)
+        public MistralAIService(HttpClient httpClient, IConfiguration config, ILogger<MistralAIService> logger, MistralContextBuilder contextBuilder, ISuggestionRepository suggestionRepository, IMemoryCache cache, ILocalAiContextService localAiContextService)
         {
             _httpClient = httpClient;
             _config = config;
@@ -39,29 +34,53 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _contextBuilder = contextBuilder;
             _suggestionRepository = suggestionRepository;
             _cache = cache;
+            _localAiContextService = localAiContextService;
         }
 
         public async Task<string> GenerateSuggestionAsync(string prompt, double? latitude, double? longitude, CancellationToken ct = default)
         {
             try
             {
-                var apiUrl = _config["MistralAI:ApiUrl"] ?? "http://localhost:11434/api/chat";
+                var endpoint = _config["MistralAI:ApiUrl"] ?? "http://localhost:11434/api/chat";
                 var model = _config["MistralAI:Model"] ?? "mistral";
+
+                var localContext = await _localAiContextService.BuildContextAsync(prompt, latitude, longitude, ct);
+                var groundedPrompt = _localAiContextService.BuildPrompt(localContext);
 
                 var request = new
                 {
                     model,
                     messages = new[]
                     {
-                new { role = "user", content = prompt }
+                new
+                {
+                    role = "system",
+                    content = "You are a reliable local OutZen assistant. You never invent information that is not in context."
+                },
+                new
+                {
+                    role = "user",
+                    content = groundedPrompt
+                }
             },
-                    stream = false
+                    stream = false,
+                    options = new
+                    {
+                        temperature = _config.GetValue<float?>("MistralAI:Temperature") ?? 0.3f
+                    }
                 };
 
-                var response = await _httpClient.PostAsJsonAsync(apiUrl, request, ct);
+                _logger.LogInformation("Calling Ollama endpoint: {Endpoint} with model: {Model}", endpoint, model);
+                _logger.LogInformation("Grounded prompt sent to Ollama: {Prompt}", groundedPrompt);
+
+                var response = await _httpClient.PostAsJsonAsync(endpoint, request, ct);
+                var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+                _logger.LogInformation("Ollama status code: {StatusCode}", (int)response.StatusCode);
+                _logger.LogInformation("Ollama raw response: {Response}", responseContent);
+
                 response.EnsureSuccessStatusCode();
 
-                var responseContent = await response.Content.ReadAsStringAsync();
                 var jsonResponse = JsonSerializer.Deserialize<MistralResponse>(
                     responseContent,
                     new JsonSerializerOptions
@@ -77,12 +96,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 throw;
             }
         }
-
-
         public async Task<string> CallOllamaApi(string prompt, CancellationToken ct)
         {
-            var apiUrl = _config["MistralAI:ApiUrl"] ?? "http://localhost:11434/api/chat";
-            var model = _config["MistralAI:Model"] ?? "mistral-tiny";
+            var endpoint = _config["MistralAI:ApiUrl"] ?? "http://localhost:11434/api/chat";
+            var model = _config["MistralAI:Model"] ?? "mistral";
 
             var request = new
             {
@@ -94,7 +111,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             try
             {
-                var response = await _httpClient.PostAsJsonAsync(apiUrl, request, ct);
+                var response = await _httpClient.PostAsJsonAsync(endpoint, request, ct);
                 response.EnsureSuccessStatusCode();
                 var responseContent = await response.Content.ReadAsStringAsync();
                 var jsonResponse = JsonSerializer.Deserialize<MistralResponse>(
@@ -112,8 +129,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 throw;
             }
         }
-
-
         public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(string prompt, CancellationToken ct = default)
         {
             var suggestionText = await GenerateSuggestionAsync(prompt, null, null, ct);

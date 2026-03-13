@@ -4,6 +4,8 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.Services;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -16,11 +18,13 @@ namespace CitizenHackathon2025.API.Tests
         {
             // Arrange
             var mockMistralService = new Mock<IMistralAIService>();
-            mockMistralService.Setup(s => s.GenerateSuggestionAsync(
-                It.IsAny<string>(),
-                It.IsAny<double?>(),  // latitude
-                It.IsAny<double?>(),  // longitude
-                It.IsAny<CancellationToken>()))
+
+            mockMistralService
+                .Setup(s => s.GenerateSuggestionAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<double?>(),
+                    It.IsAny<double?>(),
+                    It.IsAny<CancellationToken>()))
                 .ReturnsAsync("Test suggestion");
 
             var suggestionService = new SuggestionService(
@@ -39,31 +43,34 @@ namespace CitizenHackathon2025.API.Tests
             // Assert
             Assert.NotNull(result);
         }
+
         [Fact]
         public async Task SaveSuggestionAsync_ValidSuggestion_ReturnsSavedSuggestion()
         {
             // Arrange
             var mockRepo = new Mock<ISuggestionRepository>();
-            mockRepo.Setup(r => r.SaveSuggestionAsync(It.IsAny<Suggestion>(), It.IsAny<CancellationToken>()))
-                    .ReturnsAsync(new Suggestion { Id = 1, User_Id = 1 });
+            mockRepo
+                .Setup(r => r.SaveSuggestionAsync(It.IsAny<Suggestion>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Suggestion { Id = 1, User_Id = 1 });
 
             var mockLogger = new Mock<ILogger<MistralAIService>>();
             var mockConfig = new Mock<IConfiguration>();
-            var mockHttpClient = new Mock<HttpClient>();
             var mockCache = new Mock<IMemoryCache>();
+            var mockLocalAiContextService = new Mock<ILocalAiContextService>();
 
-            // Configuring IConfiguration
+            // Dummy setup
             mockConfig.Setup(c => c["MistralAI:ApiKey"]).Returns("test-api-key");
             mockConfig.Setup(c => c["MistralAI:ApiUrl"]).Returns("https://test-api-url.com");
             mockConfig.Setup(c => c["MistralAI:Model"]).Returns("mistral-test-model");
 
             var service = new MistralAIService(
-                mockHttpClient.Object,
+                new HttpClient(),
                 mockConfig.Object,
                 mockLogger.Object,
-                Mock.Of<MistralContextBuilder>(),  
+                Mock.Of<MistralContextBuilder>(),
                 mockRepo.Object,
-                mockCache.Object  
+                mockCache.Object,
+                mockLocalAiContextService.Object
             );
 
             var suggestion = new Suggestion
@@ -79,7 +86,9 @@ namespace CitizenHackathon2025.API.Tests
             // Assert
             Assert.NotNull(result);
             Assert.Equal(1, result.Id);
-            mockRepo.Verify(r => r.SaveSuggestionAsync(It.IsAny<Suggestion>(), It.IsAny<CancellationToken>()), Times.Once);
+            mockRepo.Verify(
+                r => r.SaveSuggestionAsync(It.IsAny<Suggestion>(), It.IsAny<CancellationToken>()),
+                Times.Once);
         }
     }
 }
