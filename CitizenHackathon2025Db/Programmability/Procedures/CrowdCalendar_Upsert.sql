@@ -6,6 +6,8 @@ CREATE PROCEDURE dbo.CrowdCalendar_Upsert
     @EventName        nvarchar(128)  = NULL,
     @ExpectedLevel    tinyint,
     @Confidence       tinyint        = NULL,
+    @Latitude         decimal(9, 6)   = NULL,
+    @Longitude        decimal(9, 6)   = NULL,
     @StartLocalTime   time(0)        = NULL,
     @EndLocalTime     time(0)        = NULL,
     @LeadHours        int            = 3,
@@ -28,6 +30,8 @@ BEGIN
             EventName       = @EventName,
             ExpectedLevel   = @ExpectedLevel,
             Confidence      = @Confidence,
+            Latitude        = @Latitude,
+            Longitude       = @Longitude,
             StartLocalTime  = @StartLocalTime,
             EndLocalTime    = @EndLocalTime,
             LeadHours       = @LeadHours,
@@ -35,9 +39,9 @@ BEGIN
             Tags            = @Tags,
             Active          = @Active
     WHEN NOT MATCHED THEN
-        INSERT (DateUtc, RegionCode, PlaceId, EventName, ExpectedLevel, Confidence,
+        INSERT (DateUtc, RegionCode, PlaceId, EventName, ExpectedLevel, Confidence, Latitude, Longitude,
                 StartLocalTime, EndLocalTime, LeadHours, MessageTemplate, Tags, Active)
-        VALUES (@DateUtc, @RegionCode, @PlaceId, @EventName, @ExpectedLevel, @Confidence,
+        VALUES (@DateUtc, @RegionCode, @PlaceId, @EventName, @ExpectedLevel, @Confidence, @Latitude, @Longitude,
                 @StartLocalTime, @EndLocalTime, @LeadHours, @MessageTemplate, @Tags, @Active);
 END
 GO

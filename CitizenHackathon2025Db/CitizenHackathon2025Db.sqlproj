@@ -107,6 +107,7 @@
     <Build Include="Programmability\Procedures\sp_CrowdInfoAntennaSnapshot_BulkUpsert.sql" />
     <Build Include="Types\CrowdInfoAntennaSnapshotTvp.sql" />
     <Build Include="Programmability\Procedures\ArchiveAndDeleteExpiredAntennaConnections.sql" />
+    <Build Include="Programmability\Procedures\CrowdCalendar_ExpireOldEntries.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />

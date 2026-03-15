@@ -1,58 +1,94 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    public class CrowdAdvisoryService : ICrowdAdvisoryService
+    public sealed class CrowdAdvisoryService : ICrowdAdvisoryService
     {
-        private readonly ICrowdCalendarRepository _repo;
+        private static readonly TimeSpan DefaultStartLocalTime = new(9, 0, 0);
+        private static readonly TimeSpan DefaultDueStartLocalTime = new(6, 0, 0);
+        private static readonly TimeSpan AdvisoryWindowDuration = TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan RecommendedArrivalOffset = TimeSpan.FromMinutes(45);
+        private static readonly TimeSpan RecommendedDepartureOffset = TimeSpan.FromHours(2);
 
-        public CrowdAdvisoryService(ICrowdCalendarRepository repo) => _repo = repo;
+        private readonly ICrowdCalendarRepository _repository;
 
-        public async Task<IEnumerable<string>> GetAdvisoriesForTodayAsync(string regionCode, int? placeId = null, TimeZoneInfo? tz = null)
+        public CrowdAdvisoryService(ICrowdCalendarRepository repository)
         {
+            _repository = repository;
+        }
+
+        public async Task<IEnumerable<string>> GetAdvisoriesForTodayAsync(
+            string regionCode,
+            int? placeId = null,
+            TimeZoneInfo? timeZone = null)
+        {
+            await _repository.ExpireOldEntriesAsync();
+
             var todayUtc = DateTime.UtcNow.Date;
-            var entries = await _repo.GetByDateAsync(todayUtc, regionCode, placeId);
-
-            tz ??= TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
+            var entries = await _repository.GetByDateAsync(todayUtc, regionCode, placeId);
+            var tz = ResolveTimeZone(timeZone);
 
             return entries
-                .OrderByDescending(e => e.ExpectedLevel)
-                .Select(e => FormatMessage(e, tz));
+                .OrderByDescending(entry => entry.ExpectedLevel)
+                .Select(entry => FormatMessage(entry, tz))
+                .ToArray();
         }
 
-        public async Task<IEnumerable<(CrowdCalendarEntry, string)>> GetDueAdvisoriesAsync(DateTime nowUtc, TimeZoneInfo? tz = null)
+        public async Task<IEnumerable<(CrowdCalendarEntry entry, string message)>> GetDueAdvisoriesAsync(
+            DateTime nowUtc,
+            TimeZoneInfo? timeZone = null)
         {
-            tz ??= TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
-            var entries = await _repo.GetDueAdvisoriesAsync(nowUtc);
+            await _repository.ExpireOldEntriesAsync();
 
+            var tz = ResolveTimeZone(timeZone);
             var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, tz);
+            var entries = await _repository.GetDueAdvisoriesAsync(nowUtc);
+
             return entries
-                .Where(e =>
-                {
-                    var startLocal = e.StartLocalTime ?? new TimeSpan(6, 0, 0); // default 06:00
-                    var lead = TimeSpan.FromHours(Math.Max(0, e.LeadHours));
-                    var warnAt = startLocal - lead;
-
-                    // Prevents values ​​< 00:00
-                    var windowStart = warnAt < TimeSpan.Zero ? TimeSpan.Zero : warnAt;
-                    var windowEnd = windowStart.Add(TimeSpan.FromMinutes(10));
-
-                    var nowTod = nowLocal.TimeOfDay;
-                    return nowTod >= windowStart && nowTod < windowEnd;
-                })
-                .Select(e => (e, FormatMessage(e, tz)));
+                .Where(entry => IsDue(entry, nowLocal))
+                .OrderByDescending(entry => entry.ExpectedLevel)
+                .Select(entry => (entry, FormatMessage(entry, tz)))
+                .ToArray();
         }
 
-        private static string FormatMessage(CrowdCalendarEntry e, TimeZoneInfo tz)
+        private static TimeZoneInfo ResolveTimeZone(TimeZoneInfo? timeZone)
         {
-            var todayLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
-            var startLocal = e.StartLocalTime ?? new TimeSpan(9, 0, 0);
-            var recommendedArrival = DateTime.SpecifyKind(todayLocal.Add(startLocal).AddMinutes(-45), DateTimeKind.Unspecified);
-            var recommendedDeparture = recommendedArrival.AddHours(-2); // simple heuristic
-            var maxPrefix = e.ExpectedLevel switch
+            return timeZone ?? TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
+        }
+
+        private static bool IsDue(CrowdCalendarEntry entry, DateTime nowLocal)
+        {
+            var startLocalTime = entry.StartLocalTime ?? DefaultDueStartLocalTime;
+            var lead = TimeSpan.FromHours(Math.Max(0, entry.LeadHours));
+            var warnAt = startLocalTime - lead;
+
+            var windowStart = warnAt < TimeSpan.Zero
+                ? TimeSpan.Zero
+                : warnAt;
+
+            var windowEnd = windowStart.Add(AdvisoryWindowDuration);
+            var currentTimeOfDay = nowLocal.TimeOfDay;
+
+            return currentTimeOfDay >= windowStart
+                && currentTimeOfDay < windowEnd;
+        }
+
+        private static string FormatMessage(CrowdCalendarEntry entry, TimeZoneInfo timeZone)
+        {
+            var entryUtcDate = DateTime.SpecifyKind(entry.DateUtc.Date, DateTimeKind.Utc);
+            var localDate = TimeZoneInfo.ConvertTimeFromUtc(entryUtcDate, timeZone).Date;
+
+            var startLocalTime = entry.StartLocalTime ?? DefaultStartLocalTime;
+            var recommendedArrival = DateTime.SpecifyKind(
+                localDate.Add(startLocalTime).Subtract(RecommendedArrivalOffset),
+                DateTimeKind.Unspecified);
+
+            var recommendedDeparture = recommendedArrival.Subtract(RecommendedDepartureOffset);
+
+            var prefix = entry.ExpectedLevel switch
             {
                 CrowdLevelEnum.Critical => "🚨 CRITIQUE",
                 CrowdLevelEnum.High => "⚠️ IMPORTANT",
@@ -60,18 +96,18 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 _ => "✅"
             };
 
-            var template = e.MessageTemplate ??
-                "Attention, {Level} crowd expected today{EventSuffix}. Recommended departure time is {RecommendedDeparture}.";
+            var template = entry.MessageTemplate
+                ?? "Attention, {Level} crowd expected today{EventSuffix}. Recommended departure time is {RecommendedDeparture}.";
 
-            var txt = template
-                .Replace("{Level}", e.ExpectedLevel.ToString())
-                .Replace("{EventName}", e.EventName ?? "")
-                .Replace("{EventSuffix}", string.IsNullOrWhiteSpace(e.EventName) ? "" : $" ({e.EventName})")
+            var message = template
+                .Replace("{Level}", entry.ExpectedLevel.ToString())
+                .Replace("{EventName}", entry.EventName ?? string.Empty)
+                .Replace("{EventSuffix}", string.IsNullOrWhiteSpace(entry.EventName) ? string.Empty : $" ({entry.EventName})")
                 .Replace("{RecommendedArrival}", recommendedArrival.ToString("HH:mm"))
                 .Replace("{RecommendedDeparture}", recommendedDeparture.ToString("HH:mm"))
-                .Replace("{Region}", e.RegionCode);
+                .Replace("{Region}", entry.RegionCode);
 
-            return $"{maxPrefix} — {txt}";
+            return $"{prefix} — {message}";
         }
     }
 }

@@ -14,6 +14,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<int> SoftDeleteAsync(int id);           // Active=0
         Task<int> RestoreAsync(int id);              // Active=1
         Task<int> HardDeleteAsync(int id);
+        Task<int> ExpireOldEntriesAsync();
         Task<IEnumerable<CrowdCalendarEntry>> GetDueTodayAsync(DateTime nowUtc, string? regionFilter = null);
     }
 }
