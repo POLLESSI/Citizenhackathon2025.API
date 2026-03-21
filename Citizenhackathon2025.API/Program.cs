@@ -349,6 +349,12 @@ internal class Program
             services.AddAuthorization();
 
         }
+
+        builder.Services.AddHttpClient<IMistralAIService, MistralAIService>(client =>
+        {
+            client.BaseAddress = new Uri("http://127.0.0.1:11434/");
+            client.Timeout = TimeSpan.FromSeconds(120);
+        });
         // Add this policy for the Ollama client (without timeout)
         //builder.Services.AddHttpClient("OllamaClient", c =>
         //{

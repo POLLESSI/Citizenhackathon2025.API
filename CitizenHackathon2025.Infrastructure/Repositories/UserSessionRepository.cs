@@ -11,16 +11,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         private readonly IDbConnection _cn;
         public UserSessionRepository(IDbConnection cn) => _cn = cn;
 
-        public Task UpsertAsync(UserSession s) => _cn.ExecuteAsync(@"
-                                                            MERGE dbo.UserSessions WITH (HOLDLOCK) AS t
-                                                            USING (SELECT @Jti AS Jti) AS src
-                                                            ON (t.Jti = src.Jti)
-                                                            WHEN MATCHED THEN UPDATE SET
-                                                                LastSeenUtc=@LastSeenUtc, ExpiresAtUtc=@ExpiresAtUtc, Source=@Source, Ip=@Ip, UserAgent=@UserAgent
-                                                            WHEN NOT MATCHED THEN INSERT
-                                                                (UserEmail,Jti,RefreshFamilyId,IssuedAtUtc,ExpiresAtUtc,LastSeenUtc,Source,Ip,UserAgent,IsRevoked)
-                                                            VALUES
-                                                                (@UserEmail,@Jti,@RefreshFamilyId,@IssuedAtUtc,@ExpiresAtUtc,@LastSeenUtc,@Source,@Ip,@UserAgent,0);",s);
+        public Task UpsertAsync(UserSession s) => 
+            _cn.ExecuteAsync(@"
+                        MERGE dbo.UserSessions WITH (HOLDLOCK) AS t
+                        USING (SELECT @Jti AS Jti) AS src
+                        ON (t.Jti = src.Jti)
+                        WHEN MATCHED THEN UPDATE SET
+                            LastSeenUtc=@LastSeenUtc, ExpiresAtUtc=@ExpiresAtUtc, Source=@Source, Ip=@Ip, UserAgent=@UserAgent
+                        WHEN NOT MATCHED THEN INSERT
+                            (UserEmail,Jti,RefreshFamilyId,IssuedAtUtc,ExpiresAtUtc,LastSeenUtc,Source,Ip,UserAgent,IsRevoked)
+                        VALUES
+                            (@UserEmail,@Jti,@RefreshFamilyId,@IssuedAtUtc,@ExpiresAtUtc,@LastSeenUtc,@Source,@Ip,@UserAgent,0);",s);
 
         public Task TouchAsync(string jti, DateTime nowUtc) =>
             _cn.ExecuteAsync(@"UPDATE dbo.UserSessions SET LastSeenUtc=@nowUtc WHERE Jti=@jti AND IsRevoked=0;",

@@ -41,7 +41,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             try
             {
-                var endpoint = _config["MistralAI:ApiUrl"] ?? "http://localhost:11434/api/chat";
                 var model = _config["MistralAI:Model"] ?? "mistral";
 
                 var localContext = await _localAiContextService.BuildContextAsync(prompt, latitude, longitude, ct);
@@ -70,10 +69,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     }
                 };
 
-                _logger.LogInformation("Calling Ollama endpoint: {Endpoint} with model: {Model}", endpoint, model);
-                _logger.LogInformation("Grounded prompt sent to Ollama: {Prompt}", groundedPrompt);
+                _logger.LogInformation("Calling Ollama /api/chat with model: {Model}", model);
 
-                var response = await _httpClient.PostAsJsonAsync(endpoint, request, ct);
+                using var response = await _httpClient.PostAsJsonAsync("api/chat", request, ct);
                 var responseContent = await response.Content.ReadAsStringAsync(ct);
 
                 _logger.LogInformation("Ollama status code: {StatusCode}", (int)response.StatusCode);
@@ -83,12 +81,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 var jsonResponse = JsonSerializer.Deserialize<MistralResponse>(
                     responseContent,
-                    new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                return jsonResponse?.Message?.Content ?? "No response from Mistral.";
+                return jsonResponse?.Message?.Content?.Trim() ?? "No response from Mistral.";
             }
             catch (Exception ex)
             {

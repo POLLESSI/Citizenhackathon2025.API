@@ -95,13 +95,19 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("ask-mistral")]
         public async Task<IActionResult> AskMistral([FromBody] GptPromptRequest request)
         {
+            _logger.LogInformation("=== ASK MISTRAL ENTER ===");
+            _logger.LogInformation("Prompt={Prompt}", request?.Prompt);
+            _logger.LogInformation("Lat={Lat}, Lng={Lng}", request?.Latitude, request?.Longitude);
+
             if (!ModelState.IsValid)
+            {
+                _logger.LogWarning("ModelState invalid");
                 return BadRequest(ModelState);
+            }
 
             try
             {
-                _logger.LogInformation("AskMistral received. Prompt='{Prompt}', Lat={Lat}, Lng={Lng}",
-                    request.Prompt, request.Latitude, request.Longitude);
+                _logger.LogInformation("Calling _mistralAIService.GenerateSuggestionAsync...");
 
                 var mistralResponse = await _mistralAIService.GenerateSuggestionAsync(
                     request.Prompt,
@@ -110,7 +116,8 @@ namespace CitizenHackathon2025.API.Controllers
                     HttpContext.RequestAborted
                 );
 
-                _logger.LogInformation("AskMistral response received from Ollama.");
+                _logger.LogInformation("GenerateSuggestionAsync OK");
+                _logger.LogInformation("Response length={Len}", mistralResponse?.Length ?? 0);
 
                 var interaction = new GPTInteraction
                 {
@@ -122,7 +129,9 @@ namespace CitizenHackathon2025.API.Controllers
                     SourceType = "MistralLocal"
                 };
 
+                _logger.LogInformation("Calling UpsertInteractionAsync...");
                 var saved = await _gptRepository.UpsertInteractionAsync(interaction);
+                _logger.LogInformation("UpsertInteractionAsync OK, Id={Id}", saved?.Id);
 
                 var dto = new GptAnswerDTO
                 {
@@ -141,6 +150,8 @@ namespace CitizenHackathon2025.API.Controllers
                         Response = dto.Response,
                         CreatedAt = dto.CreatedAt
                     });
+
+                    _logger.LogInformation("SignalR broadcast OK");
                 }
                 catch (Exception hubEx)
                 {

@@ -8,7 +8,7 @@ namespace CitizenHackathon2025.Infrastructure.Init
     {
         public static async Task RunOnceAsync(IDbConnection conn, string contentRoot, ILogger log)
         {
-            // 2.1 – Table de garde __AppOnce
+            // 2.1 – Guard table __AppOnce
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
@@ -19,13 +19,13 @@ namespace CitizenHackathon2025.Infrastructure.Init
                 cmd.ExecuteNonQuery();
             }
 
-            // 2.2 – Si PostDeploy_GPT pas encore exécuté => exécuter tes scripts .sql
+            // 2.2 – If PostDeploy_GPT hasn't run yet, run your .sql scripts.
             if (!HasRun(conn, "PostDeploy_GPT"))
             {
-                // Exécute d'abord le hotfix des index GPT (pour virer les doublons)
+                // First, run the GPT index hotfix (to remove duplicates)
                 ExecuteSqlBatches(conn, ReadSql(contentRoot, "sql/01_fix_gpt_indexes.sql"));
 
-                // Puis ton gros Post-Deployment idempotent
+                // Then your big idempotent Post-Deployment
                 ExecuteSqlBatches(conn, ReadSql(contentRoot, "sql/99_post_deploy.sql"));
 
                 MarkRan(conn, "PostDeploy_GPT");
@@ -56,7 +56,7 @@ namespace CitizenHackathon2025.Infrastructure.Init
         private static string ReadSql(string root, string relativePath)
             => File.ReadAllText(Path.Combine(root, relativePath));
 
-        // SqlCommand ne comprend pas "GO" => il faut découper en batches
+        // SqlCommand doesn't understand "GO" => it needs to be broken down into batches
         private static void ExecuteSqlBatches(IDbConnection conn, string sql)
         {
             var batches = Regex.Split(sql, @"^\s*GO\s*$(?mi)");

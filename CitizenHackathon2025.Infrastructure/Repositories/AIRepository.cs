@@ -13,9 +13,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         private readonly IDbConnection _connection;
         private readonly ILogger<AIRepository> _logger;
 
-        public AIRepository(IDbConnection connection)
+        public AIRepository(IDbConnection connection, ILogger<AIRepository> logger)
         {
             _connection = connection;
+            _logger = logger;
         }
 
         public async Task SaveInteractionAsync(GPTInteraction interaction)
