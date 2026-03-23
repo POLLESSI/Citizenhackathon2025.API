@@ -1,27 +1,28 @@
-﻿using CitizenHackathon2025.Shared.Security;
+﻿using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Shared.Security;
 
 namespace CitizenHackathon2025.Infrastructure.Services.Monitoring
 {
-    public class CspViolationStore
+    public sealed class CspViolationStore : ICspViolationStore
     {
-        private readonly List<CspReportContent> _reports = new();
+        private readonly List<CspReportContent> _items = new();
         private readonly object _lock = new();
 
         public void Add(CspReportContent report)
         {
+            if (report is null) return;
+
             lock (_lock)
             {
-                if (_reports.Count >= 1000)
-                    _reports.RemoveAt(0); 
-                _reports.Add(report);
+                _items.Add(report);
             }
         }
 
-        public List<CspReportContent> GetAll()
+        public IEnumerable<CspReportContent> GetAll()
         {
             lock (_lock)
             {
-                return _reports.ToList();
+                return _items.ToList();
             }
         }
 
@@ -29,7 +30,7 @@ namespace CitizenHackathon2025.Infrastructure.Services.Monitoring
         {
             lock (_lock)
             {
-                _reports.Clear();
+                _items.Clear();
             }
         }
     }

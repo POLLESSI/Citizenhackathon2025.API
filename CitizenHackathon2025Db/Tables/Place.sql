@@ -8,10 +8,13 @@
 	[Longitude] DECIMAL(9, 6),
 	[Capacity] INT,
 	[Tag] NVARCHAR(16),
+	[ExternalSource] NVARCHAR(32) NULL,
+	[ExternalId] NVARCHAR(128) NULL,
+	[SourceUpdatedAtUtc] DATETIME2(3) NULL,
 	[Active] BIT DEFAULT 1
 
 	CONSTRAINT [PK_Place] PRIMARY KEY ([Id]),
-	CONSTRAINT [UQ_Place_Name] UNIQUE ([Name])
+	--CONSTRAINT [UQ_Place_Name] UNIQUE ([Name])
 )
 
 GO
@@ -30,6 +33,10 @@ GO
 CREATE INDEX IX_Place_Active_Id ON dbo.Place (Active, Id DESC);
 GO
 
+CREATE UNIQUE INDEX UX_Place_ExternalSource_ExternalId
+ON dbo.Place(ExternalSource, ExternalId)
+WHERE ExternalSource IS NOT NULL AND ExternalId IS NOT NULL;
+GO
 
 
 

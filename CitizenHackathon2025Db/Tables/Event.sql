@@ -8,6 +8,9 @@
 	[DateEvent] DATETIME2(0) NOT NULL,
 	[ExpectedCrowd] INT NULL,
 	[IsOutdoor] BIT NULL,
+	[ExternalSource] NVARCHAR(32) NULL,
+	[ExternalId] NVARCHAR(128) NULL,
+	[SourceUpdatedAtUtc] DATETIME2(3) NULL,
 	[Active] BIT DEFAULT 1,
 
 	CONSTRAINT [PK_Event] PRIMARY KEY ([Id]),
@@ -35,7 +38,10 @@ CREATE INDEX IX_Event_Active_DateEvent
 ON dbo.Event (Active, DateEvent DESC);
 GO
 
-
+CREATE UNIQUE INDEX UX_Event_ExternalSource_ExternalId
+ON dbo.Event(ExternalSource, ExternalId)
+WHERE ExternalSource IS NOT NULL AND ExternalId IS NOT NULL;
+GO
 
 
 

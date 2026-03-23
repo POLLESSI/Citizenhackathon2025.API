@@ -76,7 +76,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 RadiusKm = radiusKm
             });
         }
-        public async Task<Event?> GetByIdAsync(int id, CancellationToken ct = default)
+        public async Task<Event> GetByIdAsync(int id, CancellationToken ct = default)
         {
             const string sql = @"
                                 SELECT TOP(1) *

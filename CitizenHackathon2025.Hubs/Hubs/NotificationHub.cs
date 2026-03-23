@@ -1,4 +1,4 @@
-﻿using CitizenHackathon2025.Shared.StaticConfig.Constants;
+﻿using CitizenHackathon2025.Contracts.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -42,37 +42,37 @@ namespace CitizenHackathon2025.Hubs.Hubs
             return Clients.Group(userIdOrEmail).SendAsync(NotificationHubMethods.ToClient.NotifyUser, userIdOrEmail, message);
         }
 
-        /// <summary>Join a group (convention: userId/email, or functional group).</summary>
-        public async Task JoinGroup(string group)
-        {
-            var user = Context.User?.Identity?.Name ?? "";
-            if (!string.Equals(group, user, StringComparison.OrdinalIgnoreCase))
-                throw new HubException("Not allowed.");
-            await Groups.AddToGroupAsync(Context.ConnectionId, group);
-        }
+        ///// <summary>Join a group (convention: userId/email, or functional group).</summary>
+        //public async Task JoinGroup(string group)
+        //{
+        //    var user = Context.User?.Identity?.Name ?? "";
+        //    if (!string.Equals(group, user, StringComparison.OrdinalIgnoreCase))
+        //        throw new HubException("Not allowed.");
+        //    await Groups.AddToGroupAsync(Context.ConnectionId, group);
+        //}
 
-        /// <summary>Leave a group.</summary>
-        public Task LeaveGroup(string group)
-        {
-            if (!string.IsNullOrWhiteSpace(group))
-            {
-                _logger.LogInformation("[NotificationHub] {Conn} left {Group}", Context.ConnectionId, group);
-                return Groups.RemoveFromGroupAsync(Context.ConnectionId, group);
-            }
-            return Task.CompletedTask;
-        }
+        ///// <summary>Leave a group.</summary>
+        //public Task LeaveGroup(string group)
+        //{
+        //    if (!string.IsNullOrWhiteSpace(group))
+        //    {
+        //        _logger.LogInformation("[NotificationHub] {Conn} left {Group}", Context.ConnectionId, group);
+        //        return Groups.RemoveFromGroupAsync(Context.ConnectionId, group);
+        //    }
+        //    return Task.CompletedTask;
+        //}
 
-        public override Task OnConnectedAsync()
-        {
-            _logger.LogInformation("[NotificationHub] Connected: {Conn}", Context.ConnectionId);
-            return base.OnConnectedAsync();
-        }
+        //public override Task OnConnectedAsync()
+        //{
+        //    _logger.LogInformation("[NotificationHub] Connected: {Conn}", Context.ConnectionId);
+        //    return base.OnConnectedAsync();
+        //}
 
-        public override Task OnDisconnectedAsync(System.Exception? exception)
-        {
-            _logger.LogInformation("[NotificationHub] Disconnected: {Conn} ({Err})", Context.ConnectionId, exception?.Message);
-            return base.OnDisconnectedAsync(exception);
-        }
+        //public override Task OnDisconnectedAsync(System.Exception? exception)
+        //{
+        //    _logger.LogInformation("[NotificationHub] Disconnected: {Conn} ({Err})", Context.ConnectionId, exception?.Message);
+        //    return base.OnDisconnectedAsync(exception);
+        //}
     }
 }
 

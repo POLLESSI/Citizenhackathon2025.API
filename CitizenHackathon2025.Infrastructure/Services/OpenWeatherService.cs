@@ -6,7 +6,6 @@ using CitizenHackathon2025.Shared.Options;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Serilog;
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -23,17 +22,30 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private const string CurrentWeatherPath = "/data/2.5/weather";
         private const string ForecastPath = "/data/2.5/forecast";
 
-        public OpenWeatherService(HttpClient http, ILogger<OpenWeatherService> logger, IOptions<OpenWeatherOptions> opt)
-            => (_http, _logger, _opt) = (http, logger, opt.Value);
+        public OpenWeatherService(
+            HttpClient http,
+            ILogger<OpenWeatherService> logger,
+            IOptions<OpenWeatherOptions> opt)
+        {
+            _http = http;
+            _logger = logger;
+            _opt = opt.Value;
+        }
 
         public async Task<(double lat, double lon)?> GetCoordinatesAsync(string city, CancellationToken ct = default)
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(_opt.ApiKey))
+                {
+                    _logger.LogError("OpenWeather ApiKey is missing.");
+                    return null;
+                }
+
                 var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
 
                 var url = QueryHelpers.AddQueryString(
-                    $"{baseUrl}/geo/1.0/direct",
+                    $"{baseUrl}{GeoPath}",
                     new Dictionary<string, string?>
                     {
                         ["q"] = city,
@@ -41,70 +53,215 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         ["appid"] = _opt.ApiKey
                     });
 
-                var response = await _http.GetFromJsonAsync<List<GeoLocationDTO>>(
-                    url,
-                    JsonDefaults.Options,
-                    ct
-                );
+                _logger.LogInformation("OpenWeather geocoding request for {City}", city);
+
+                using var resp = await _http.GetAsync(url, ct);
+                var json = await resp.Content.ReadAsStringAsync(ct);
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Geocoding failed for {City}. Status={Status}. Body={Body}",
+                        city,
+                        (int)resp.StatusCode,
+                        json);
+                    return null;
+                }
+
+                var response = JsonSerializer.Deserialize<List<GeoLocationDTO>>(json, JsonDefaults.Options);
                 var loc = response?.FirstOrDefault();
+
                 return loc is null ? null : (loc.Lat, loc.Lon);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving coordinates for {City}", city);
                 return null;
             }
         }
 
+        //public async Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city, CancellationToken ct = default)
+        //{
+        //    try
+        //    {
+        //        if (string.IsNullOrWhiteSpace(_opt.ApiKey))
+        //        {
+        //            _logger.LogError("OpenWeather ApiKey is missing.");
+        //            return null;
+        //        }
+
+        //        var url = $"{CurrentWeatherPath}?q={Uri.EscapeDataString(city)}&appid={_opt.ApiKey}&units=metric&lang=fr";
+        //        _logger.LogInformation(
+        //            "OpenWeather current request for city {City} using {Url}",
+        //            city,
+        //            url.Replace(_opt.ApiKey, "***"));
+
+        //        using var resp = await _http.GetAsync(url, ct);
+        //        var json = await resp.Content.ReadAsStringAsync(ct);
+
+        //        if (!resp.IsSuccessStatusCode)
+        //        {
+        //            _logger.LogWarning(
+        //                "Current weather call failed for {City}. Status={Status}. Body={Body}",
+        //                city,
+        //                (int)resp.StatusCode,
+        //                json);
+        //            return null;
+        //        }
+
+        //        using var doc = JsonDocument.Parse(json);
+        //        var dto = ParseWeatherDto(doc.RootElement);
+
+        //        _logger.LogInformation(
+        //            "Parsed current weather successfully for {City}: Temp={Temp}, Summary={Summary}",
+        //            city,
+        //            dto.TemperatureC,
+        //            dto.Summary);
+
+        //        return dto;
+        //    }
+        //    catch (JsonException ex)
+        //    {
+        //        _logger.LogError(ex, "JSON parsing error in GetCurrentWeatherAsync for city {City}", city);
+        //        return null;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Exception in GetCurrentWeatherAsync for city {City}", city);
+        //        return null;
+        //    }
+        //}
+
         public async Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city, CancellationToken ct = default)
         {
-            try
-            {
-                var url = $"{CurrentWeatherPath}?q={Uri.EscapeDataString(city)}&appid={_opt.ApiKey}&units=metric&lang=fr";
-                using var resp = await _http.GetAsync(url, ct);
-                if (!resp.IsSuccessStatusCode)
+            if (string.IsNullOrWhiteSpace(_opt.ApiKey))
+                throw new InvalidOperationException("OpenWeather ApiKey is missing.");
+
+            var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
+
+            var url = QueryHelpers.AddQueryString(
+                $"{baseUrl}{CurrentWeatherPath}",
+                new Dictionary<string, string?>
                 {
-                    _logger.LogWarning("Current weather call failed for {City} : {Status}", city, resp.StatusCode);
-                    return null;
-                }
-                var json = await resp.Content.ReadAsStringAsync(ct);
-                return ParseWeatherDto(JsonDocument.Parse(json).RootElement);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in GetCurrentWeatherAsync");
-                return null;
-            }
+                    ["q"] = city,
+                    ["appid"] = _opt.ApiKey,
+                    ["units"] = "metric",
+                    ["lang"] = "fr"
+                });
+
+            _logger.LogInformation(
+                "OpenWeather current request for city {City} using {Url}",
+                city,
+                url.Replace(_opt.ApiKey, "***"));
+
+            using var resp = await _http.GetAsync(url, ct);
+            var json = await resp.Content.ReadAsStringAsync(ct);
+
+            _logger.LogInformation(
+                "OpenWeather raw response for {City}. Status={Status}. Body={Body}",
+                city,
+                (int)resp.StatusCode,
+                json);
+
+            resp.EnsureSuccessStatusCode();
+
+            using var doc = JsonDocument.Parse(json);
+
+            var dto = ParseWeatherDto(doc.RootElement);
+
+            _logger.LogInformation(
+                "Parsed current weather successfully for {City}: Temp={Temp}, Summary={Summary}",
+                city,
+                dto.TemperatureC,
+                dto.Summary);
+
+            return dto;
         }
 
         public async Task<WeatherForecastDTO?> GetForecastAsync(string city, CancellationToken ct = default)
         {
             try
             {
-                var url = $"{ForecastPath}?q={Uri.EscapeDataString(city)}&appid={_opt.ApiKey}&units=metric&lang=fr";
-                using var resp = await _http.GetAsync(url, ct);
-                if (!resp.IsSuccessStatusCode)
+                if (string.IsNullOrWhiteSpace(_opt.ApiKey))
                 {
-                    _logger.LogWarning("Forecast call failed for {City} : {Status}", city, resp.StatusCode);
+                    _logger.LogError("OpenWeather ApiKey is missing.");
                     return null;
                 }
+
+                var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
+
+                var url = QueryHelpers.AddQueryString(
+                    $"{baseUrl}{ForecastPath}",
+                    new Dictionary<string, string?>
+                    {
+                        ["q"] = city,
+                        ["appid"] = _opt.ApiKey,
+                        ["units"] = "metric",
+                        ["lang"] = "fr"
+                    });
+
+                _logger.LogInformation(
+                    "OpenWeather forecast request for city {City} using {Url}",
+                    city,
+                    url.Replace(_opt.ApiKey, "***"));
+
+                using var resp = await _http.GetAsync(url, ct);
                 var json = await resp.Content.ReadAsStringAsync(ct);
-                var first = JsonDocument.Parse(json).RootElement.GetProperty("list")[0];
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Forecast call failed for {City}. Status={Status}. Body={Body}",
+                        city,
+                        (int)resp.StatusCode,
+                        json);
+                    return null;
+                }
+
+                using var doc = JsonDocument.Parse(json);
+
+                if (!doc.RootElement.TryGetProperty("list", out var list) || list.GetArrayLength() == 0)
+                {
+                    _logger.LogWarning(
+                        "Forecast response for {City} does not contain any items. Body={Body}",
+                        city,
+                        json);
+                    return null;
+                }
+
+                var first = list[0];
                 return ParseWeatherDto(first, DateTime.UtcNow.AddHours(3));
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "JSON parsing error in GetForecastAsync for city {City}", city);
+                return null;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in GetForecastAsync");
+                _logger.LogError(ex, "Exception in GetForecastAsync for city {City}", city);
                 return null;
             }
         }
 
         public async Task<WeatherForecastDTO> GetForecastAsync(decimal latitude, decimal longitude, CancellationToken ct = default)
         {
-            var lat = latitude.ToString(CultureInfo.InvariantCulture);
-            var lon = longitude.ToString(CultureInfo.InvariantCulture);
-            var url = $"{CurrentWeatherPath}?lat={lat}&lon={lon}&units=metric&appid={_opt.ApiKey}";
-            _logger.LogDebug("OpenWeather call: {Url}", url);
+            if (string.IsNullOrWhiteSpace(_opt.ApiKey))
+                throw new InvalidOperationException("OpenWeather ApiKey is missing.");
+
+            var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
+
+            var url = QueryHelpers.AddQueryString(
+                $"{baseUrl}{CurrentWeatherPath}",
+                new Dictionary<string, string?>
+                {
+                    ["lat"] = latitude.ToString(CultureInfo.InvariantCulture),
+                    ["lon"] = longitude.ToString(CultureInfo.InvariantCulture),
+                    ["units"] = "metric",
+                    ["appid"] = _opt.ApiKey
+                });
+
+            _logger.LogDebug("OpenWeather call: {Url}", url.Replace(_opt.ApiKey, "***"));
 
             var ow = await _http.GetFromJsonAsync<OpenWeatherResponse>(url, JsonDefaults.Options, ct)
                      ?? throw new InvalidOperationException("Empty OpenWeather response");
@@ -124,15 +281,41 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             try
             {
-                var url = $"{CurrentWeatherPath}?lat={lat.ToString(CultureInfo.InvariantCulture)}&lon={lon.ToString(CultureInfo.InvariantCulture)}&appid={_opt.ApiKey}&units=metric&lang=fr";
-                using var resp = await _http.GetAsync(url, ct);
-                if (!resp.IsSuccessStatusCode)
+                if (string.IsNullOrWhiteSpace(_opt.ApiKey))
                 {
-                    _logger.LogWarning("Weather call for coordinates failed {Lat}, {Lon}", lat, lon);
+                    _logger.LogError("OpenWeather ApiKey is missing.");
                     return null;
                 }
+
+                var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
+
+                var url = QueryHelpers.AddQueryString(
+                    $"{baseUrl}{CurrentWeatherPath}",
+                    new Dictionary<string, string?>
+                    {
+                        ["lat"] = lat.ToString(CultureInfo.InvariantCulture),
+                        ["lon"] = lon.ToString(CultureInfo.InvariantCulture),
+                        ["appid"] = _opt.ApiKey,
+                        ["units"] = "metric",
+                        ["lang"] = "fr"
+                    });
+
+                using var resp = await _http.GetAsync(url, ct);
                 var json = await resp.Content.ReadAsStringAsync(ct);
-                return ParseWeatherDto(JsonDocument.Parse(json).RootElement);
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Weather call for coordinates failed {Lat}, {Lon}. Status={Status}. Body={Body}",
+                        lat,
+                        lon,
+                        (int)resp.StatusCode,
+                        json);
+                    return null;
+                }
+
+                using var doc = JsonDocument.Parse(json);
+                return ParseWeatherDto(doc.RootElement);
             }
             catch (Exception ex)
             {
@@ -144,11 +327,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public async Task<string> GetWeatherSummaryAsync(string location, CancellationToken ct = default)
         {
             var weather = await GetCurrentWeatherAsync(location, ct);
-            if (weather is null) return $"Unable to retrieve weather for {location}.";
+            if (weather is null)
+                return $"Unable to retrieve weather for {location}.";
+
             return $"Il fait {weather.TemperatureC}°C avec {weather.Summary}, vent {weather.WindSpeedKmh:F1} km/h et humidité {weather.Humidity}%.";
         }
 
-        // ---------- "CT-free" wrappers if your interface still requires them ----------
         Task<WeatherForecastDTO?> IOpenWeatherService.GetCurrentWeatherAsync(string city)
             => GetCurrentWeatherAsync(city, default);
 
@@ -160,33 +344,80 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         Task<string> IOpenWeatherService.GetWeatherSummaryAsync(string location)
             => GetWeatherSummaryAsync(location, default);
-        // ------------------------------------------------------------------------
 
         private static WeatherForecastDTO ParseWeatherDto(JsonElement root, DateTime? dateOverride = null)
         {
             var date = dateOverride ?? DateTime.UtcNow;
-            var main = root.GetProperty("main");
-            var wind = root.GetProperty("wind");
-            var weatherArray = root.GetProperty("weather");
-            var description = weatherArray[0].GetProperty("description").GetString() ?? "N/A";
 
-            double rainfall = 0;
-            if (root.TryGetProperty("rain", out var rain) && rain.TryGetProperty("1h", out var rain1h))
+            if (!root.TryGetProperty("main", out var main))
+                throw new InvalidOperationException("OpenWeather response missing 'main' property.");
+
+            if (!root.TryGetProperty("wind", out var wind))
+                throw new InvalidOperationException("OpenWeather response missing 'wind' property.");
+
+            if (!root.TryGetProperty("weather", out var weatherArray) ||
+                weatherArray.ValueKind != JsonValueKind.Array ||
+                weatherArray.GetArrayLength() == 0)
+            {
+                throw new InvalidOperationException("OpenWeather response missing 'weather[0]' property.");
+            }
+
+            var weather0 = weatherArray[0];
+
+            var weatherMain = weather0.TryGetProperty("main", out var mainEl)
+                ? mainEl.GetString() ?? string.Empty
+                : string.Empty;
+
+            var description = weather0.TryGetProperty("description", out var descEl)
+                ? descEl.GetString()
+                : null;
+
+            var icon = weather0.TryGetProperty("icon", out var iconEl)
+                ? iconEl.GetString()
+                : null;
+
+            var temp = main.TryGetProperty("temp", out var tempEl)
+                ? tempEl.GetDouble()
+                : throw new InvalidOperationException("OpenWeather response missing 'main.temp'.");
+
+            var humidity = main.TryGetProperty("humidity", out var humEl)
+                ? humEl.GetInt32()
+                : 0;
+
+            var windSpeed = wind.TryGetProperty("speed", out var speedEl)
+                ? speedEl.GetDouble()
+                : 0d;
+
+            double rainfall = 0d;
+            if (root.TryGetProperty("rain", out var rain) &&
+                rain.TryGetProperty("1h", out var rain1h))
+            {
                 rain1h.TryGetDouble(out rainfall);
+            }
 
             return new WeatherForecastDTO
             {
                 DateWeather = date,
-                TemperatureC = (int)main.GetProperty("temp").GetDouble(),
-                Summary = description,
-                Humidity = main.GetProperty("humidity").GetInt32(),
+                TemperatureC = (int)Math.Round(temp),
+                Humidity = humidity,
+                WindSpeedKmh = windSpeed * 3.6,
                 RainfallMm = rainfall,
-                WindSpeedKmh = wind.GetProperty("speed").GetDouble() * 3.6
+
+                Summary = description ?? "N/A",
+                WeatherMain = weatherMain,
+                Description = description,
+                Icon = icon,
+                IconUrl = string.IsNullOrWhiteSpace(icon)
+                    ? string.Empty
+                    : $"https://openweathermap.org/img/wn/{icon}@2x.png"
             };
         }
 
-        // DTO for /geo/1.0/direct
-        public class GeoLocationDTO { public double Lat { get; set; } public double Lon { get; set; } }
+        public class GeoLocationDTO
+        {
+            public double Lat { get; set; }
+            public double Lon { get; set; }
+        }
     }
 }
 

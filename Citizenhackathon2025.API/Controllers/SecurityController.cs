@@ -1,4 +1,4 @@
-﻿using CitizenHackathon2025.Infrastructure.Services.Monitoring;
+﻿using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Shared.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -11,19 +11,17 @@ namespace CitizenHackathon2025.API.Controllers
     public class SecurityController : ControllerBase
     {
         private readonly ILogger<SecurityController> _logger;
-        private readonly CspViolationStore _store;
+        private readonly ICspViolationStore _store;
 
-        public SecurityController(ILogger<SecurityController> logger, CspViolationStore store)
+        public SecurityController(ILogger<SecurityController> logger, ICspViolationStore store)
         {
             _logger = logger;
             _store = store;
         }
 
-        // GET /csp-report/health  ✅ no body on a GET
         [HttpGet("health")]
         public IActionResult Health() => Ok(new { status = "ok" });
 
-        // POST /csp-report        ✅ the spec expects a POST with body
         [HttpPost]
         public IActionResult ReceiveCspViolation([FromBody] CspReportModel model)
         {
@@ -35,6 +33,7 @@ namespace CitizenHackathon2025.API.Controllers
 
                 _store.Add(model.Report);
             }
+
             return Ok();
         }
 
@@ -42,7 +41,11 @@ namespace CitizenHackathon2025.API.Controllers
         public IActionResult GetAllReports() => Ok(_store.GetAll());
 
         [HttpDelete("clear")]
-        public IActionResult ClearAll() { _store.Clear(); return NoContent(); }
+        public IActionResult ClearAll()
+        {
+            _store.Clear();
+            return NoContent();
+        }
     }
 }
 

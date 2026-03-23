@@ -11,6 +11,9 @@
         public DateTime DateEvent { get; set; }
         public int? ExpectedCrowd { get; set; }
         public bool IsOutdoor { get; set; }
+        public string ExternalSource { get; set; }
+        public string ExternalId { get; set; }
+        public DateTime? SourceUpdatedAtUtc { get; set; }
         public bool Active { get; set; }
     }
 }

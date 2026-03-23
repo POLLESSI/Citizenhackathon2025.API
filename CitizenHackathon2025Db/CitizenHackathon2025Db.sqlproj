@@ -108,6 +108,10 @@
     <Build Include="Types\CrowdInfoAntennaSnapshotTvp.sql" />
     <Build Include="Programmability\Procedures\ArchiveAndDeleteExpiredAntennaConnections.sql" />
     <Build Include="Programmability\Procedures\CrowdCalendar_ExpireOldEntries.sql" />
+    <Build Include="Tables\WepPlaceStaging.sql" />
+    <Build Include="Tables\WepEventStaging.sql" />
+    <Build Include="Programmability\Procedures\sp_Place_UpsertExternal.sql" />
+    <Build Include="Programmability\Procedures\sp_Event_UpsertExternal.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
