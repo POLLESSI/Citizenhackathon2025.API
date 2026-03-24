@@ -10,20 +10,20 @@ namespace CitizenHackathon2025.API.Controllers
     [ApiController]
     public class TourismController : ControllerBase
     {
-    #nullable disable
-        private readonly IAIService _aiService;
+        private readonly IGenerativeAiService _ai;
 
-        public TourismController(IAIService aiService)
+        public TourismController(IGenerativeAiService ai)
         {
-            _aiService = aiService;
+            _ai = ai;
         }
+
         [HttpPost("suggest")]
-        public async Task<IActionResult> GetSuggestions([FromBody] TouristicPromptDTO dto)
+        public async Task<IActionResult> GetSuggestions([FromBody] TouristicPromptDTO dto, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(dto.Prompt))
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Prompt))
                 return BadRequest("The prompt cannot be empty.");
 
-            var response = await _aiService.GetTouristicSuggestionsAsync(dto.Prompt);
+            var response = await _ai.GenerateTextAsync(dto.Prompt, ct);
 
             return Ok(new { suggestions = response });
         }

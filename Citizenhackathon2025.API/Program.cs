@@ -533,6 +533,19 @@ internal class Program
     {
         services.AddSingleton<ResiliencePipelines>(sp => ResiliencePipelinesFactory.Create(sp));
 
+        services.AddHttpClient<IGenerativeAiService, OllamaGenerativeAiService>((sp, client) =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var apiUrl = cfg["MistralAI:ApiUrl"] ?? "http://localhost:11434/";
+
+            client.BaseAddress = new Uri(apiUrl.EndsWith("/api/chat", StringComparison.OrdinalIgnoreCase)
+                ? apiUrl.Replace("/api/chat", "/")
+                : apiUrl.TrimEnd('/') + "/");
+
+            client.Timeout = TimeSpan.FromSeconds(300);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+        });
+
         services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
         {
             client.BaseAddress = new Uri("http://127.0.0.1:11434/");

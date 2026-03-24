@@ -5,44 +5,48 @@
     @TemperatureC    INT,
     @Summary         NVARCHAR(256),
     @RainfallMm      FLOAT = NULL,
-    @Humidity        INT   = NULL,
+    @Humidity        INT = NULL,
     @WindSpeedKmh    FLOAT = NULL,
-    @WeatherMain    NVARCHAR(64)  = NULL,
-    @Description    NVARCHAR(256) = NULL,
-    @Icon           NVARCHAR(16)  = NULL,
-    @IconUrl        NVARCHAR(256) = NULL,
-    @WeatherType    INT           = 0,
-    @IsSevere       BIT           = 0
+    @WeatherMain     NVARCHAR(64) = NULL,
+    @Description     NVARCHAR(256) = NULL,
+    @Icon            NVARCHAR(16) = NULL,
+    @IconUrl         NVARCHAR(256) = NULL,
+    @WeatherType     INT = 0,
+    @IsSevere        BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DECLARE @ExistingId INT;
 
-    -- We are looking for an active line for the same date and the same coordinates
     SELECT TOP (1) @ExistingId = Id
     FROM dbo.WeatherForecast
     WHERE Active = 1
       AND DateWeather = @DateWeather
-      AND ISNULL(Latitude, 0)  = ISNULL(@Latitude, 0)
+      AND ISNULL(Latitude, 0) = ISNULL(@Latitude, 0)
       AND ISNULL(Longitude, 0) = ISNULL(@Longitude, 0);
 
     IF @ExistingId IS NOT NULL
     BEGIN
-        -- UPDATE + OUTPUT so that Dapper can retrieve the updated line
         UPDATE WF
         SET TemperatureC = @TemperatureC,
-            Summary      = @Summary,
-            RainfallMm   = @RainfallMm,
-            Humidity     = @Humidity,
-            WindSpeedKmh = @WindSpeedKmh
+            Summary = @Summary,
+            RainfallMm = @RainfallMm,
+            Humidity = @Humidity,
+            WindSpeedKmh = @WindSpeedKmh,
+            WeatherMain = @WeatherMain,
+            Description = @Description,
+            Icon = @Icon,
+            IconUrl = @IconUrl,
+            WeatherType = @WeatherType,
+            IsSevere = @IsSevere,
+            Active = 1
         OUTPUT INSERTED.*
         FROM dbo.WeatherForecast WF
         WHERE WF.Id = @ExistingId;
     END
     ELSE
     BEGIN
-        -- INSERT + OUTPUT so that Dapper can retrieve the new line
         INSERT INTO dbo.WeatherForecast
         (
             DateWeather,
@@ -53,6 +57,12 @@ BEGIN
             RainfallMm,
             Humidity,
             WindSpeedKmh,
+            WeatherMain,
+            Description,
+            Icon,
+            IconUrl,
+            WeatherType,
+            IsSevere,
             Active
         )
         OUTPUT INSERTED.*
@@ -66,22 +76,14 @@ BEGIN
             @RainfallMm,
             @Humidity,
             @WindSpeedKmh,
+            @WeatherMain,
+            @Description,
+            @Icon,
+            @IconUrl,
+            @WeatherType,
+            @IsSevere,
             1
         );
-        SELECT
-            Id,
-            DateWeather AS DateWeatherUtc,
-            Latitude,
-            Longitude,
-            TemperatureC,
-            Summary,
-            RainfallMm,
-            Humidity,
-            WindSpeedKmh,
-            Active
-        FROM dbo.WeatherForecast
-        WHERE Id = @ExistingId;
-
     END
 END
 GO

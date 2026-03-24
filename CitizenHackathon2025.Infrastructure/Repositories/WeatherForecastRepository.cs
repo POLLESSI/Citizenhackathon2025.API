@@ -117,25 +117,18 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         }
         public async Task<WeatherForecast> SaveOrUpdateAsync(WeatherForecast entity, CancellationToken ct = default)
         {
-            const string sql = @"
-                            EXEC dbo.sp_WeatherForecast_Upsert
-                                @DateWeather,
-                                @Latitude,
-                                @Longitude,
-                                @TemperatureC,
-                                @Summary,
-                                @RainfallMm,
-                                @Humidity,
-                                @WindSpeedKmh,
-                                @WeatherMain,
-                                @Description,
-                                @Icon,
-                                @IconUrl,
-                                @WeatherType,
-                                @IsSevere;";
+            const string sql = "dbo.sp_WeatherForecast_Upsert";
 
-            DynamicParameters parameters = new DynamicParameters();
-            parameters.Add("@DateWeather", entity.DateWeatherUtc);
+            var dateUtc = entity.DateWeatherUtc.Kind == DateTimeKind.Utc
+                ? entity.DateWeatherUtc
+                : DateTime.SpecifyKind(entity.DateWeatherUtc, DateTimeKind.Utc);
+
+            dateUtc = new DateTime(
+                dateUtc.Ticks - (dateUtc.Ticks % TimeSpan.TicksPerSecond),
+                DateTimeKind.Utc);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@DateWeather", dateUtc);
             parameters.Add("@Latitude", entity.Latitude);
             parameters.Add("@Longitude", entity.Longitude);
             parameters.Add("@TemperatureC", entity.TemperatureC);
@@ -150,18 +143,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@WeatherType", (int)entity.WeatherType);
             parameters.Add("@IsSevere", entity.IsSevere);
 
-
-            var dateUtc = entity.DateWeatherUtc.Kind == DateTimeKind.Utc
-                ? entity.DateWeatherUtc
-                : DateTime.SpecifyKind(entity.DateWeatherUtc, DateTimeKind.Utc);
-
-            dateUtc = new DateTime(dateUtc.Ticks - (dateUtc.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Utc);
-
-            // ✅ Here: we read the SQL return "as a database".
             var row = await _connection.QuerySingleAsync<WeatherForecastReadRow>(
-                new CommandDefinition(sql, parameters, cancellationToken: ct));
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: ct));
 
-            // ✅ Here: we rebuild your Domain Entity "as a Domain"
             return new WeatherForecast
             {
                 Id = row.Id,
@@ -179,14 +167,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 IconUrl = row.IconUrl,
                 WeatherType = (Contracts.Enums.WeatherType)row.WeatherType,
                 IsSevere = row.IsSevere
-                // The OpenWeather fields (Icon/WeatherMain/WeatherType…) cannot be filled in.
-                // as long as your table/SP doesn't handle them.
             };
         }
-
-
-
-
         public async Task<WeatherForecast> GenerateNewForecastAsync(CancellationToken ct = default)
         {
             decimal lat = 50.2m + (decimal)_rng.NextDouble() * 0.7m;
@@ -199,6 +181,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 Longitude = lon,
                 TemperatureC = _rng.Next(-10, 35),
                 Summary = "Generated",
+                WeatherMain = "Clouds",
+                Description = "generated forecast",
+                Icon = "04d",
+                IconUrl = "https://openweathermap.org/img/wn/04d@2x.png",
+                WeatherType = Contracts.Enums.WeatherType.Cloudy,
+                IsSevere = false,
                 RainfallMm = Math.Round(_rng.NextDouble() * 20, 1),
                 Humidity = _rng.Next(30, 100),
                 WindSpeedKmh = Math.Round(_rng.NextDouble() * 80, 1)

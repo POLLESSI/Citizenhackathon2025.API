@@ -1,9 +1,10 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Models;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenWeather;
 
 namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
-{ 
+{
     public static class OpenWeatherMappers
     {
         public static WeatherAlertEntity MapAlert(OneCallAlert a, decimal lat, decimal lon, DateTime nowUtc)
@@ -11,7 +12,6 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
             var start = DateTimeOffset.FromUnixTimeSeconds(a.Start).UtcDateTime;
             var end = DateTimeOffset.FromUnixTimeSeconds(a.End).UtcDateTime;
 
-            // ExternalId stable: sender|event|start|end (sufficient, OneCall does not have a standard unique ID)
             var externalId = $"{a.SenderName}|{a.Event}|{a.Start}|{a.End}";
 
             return new WeatherAlertEntity
@@ -22,8 +22,6 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
                 Longitude = lon,
                 SenderName = a.SenderName,
                 EventName = a.Event,
-                StartUtc = start,
-                EndUtc = end,
                 Description = a.Description,
                 Tags = a.Tags is { Count: > 0 } ? string.Join(",", a.Tags) : null,
                 Severity = GuessSeverity(a),
@@ -35,12 +33,12 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
         public static WeatherForecast MapCurrentToForecast(OneCallResponse one, decimal lat, decimal lon)
         {
             var cur = one.Current;
-            if (cur is null) throw new InvalidOperationException("OneCall current is null");
+            if (cur is null)
+                throw new InvalidOperationException("OneCall current is null");
 
             var dt = DateTimeOffset.FromUnixTimeSeconds(cur.Dt).UtcDateTime;
             var weather = cur.Weather?.FirstOrDefault();
 
-            // wind_speed is m/s -> km/h
             var windKmh = cur.WindSpeed * 3.6;
             var rain1h = cur.Rain is not null && cur.Rain.TryGetValue("1h", out var v) ? v : 0.0;
 
@@ -53,19 +51,30 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
                 Humidity = cur.Humidity,
                 WindSpeedKmh = Math.Round(windKmh, 1),
                 RainfallMm = rain1h,
-                Summary = weather?.Description ?? weather?.Main ?? "current"
+                Summary = weather?.Description ?? weather?.Main ?? "current",
+                WeatherMain = weather?.Main ?? "",
+                Description = weather?.Description,
+                Icon = weather?.Icon,
+                IconUrl = !string.IsNullOrWhiteSpace(weather?.Icon)
+                    ? $"https://openweathermap.org/img/wn/{weather.Icon}@2x.png"
+                    : "",
+                WeatherType = MapWeatherType(weather?.Main, weather?.Description),
+                IsSevere = GuessWeatherSeverity(weather?.Main, weather?.Description)
             };
         }
 
         public static WeatherForecast MapCurrent25ToForecast(OpenWeatherResponse cur)
         {
-            // dt = unix seconds
-            var dt = DateTimeOffset.FromUnixTimeSeconds(cur.dt).UtcDateTime;
+            if (cur is null)
+                throw new ArgumentNullException(nameof(cur));
 
-            // wind.speed is m/s -> km/h
+            var dt = DateTimeOffset.FromUnixTimeSeconds(cur.dt).UtcDateTime;
             var windKmh = (cur.wind?.speed ?? 0) * 3.6;
 
-            var desc = cur.weather?.FirstOrDefault()?.description ?? "current";
+            var weather = cur.weather?.FirstOrDefault();
+            var main = weather?.main;
+            var desc = weather?.description ?? "current";
+            var icon = weather?.icon ?? "";
 
             return new WeatherForecast
             {
@@ -75,18 +84,75 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
                 TemperatureC = (int)Math.Round(cur.main?.temp ?? 0),
                 Humidity = cur.main?.humidity ?? 0,
                 WindSpeedKmh = Math.Round(windKmh, 1),
-                RainfallMm = 0.0,            // /data/2.5/weather does not always return rain(1h) depending on the payload
-                Summary = desc
+                RainfallMm = 0.0,
+                Summary = desc,
+                WeatherMain = main ?? "",
+                Description = desc,
+                Icon = icon,
+                IconUrl = !string.IsNullOrWhiteSpace(icon)
+                    ? $"https://openweathermap.org/img/wn/{icon}@2x.png"
+                    : "",
+                WeatherType = MapWeatherType(main, desc),
+                IsSevere = GuessWeatherSeverity(main, desc)
             };
+        }
+
+        private static WeatherType MapWeatherType(string? weatherMain, string? description)
+        {
+            var main = weatherMain?.ToLowerInvariant() ?? "";
+            var desc = description?.ToLowerInvariant() ?? "";
+
+            return main switch
+            {
+                "clear" => WeatherType.Clear,
+
+                "clouds" => desc switch
+                {
+                    var d when d.Contains("few") => WeatherType.PartlyCloudy,
+                    var d when d.Contains("scattered") => WeatherType.PartlyCloudy,
+                    var d when d.Contains("broken") => WeatherType.Cloudy,
+                    var d when d.Contains("overcast") => WeatherType.Overcast,
+                    _ => WeatherType.Cloudy
+                },
+
+                "rain" => WeatherType.Rain,
+                "drizzle" => WeatherType.Drizzle,
+                "thunderstorm" => WeatherType.Thunderstorm,
+                "snow" => WeatherType.Snow,
+                "mist" => WeatherType.Mist,
+                "fog" => WeatherType.Fog,
+                "smoke" => WeatherType.Smoke,
+                "ash" => WeatherType.VolcanicAsh,
+
+                _ => WeatherType.Unknown
+            };
+        }
+
+        private static bool GuessWeatherSeverity(string? weatherMain, string? description)
+        {
+            var main = weatherMain?.ToLowerInvariant() ?? "";
+            var desc = description?.ToLowerInvariant() ?? "";
+
+            if (main is "thunderstorm")
+                return true;
+
+            if (desc.Contains("violent") || desc.Contains("heavy") || desc.Contains("extreme"))
+                return true;
+
+            return false;
         }
 
         private static byte? GuessSeverity(OneCallAlert a)
         {
-            // Minimal heuristic; you can refine it (tags, keywords, duration, etc.)
             var ev = (a.Event ?? "").ToLowerInvariant();
-            if (ev.Contains("red") || ev.Contains("danger")) return 4;
-            if (ev.Contains("orange") || ev.Contains("warning")) return 3;
-            return 2; // default moderate
+
+            if (ev.Contains("red") || ev.Contains("danger"))
+                return 4;
+
+            if (ev.Contains("orange") || ev.Contains("warning"))
+                return 3;
+
+            return 2;
         }
     }
 }

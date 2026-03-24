@@ -9,10 +9,30 @@
         public long dt { get; set; }
     }
 
-    public sealed class Coord { public decimal lon { get; set; } public decimal lat { get; set; } }
-    public sealed class Main { public double temp { get; set; } public int humidity { get; set; } }
-    public sealed class Wind { public double speed { get; set; } }
-    public sealed class Weather { public string description { get; set; } = ""; }
+    public sealed class Coord
+    {
+        public decimal lon { get; set; }
+        public decimal lat { get; set; }
+    }
+
+    public sealed class Main
+    {
+        public double temp { get; set; }
+        public int humidity { get; set; }
+    }
+
+    public sealed class Wind
+    {
+        public double speed { get; set; }
+    }
+
+    public sealed class Weather
+    {
+        public int id { get; set; }
+        public string main { get; set; } = "";
+        public string description { get; set; } = "";
+        public string icon { get; set; } = "";
+    }
 }
 
 

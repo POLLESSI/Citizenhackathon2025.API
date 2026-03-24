@@ -1,9 +1,11 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -70,6 +72,34 @@ namespace CitizenHackathon2025.API.Controllers
             var dto = await _app.GetByIdAsync(id, ct);
             return dto is null ? NotFound() : Ok(dto);
         }
+
+        //[Authorize(Policy = "Admin")]
+        //[HttpGet("db-info")]
+        //public IActionResult GetDbInfo([FromServices] IDbConnection cn)
+        //{
+        //    return Ok(new
+        //    {
+        //        Database = cn.Database,
+        //        DataSource = cn.ConnectionString
+        //    });
+        //}
+
+        //[HttpGet("debug-proc-weather")]
+        //public async Task<IActionResult> DebugProcWeather([FromServices] IDbConnection cn)
+        //{
+        //    const string sql = @"
+        //                    SELECT 
+        //                        DB_NAME() AS DbName,
+        //                        p.parameter_id,
+        //                        p.name,
+        //                        TYPE_NAME(p.user_type_id) AS TypeName
+        //                    FROM sys.parameters p
+        //                    WHERE p.object_id = OBJECT_ID('dbo.sp_WeatherForecast_Upsert')
+        //                    ORDER BY p.parameter_id;";
+
+        //    var rows = await cn.QueryAsync(sql);
+        //    return Ok(rows);
+        //}
 
         [HttpPost("archive-expired")]
         [Authorize(Policy = "Admin")]
