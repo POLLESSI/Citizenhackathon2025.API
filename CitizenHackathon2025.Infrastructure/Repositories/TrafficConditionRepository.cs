@@ -145,30 +145,40 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             if (tc.Fingerprint is null || tc.Fingerprint.Length != 32)
                 throw new ArgumentException("Fingerprint must be 32 bytes.", nameof(tc));
 
-            const string sql = @"EXEC dbo.sp_TrafficCondition_Upsert
-                            @Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType,
-                            @Provider, @ExternalId, @Fingerprint, @LastSeenAt;";
+            const string sql = "dbo.sp_TrafficCondition_Upsert";
 
             var p = new DynamicParameters();
             p.Add("@Latitude", tc.Latitude);
             p.Add("@Longitude", tc.Longitude);
-            p.Add("@DateCondition", tc.DateCondition);
+            p.Add("@DateCondition", tc.DateCondition.Kind == DateTimeKind.Utc
+                ? tc.DateCondition
+                : tc.DateCondition.ToUniversalTime());
             p.Add("@CongestionLevel", tc.CongestionLevel);
             p.Add("@IncidentType", tc.IncidentType);
-
             p.Add("@Provider", tc.Provider);
             p.Add("@ExternalId", tc.ExternalId);
             p.Add("@Fingerprint", tc.Fingerprint, DbType.Binary, size: 32);
-            p.Add("@LastSeenAt", tc.LastSeenAt);
+            p.Add("@LastSeenAt", tc.LastSeenAt.Kind == DateTimeKind.Utc ? tc.LastSeenAt : tc.LastSeenAt.ToUniversalTime());
+            p.Add("@Title", tc.Title);
+            p.Add("@Road", tc.Road);
+            p.Add("@Severity", tc.Severity, DbType.Byte);
+            p.Add("@GeomWkt", tc.GeomWkt);
 
             try
             {
-                return await _connection.QuerySingleAsync<TrafficCondition>(sql, p);
+                return await _connection.QuerySingleAsync<TrafficCondition>(
+                    new CommandDefinition(
+                        sql,
+                        p,
+                        commandType: CommandType.StoredProcedure));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "UPSERT failed provider={Provider} externalId={ExternalId}", tc.Provider, tc.ExternalId);
-                return null;
+                _logger.LogError(ex,
+                    "UPSERT failed provider={Provider} externalId={ExternalId} lat={Lat} lon={Lon}",
+                    tc.Provider, tc.ExternalId, tc.Latitude, tc.Longitude);
+
+                throw;
             }
         }
     }

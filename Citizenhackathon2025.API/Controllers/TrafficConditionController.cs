@@ -7,11 +7,13 @@ using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.Helpers;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using System.Data;
 using HubEvents = CitizenHackathon2025.Contracts.Hubs.TrafficConditionHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
@@ -24,15 +26,17 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly ITrafficConditionRepository _trafficConditionRepository;
         private readonly ITrafficApiService _trafficApiService;
         private readonly IHubContext<TrafficHub> _hubContext;
+        private readonly ILogger<TrafficConditionController> _logger;
         private readonly byte[] _trafficHmacKey;
 
         private const string HubMethod_ReceiveTrafficConditionUpdate = "ReceiveTrafficConditionUpdate";
 
-        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext, byte[] trafficHmacKey)
+        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext, ILogger<TrafficConditionController> logger, byte[] trafficHmacKey)
         {
             _trafficConditionRepository = trafficConditionRepository;
             _trafficApiService = trafficApiService;
             _hubContext = hubContext;
+            _logger = logger;
             _trafficHmacKey = trafficHmacKey;
         }
 
@@ -49,14 +53,18 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> GetCurrent(double lat, double lon, CancellationToken ct)
         {
             var dto = await _trafficApiService.GetCurrentTrafficAsync(lat, lon, ct);
-            if (dto is null) return NotFound();
+            if (dto is null)
+            {
+                _logger.LogWarning("ODWB returned null");
+                return NotFound();
+            }
 
             // Ensures UTC (important for SQL + consistency)
             var dateUtc = dto.DateCondition.Kind == DateTimeKind.Unspecified
                 ? DateTime.SpecifyKind(dto.DateCondition, DateTimeKind.Utc)
                 : dto.DateCondition.ToUniversalTime();
 
-            var provider = "trafficapi"; // or "waze" if it really is Waze, otherwise naming consistency
+            var provider = "odwb"; // or "waze" if it really is Waze, otherwise naming consistency
 
             // ExternalId stable + fingerprint stable
             var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
@@ -123,6 +131,32 @@ namespace CitizenHackathon2025.API.Controllers
             var tc = await service.GetByIdAsync(id);
             return tc == null ? NotFound() : Ok(tc);
         }
+        [HttpGet("debug-proc-traffic")]
+        public async Task<IActionResult> DebugProcTraffic([FromServices] IDbConnection cn)
+        {
+            const string sql = @"
+                            SELECT
+                                DB_NAME() AS DbName,
+                                p.parameter_id,
+                                p.name,
+                                TYPE_NAME(p.user_type_id) AS TypeName
+                            FROM sys.parameters p
+                            WHERE p.object_id = OBJECT_ID('dbo.sp_TrafficCondition_Upsert')
+                            ORDER BY p.parameter_id;";
+
+            var rows = await cn.QueryAsync(sql);
+            return Ok(rows);
+        }
+        [HttpGet("db-info")]
+        public async Task<IActionResult> DbInfo([FromServices] IDbConnection cn)
+        {
+            var db = await cn.ExecuteScalarAsync<string>("SELECT DB_NAME();");
+            return Ok(new
+            {
+                Database = db,
+                DataSource = cn.ConnectionString
+            });
+        }
         [HttpPost]
         public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficConditionDTO dto, CancellationToken ct)
         {
@@ -168,7 +202,7 @@ namespace CitizenHackathon2025.API.Controllers
 
             // ✅ Load the key from IConfiguration/IOptions
             var key = _trafficHmacKey; // see §6
-            TrafficUpsertIdentityHmac.Ensure(entity, defaultProvider: "odwb", hmacKey: key, timeBucket: TimeSpan.FromMinutes(1));
+            TrafficUpsertIdentityHmac.Ensure(entity, defaultProvider: "manual", hmacKey: key, timeBucket: TimeSpan.FromMinutes(1));
 
             var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
             if (saved is null) return Problem("UPSERT failed");

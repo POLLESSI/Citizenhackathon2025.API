@@ -7,35 +7,80 @@
     @Provider        NVARCHAR(16),
     @ExternalId      NVARCHAR(128),
     @Fingerprint     VARBINARY(32),
-    @LastSeenAt      DATETIME2(0)
+    @LastSeenAt      DATETIME2(0),
+    @Title           NVARCHAR(256) = NULL,
+    @Road            NVARCHAR(128) = NULL,
+    @Severity        TINYINT = NULL,
+    @GeomWkt         NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    IF @LastSeenAt IS NULL SET @LastSeenAt = SYSUTCDATETIME();
+    IF @LastSeenAt IS NULL
+        SET @LastSeenAt = SYSUTCDATETIME();
 
     MERGE dbo.TrafficCondition AS T
-    -- 1) Archive any existing active row for this location
-    USING (SELECT @Provider AS Provider, @ExternalId AS ExternalId) AS S
-      ON T.Provider = S.Provider AND T.ExternalId = S.ExternalId
+    USING (
+        SELECT
+            @Provider   AS Provider,
+            @ExternalId AS ExternalId
+    ) AS S
+      ON T.Provider = S.Provider
+     AND T.ExternalId = S.ExternalId
+
     WHEN MATCHED THEN
-      UPDATE SET
-        Latitude        = @Latitude,
-        Longitude       = @Longitude,
-        DateCondition   = @DateCondition,
-        CongestionLevel = @CongestionLevel,
-        IncidentType    = @IncidentType,
-        Fingerprint     = @Fingerprint,
-        LastSeenAt      = @LastSeenAt,
-        Active          = 1
+        UPDATE SET
+            Latitude        = @Latitude,
+            Longitude       = @Longitude,
+            DateCondition   = @DateCondition,
+            CongestionLevel = @CongestionLevel,
+            IncidentType    = @IncidentType,
+            Fingerprint     = @Fingerprint,
+            LastSeenAt      = @LastSeenAt,
+            Title           = @Title,
+            Road            = @Road,
+            Severity        = @Severity,
+            GeomWkt         = @GeomWkt,
+            Active          = 1
+
     WHEN NOT MATCHED THEN
-      INSERT (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Provider, ExternalId, Fingerprint, LastSeenAt, Active)
-      VALUES (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType, @Provider, @ExternalId, @Fingerprint, @LastSeenAt, 1);
+        INSERT (
+            Latitude,
+            Longitude,
+            DateCondition,
+            CongestionLevel,
+            IncidentType,
+            Provider,
+            ExternalId,
+            Fingerprint,
+            LastSeenAt,
+            Title,
+            Road,
+            Severity,
+            GeomWkt,
+            Active
+        )
+        VALUES (
+            @Latitude,
+            @Longitude,
+            @DateCondition,
+            @CongestionLevel,
+            @IncidentType,
+            @Provider,
+            @ExternalId,
+            @Fingerprint,
+            @LastSeenAt,
+            @Title,
+            @Road,
+            @Severity,
+            @GeomWkt,
+            1
+        );
 
     SELECT TOP (1) *
     FROM dbo.TrafficCondition
-    WHERE Provider = @Provider AND ExternalId = @ExternalId;
-
+    WHERE Provider = @Provider
+      AND ExternalId = @ExternalId;
 END
 GO
 

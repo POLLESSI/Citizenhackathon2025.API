@@ -33,15 +33,21 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 RainfallMm,
                                 Humidity,
                                 WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
-                            ORDER BY DateWeather DESC;
-                            ";
+                            ORDER BY DateWeather DESC;";
 
-            return await _connection.QueryFirstOrDefaultAsync<WeatherForecast>(sql);
+            return await _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
+                new CommandDefinition(sql, cancellationToken: ct));
         }
-        
+
         public async Task<List<WeatherForecast>> GetAllAsync(CancellationToken ct = default)
         {
             const string sql = @"
@@ -56,6 +62,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 RainfallMm,
                                 Humidity,
                                 WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
@@ -80,6 +92,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 RainfallMm,
                                 Humidity,
                                 WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
@@ -104,6 +122,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 RainfallMm,
                                 Humidity,
                                 WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Id = @Id AND Active = 1;";
@@ -123,9 +147,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 ? entity.DateWeatherUtc
                 : DateTime.SpecifyKind(entity.DateWeatherUtc, DateTimeKind.Utc);
 
-            dateUtc = new DateTime(
-                dateUtc.Ticks - (dateUtc.Ticks % TimeSpan.TicksPerSecond),
-                DateTimeKind.Utc);
+            dateUtc = new DateTime(dateUtc.Ticks - (dateUtc.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Utc);
 
             var parameters = new DynamicParameters();
             parameters.Add("@DateWeather", dateUtc);
