@@ -33,6 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Dapper\TypeHandlers\" />
     <Folder Include="ExternalAPIs\WallonieEnPoche\" />
   </ItemGroup>
 

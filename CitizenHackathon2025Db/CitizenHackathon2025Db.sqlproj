@@ -112,6 +112,8 @@
     <Build Include="Tables\WepEventStaging.sql" />
     <Build Include="Programmability\Procedures\sp_Place_UpsertExternal.sql" />
     <Build Include="Programmability\Procedures\sp_Event_UpsertExternal.sql" />
+    <Build Include="Tables\BannedWords.sql" />
+    <Build Include="Tables\ProfanityWord.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
@@ -132,6 +134,7 @@
     <None Include="Scripts\EvolutionScript.sql" />
     <None Include="Scripts\Post-Deployement\Script.PostDeployment.sql" />
     <None Include="Scripts\CrowdAntennaSeedCheckScript.sql" />
+    <None Include="Scripts\ProfanityWordSeedScript.sql" />
   </ItemGroup>
   <ItemGroup>
     <PreDeploy Include="Scripts\CrowdAntennaSeedScript.sql" />

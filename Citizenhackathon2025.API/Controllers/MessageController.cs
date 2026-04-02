@@ -1,8 +1,10 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Extensions;
+﻿using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.DTOs.Requests;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -17,49 +19,47 @@ namespace CitizenHackathon2025.API.Controllers
     {
         private readonly IUserMessageService _svc;
         private readonly IMessageCorrelationService _correlator;
+        private readonly IProfanityService _profanityService;
         private readonly IHubContext<MessageHub> _hub;
+        private readonly IHubContext<ModerationHub> _moderationHub;
 
         public MessageController(
             IUserMessageService svc,
             IMessageCorrelationService correlator,
-            IHubContext<MessageHub> hub)
+            IProfanityService profanityService,
+            IHubContext<MessageHub> hub,
+            IHubContext<ModerationHub> moderationHub)
         {
             _svc = svc;
             _correlator = correlator;
+            _profanityService = profanityService;
             _hub = hub;
+            _moderationHub = moderationHub;
         }
 
-        // GET api/message/latest?take=100
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatest([FromQuery] int take = 100, CancellationToken ct = default)
         {
             var list = await _svc.GetLatestAsync(take, ct);
-            var dtos = list.MapToClientMessageDTOs(); // <-- extension
+            var dtos = list.MapToClientMessageDTOs();
             return Ok(dtos);
         }
-        // GET api/message/{id}
+
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct = default)
         {
             var msg = await _svc.GetByIdAsync(id, ct);
             if (msg is null) return NotFound();
 
-            return Ok(msg.MapToClientMessageDTO()); // <-- extension
+            return Ok(msg.MapToClientMessageDTO());
         }
 
-        public sealed class CreateMessageRequest
-        {
-            public string Content { get; set; } = "";
-        }
-
-        // POST api/message
         [HttpPost]
-        [Authorize(Policy = "User")]
+        [Authorize(Policy = Policies.UserPolicy)]
         public async Task<IActionResult> Post([FromBody] CreateMessageRequest req, CancellationToken ct = default)
         {
             if (req is null) return BadRequest("Body is required.");
-            if (string.IsNullOrWhiteSpace(req.Content))
-                return BadRequest("Content cannot be empty.");
+            if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
             var userId = User.Identity?.Name ?? "anon";
 
@@ -69,34 +69,42 @@ namespace CitizenHackathon2025.API.Controllers
                 Content = req.Content
             };
 
-            // Correlation (SourceType, SourceId, RelatedName, Tags, Lat/Lng...)
             var enriched = await _correlator.CorrelateAsync(raw, ct);
 
-            // Insert via Service (validation + normalisation + repo)
+            // Analyse AVANT l'insertion si tu veux notifier la modération
+            var analysis = await _profanityService.AnalyzeAsync(req.Content, ct);
+
             var saved = await _svc.InsertAsync(enriched, ct);
 
-            var dto = saved.MapToClientMessageDTO(); 
+            if (analysis.HasProfanity)
+            {
+                await _moderationHub.Clients.All.SendAsync("ReceiveProfanityDetected", new ProfanityEventDto
+                {
+                    MessageId = saved.Id,
+                    ContentPreview = req.Content.Length > 120 ? req.Content[..120] : req.Content,
+                    Score = analysis.Score,
+                    ToxicityLevel = analysis.ToxicityLevel,
+                    MatchedWords = analysis.MatchedWords,
+                    OccurredAtUtc = DateTime.UtcNow
+                }, ct);
+            }
+
+            var dto = saved.MapToClientMessageDTO();
             await _hub.Clients.All.SendAsync("ReceiveMessageUpdate", dto, ct);
 
             return Ok(dto);
         }
 
-        // DELETE api/message/{id}
-        // Soft-delete via trigger INSTEAD OF DELETE (repo executes DELETE)
         [HttpDelete("{id:int}")]
-        [Authorize(Policy = "User")]
+        [Authorize(Policy = Policies.ModoPolicy)]
         public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct = default)
         {
             var ok = await _svc.DeleteMessageAsync(id, ct);
             if (!ok) return NotFound();
 
-            // Optional: notify customers (if your UI needs to remove the message)
             await _hub.Clients.All.SendAsync("ReceiveMessageDeleted", new { Id = id }, ct);
-
             return NoContent();
         }
-
-        
     }
 }
 

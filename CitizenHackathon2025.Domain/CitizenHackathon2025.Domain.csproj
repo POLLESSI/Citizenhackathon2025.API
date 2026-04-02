@@ -25,8 +25,5 @@
 	<ProjectReference Include="..\..\CitizenHackathon2025.Contracts\CitizenHackathon2025.Contracts.csproj" />
 	<ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Enums\" />
-  </ItemGroup>
 	
 </Project>

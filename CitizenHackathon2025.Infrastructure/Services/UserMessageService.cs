@@ -4,52 +4,48 @@ using CitizenHackathon2025.Domain.Interfaces;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    /// <summary>
-    /// Lightweight application service on top of the repository :
-    /// - Minimum validation
-    /// - Normalization (trim, take terminals, etc.)
-    /// - Delegate data access to the repository (Dapper)
-    /// </summary>
     public sealed class UserMessageService : IUserMessageService
     {
         private readonly IUserMessageRepository _repo;
+        private readonly IProfanityService _profanityService;
 
-        public UserMessageService(IUserMessageRepository repo)
+        public UserMessageService(
+            IUserMessageRepository repo,
+            IProfanityService profanityService)
         {
             _repo = repo;
+            _profanityService = profanityService;
         }
 
         public async Task<UserMessage> InsertAsync(UserMessage msg, CancellationToken ct = default)
         {
-            if (msg is null) throw new ArgumentNullException(nameof(msg));
+            if (msg is null)
+                throw new ArgumentNullException(nameof(msg));
 
             if (string.IsNullOrWhiteSpace(msg.Content))
                 throw new ArgumentException("Content cannot be empty.", nameof(msg));
 
-            // Standardization to avoid surprises on the DB/UI side
             msg.Content = msg.Content.Trim();
 
-            // Your SQL schema allows UserId NULL, but your entity declares it non-null.
-            // We secure it to avoid null refs and to keep data consistent.
-            msg.UserId = string.IsNullOrWhiteSpace(msg.UserId) ? "anon" : msg.UserId.Trim();
+            var analysis = await _profanityService.AnalyzeAsync(msg.Content, ct);
 
-            // Same logic: you have non-null strings in the entity but NULL columns in the DB.
-            // We avoid pushing accidental losers.
+            if (analysis.ShouldReject)
+                throw new ArgumentException(
+                    $"The message contains prohibited content. Score={analysis.Score}.",
+                    nameof(msg.Content));
+
+            msg.UserId = string.IsNullOrWhiteSpace(msg.UserId) ? "anon" : msg.UserId.Trim();
             msg.SourceType = string.IsNullOrWhiteSpace(msg.SourceType) ? "Other" : msg.SourceType.Trim();
             msg.RelatedName = string.IsNullOrWhiteSpace(msg.RelatedName) ? null : msg.RelatedName.Trim();
             msg.Tags = string.IsNullOrWhiteSpace(msg.Tags) ? null : msg.Tags.Trim();
-
-            // Latitude/Longitude: nothing to impose here, but you could add a validation if needed.
 
             return await _repo.InsertAsync(msg, ct);
         }
 
         public Task<List<UserMessage>> GetLatestAsync(int take = 100, CancellationToken ct = default)
         {
-            // Anti-abuse and anti-“take=999999” terminals
             if (take <= 0) take = 10;
             if (take > 500) take = 500;
-
             return _repo.GetLatestAsync(take, ct);
         }
 

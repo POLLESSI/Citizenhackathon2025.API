@@ -395,8 +395,8 @@ internal class Program
         services.AddAuthorization(o =>
         {
             o.AddPolicy(Policies.AdminPolicy, p => p.RequireRole(Roles.Admin));
-            o.AddPolicy(Policies.ModoPolicy, p => p.RequireRole(Roles.Admin, Roles.Modo));
-            o.AddPolicy(Policies.UserPolicy, p => p.RequireRole(Roles.Admin, Roles.Modo, Roles.User));
+            o.AddPolicy(Policies.ModoPolicy, p => p.RequireRole(Roles.Admin, Roles.Moderator));
+            o.AddPolicy(Policies.UserPolicy, p => p.RequireRole(Roles.Admin, Roles.Moderator, Roles.User));
             o.AddPolicy(Policies.GuestPolicy, p => p.RequireRole(Roles.Guest));
         });
     }
@@ -647,6 +647,7 @@ internal class Program
         services.AddScoped<IGPTRepository, GptInteractionsRepository>();
         services.AddScoped<ILocalAiDataRepository, LocalAiDataRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
+        services.AddScoped<IProfanityRepository, ProfanityRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<ISuggestionRepository, SuggestionRepository>();
         services.AddScoped<ITrafficConditionRepository, TrafficConditionRepository>();
@@ -682,8 +683,10 @@ internal class Program
         services.AddScoped<IGPTService, GPTService>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
         services.AddScoped<INotificationService, NotificationService>();
-        services.AddScoped<IPlaceService, PlaceService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
+        services.AddScoped<IPlaceService, PlaceService>();
+        services.AddScoped<IProfanityService, ProfanityService>();
+        services.AddScoped<IProfanityAdminService, ProfanityAdminService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<ISuggestionService, SuggestionService>();
         services.AddScoped<ITrafficConditionService, TrafficConditionService>();
@@ -930,6 +933,8 @@ internal class Program
         hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<MessageHub>(MessageHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<ModerationHub>("moderationHub").RequireAuthorization(Policies.ModoPolicy);
+        //hubs.MapHub<ModerationHub>(ModerationHubMethods.HubPath).RequireAuthorization(Policies.ModoPolicy);
         hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<UserHub>(UserHubMethods.HubPath).RequireAuthorization();

@@ -36,7 +36,7 @@ namespace CitizenHackathon2025.API.Tools
             var roleValue = role switch
             {
                 UserRole.Admin => Roles.Admin,
-                UserRole.Modo => Roles.Modo,
+                UserRole.Moderator => Roles.Moderator,
                 UserRole.User => Roles.User,
                 UserRole.Guest => Roles.Guest,
                 _ => Roles.User
