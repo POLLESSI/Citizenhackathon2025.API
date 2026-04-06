@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Queries;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace CitizenHackathon2025.API.Controllers
 {
     [ApiController]
     [Route("api/admin/sessions")]
-    [Authorize(Policy = "Admin")]
+    [Authorize(Policy = Policies.AdminPolicy)]
     public class AdminSessionsController : ControllerBase
     {
         private readonly IUserSessionRepository _repo;

@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -73,7 +74,7 @@ namespace CitizenHackathon2025.API.Controllers
             return dto is null ? NotFound() : Ok(dto);
         }
 
-        //[Authorize(Policy = "Admin")]
+        //[Authorize(Policy = Policies.AdminPolicy)]
         //[HttpGet("db-info")]
         //public IActionResult GetDbInfo([FromServices] IDbConnection cn)
         //{
@@ -102,7 +103,7 @@ namespace CitizenHackathon2025.API.Controllers
         //}
 
         [HttpPost("archive-expired")]
-        [Authorize(Policy = "Admin")]
+        [Authorize(Policy = Policies.AdminPolicy)]
         public async Task<IActionResult> ArchiveExpired(CancellationToken ct = default)
             => Ok(new { ArchivedCount = await _app.ArchiveExpiredAsync(ct) });
 

@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
-    [Authorize(Policy = "User")]
+    [Authorize(Policy = Policies.UserPolicy)]
     public class MessageHub : Hub
     {
         private readonly ILogger<MessageHub> _logger;

@@ -49,7 +49,8 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct = default)
         {
             var msg = await _svc.GetByIdAsync(id, ct);
-            if (msg is null) return NotFound();
+            if (msg is null)
+                return NotFound();
 
             return Ok(msg.MapToClientMessageDTO());
         }
@@ -58,41 +59,82 @@ namespace CitizenHackathon2025.API.Controllers
         [Authorize(Policy = Policies.UserPolicy)]
         public async Task<IActionResult> Post([FromBody] CreateMessageRequest req, CancellationToken ct = default)
         {
-            if (req is null) return BadRequest("Body is required.");
-            if (!ModelState.IsValid) return ValidationProblem(ModelState);
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<MessageController>>();
 
-            var userId = User.Identity?.Name ?? "anon";
-
-            var raw = new UserMessage
+            try
             {
-                UserId = userId,
-                Content = req.Content
-            };
+                logger.LogInformation("POST /api/Message entered. User={User}", User.Identity?.Name);
 
-            var enriched = await _correlator.CorrelateAsync(raw, ct);
+                if (req is null)
+                    return BadRequest("Body is required.");
 
-            // Analyse AVANT l'insertion si tu veux notifier la modération
-            var analysis = await _profanityService.AnalyzeAsync(req.Content, ct);
+                if (string.IsNullOrWhiteSpace(req.Content))
+                    return BadRequest("Content is required.");
 
-            var saved = await _svc.InsertAsync(enriched, ct);
+                if (!ModelState.IsValid)
+                    return ValidationProblem(ModelState);
 
-            if (analysis.HasProfanity)
-            {
-                await _moderationHub.Clients.All.SendAsync("ReceiveProfanityDetected", new ProfanityEventDto
+                var userId = User.Identity?.Name ?? "anon";
+                logger.LogInformation("Creating raw message for user {UserId}", userId);
+
+                var raw = new UserMessage
                 {
-                    MessageId = saved.Id,
-                    ContentPreview = req.Content.Length > 120 ? req.Content[..120] : req.Content,
-                    Score = analysis.Score,
-                    ToxicityLevel = analysis.ToxicityLevel,
-                    MatchedWords = analysis.MatchedWords,
-                    OccurredAtUtc = DateTime.UtcNow
-                }, ct);
+                    UserId = userId,
+                    Content = req.Content
+                };
+
+                logger.LogInformation("Before CorrelateAsync");
+                var enriched = await _correlator.CorrelateAsync(raw, ct);
+
+                logger.LogInformation("After CorrelateAsync. SourceType={SourceType}, SourceId={SourceId}, RelatedName={RelatedName}",
+                    enriched.SourceType, enriched.SourceId, enriched.RelatedName);
+
+                logger.LogInformation("Before AnalyzeAsync");
+                var analysis = await _profanityService.AnalyzeAsync(req.Content, ct);
+
+                logger.LogInformation("After AnalyzeAsync. HasProfanity={HasProfanity}, Score={Score}",
+                    analysis.HasProfanity, analysis.Score);
+
+                logger.LogInformation("Before InsertAsync");
+                var saved = await _svc.InsertAsync(enriched, ct);
+
+                logger.LogInformation("After InsertAsync. MessageId={MessageId}", saved.Id);
+
+                if (analysis.HasProfanity)
+                {
+                    await _moderationHub.Clients.All.SendAsync(
+                        "ReceiveProfanityDetected",
+                        new ProfanityEventDto
+                        {
+                            MessageId = saved.Id,
+                            ContentPreview = req.Content.Length > 120 ? req.Content[..120] : req.Content,
+                            Score = analysis.Score,
+                            ToxicityLevel = analysis.ToxicityLevel,
+                            MatchedWords = analysis.MatchedWords,
+                            OccurredAtUtc = DateTime.UtcNow
+                        },
+                        ct);
+                }
+
+                var dto = saved.MapToClientMessageDTO();
+
+                logger.LogInformation("Before hub broadcast");
+                await _hub.Clients.All.SendAsync("ReceiveMessageUpdate", dto, ct);
+                logger.LogInformation("After hub broadcast");
+
+                return Ok(dto);
             }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "POST /api/Message failed for user {User}. We aren't on X here.", User.Identity?.Name);
 
-            var dto = saved.MapToClientMessageDTO();
-            await _hub.Clients.All.SendAsync("ReceiveMessageUpdate", dto, ct);
-
-            return Ok(dto);
+                return StatusCode(500, new
+                {
+                    message = "Failed to create message.",
+                    detail = ex.Message,
+                    type = ex.GetType().FullName
+                });
+            }
         }
 
         [HttpDelete("{id:int}")]
@@ -100,7 +142,8 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct = default)
         {
             var ok = await _svc.DeleteMessageAsync(id, ct);
-            if (!ok) return NotFound();
+            if (!ok)
+                return NotFound();
 
             await _hub.Clients.All.SendAsync("ReceiveMessageDeleted", new { Id = id }, ct);
             return NoContent();

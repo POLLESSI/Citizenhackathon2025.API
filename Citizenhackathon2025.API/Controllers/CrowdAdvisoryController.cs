@@ -1,7 +1,8 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,7 +13,7 @@ namespace CitizenHackathon2025.API.Controllers
     // n dev, you can allow everything :
     // [AllowAnonymous]
     // In production, protected admin :
-    [Authorize(Policy = "Admin")]
+    [Authorize(Policy = Policies.AdminPolicy)]
     public class CrowdCalendarController : ControllerBase
     {
         private readonly ICrowdCalendarRepository _repo;

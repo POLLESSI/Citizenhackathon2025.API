@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +8,7 @@ namespace CitizenHackathon2025.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Policy = "Modo")]
+    [Authorize(Policy = Policies.ModoPolicy)]
     public sealed class ProfanityController : ControllerBase
     {
         private readonly IProfanityAdminService _service;
@@ -18,10 +19,15 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetPaged([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+        public async Task<IActionResult> GetPaged(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? languageCode = null,
+            [FromQuery] string? search = null,
+            CancellationToken ct = default)
         {
-            var items = await _service.GetPagedAsync(page, pageSize, ct);
-            return Ok(items);
+            var result = await _service.GetPagedAsync(page, pageSize, languageCode, search, ct);
+            return Ok(result);
         }
 
         [HttpGet("{id:int}")]

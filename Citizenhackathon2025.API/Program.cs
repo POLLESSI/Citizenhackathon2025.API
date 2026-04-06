@@ -933,8 +933,8 @@ internal class Program
         hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<MessageHub>(MessageHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<ModerationHub>("moderationHub").RequireAuthorization(Policies.ModoPolicy);
-        //hubs.MapHub<ModerationHub>(ModerationHubMethods.HubPath).RequireAuthorization(Policies.ModoPolicy);
+        //hubs.MapHub<ModerationHub>("moderationHub").RequireAuthorization(Policies.ModoPolicy);
+        hubs.MapHub<ModerationHub>(ModerationHubMethods.HubPath).RequireAuthorization(Policies.ModoPolicy);
         hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<UserHub>(UserHubMethods.HubPath).RequireAuthorization();

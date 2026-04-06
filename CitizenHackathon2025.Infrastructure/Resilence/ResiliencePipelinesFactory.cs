@@ -1,8 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Polly;
-using System;
-using System.Net.Http;
 
 namespace CitizenHackathon2025.Infrastructure.Resilience
 {

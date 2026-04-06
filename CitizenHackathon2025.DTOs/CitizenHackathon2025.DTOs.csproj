@@ -36,6 +36,7 @@
 
 	<ItemGroup>
 		<Folder Include="Hub\" />
+		<Folder Include="Responses\" />
 	</ItemGroup>
 
 </Project>

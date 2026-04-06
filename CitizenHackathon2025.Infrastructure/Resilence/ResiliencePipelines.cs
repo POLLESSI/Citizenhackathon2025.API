@@ -1,5 +1,4 @@
 ﻿using Polly;
-using System.Net.Http;
 
 namespace CitizenHackathon2025.Infrastructure.Resilience
 {

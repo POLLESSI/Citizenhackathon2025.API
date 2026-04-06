@@ -1,7 +1,9 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Common;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using Dapper;
 using System.Data;
+using System.Text;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -17,11 +19,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IReadOnlyList<ProfanityWord>> GetAllActiveAsync(CancellationToken ct = default)
         {
             const string sql = """
-                SELECT *
-                FROM dbo.ProfanityWord
-                WHERE Active = 1
-                ORDER BY LanguageCode, Weight DESC, Word ASC;
-                """;
+                            SELECT *
+                            FROM dbo.ProfanityWord
+                            WHERE Active = 1
+                            ORDER BY LanguageCode, Weight DESC, Word ASC;
+                            """;
 
             var rows = await _db.QueryAsync<ProfanityWord>(
                 new CommandDefinition(sql, cancellationToken: ct));
@@ -29,35 +31,82 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return rows.ToList();
         }
 
-        public async Task<IReadOnlyList<ProfanityWord>> GetPagedAsync(int page, int pageSize, CancellationToken ct = default)
+        public async Task<PagedResultDto<ProfanityWord>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? languageCode = null,
+            string? search = null,
+            CancellationToken ct = default)
         {
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 20;
 
-            const string sql = """
-                SELECT *
-                FROM dbo.ProfanityWord
-                ORDER BY Active DESC, LanguageCode, Weight DESC, Word ASC
-                OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
-                """;
+            var where = new StringBuilder("WHERE 1 = 1");
+            var parameters = new DynamicParameters();
 
-            var rows = await _db.QueryAsync<ProfanityWord>(
-                new CommandDefinition(sql, new
-                {
-                    Offset = (page - 1) * pageSize,
-                    PageSize = pageSize
-                }, cancellationToken: ct));
+            if (!string.IsNullOrWhiteSpace(languageCode))
+            {
+                where.AppendLine(" AND LanguageCode = @LanguageCode");
+                parameters.Add("LanguageCode", languageCode.Trim());
+            }
 
-            return rows.ToList();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                where.AppendLine("""
+                            AND (
+                                Word LIKE @Search
+                                OR NormalizedWord LIKE @Search
+                                OR Category LIKE @Search
+                            )
+                            """);
+                parameters.Add("Search", $"%{search.Trim()}%");
+            }
+
+            var countSql = $"""
+                        SELECT COUNT(1)
+                        FROM dbo.ProfanityWord
+                        {where}
+                        """;
+
+            var totalCount = await _db.ExecuteScalarAsync<int>(
+                new CommandDefinition(countSql, parameters, cancellationToken: ct));
+
+            parameters.Add("Offset", (page - 1) * pageSize);
+            parameters.Add("PageSize", pageSize);
+
+            var dataSql = $"""
+                        SELECT *
+                        FROM dbo.ProfanityWord
+                        {where}
+                        ORDER BY Active DESC, LanguageCode, Weight DESC, Word ASC
+                        OFFSET @Offset ROWS
+                        FETCH NEXT @PageSize ROWS ONLY;
+                        """;
+
+            var items = await _db.QueryAsync<ProfanityWord>(
+                new CommandDefinition(dataSql, parameters, cancellationToken: ct));
+
+            var totalPages = totalCount == 0
+                ? 0
+                : (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            return new PagedResultDto<ProfanityWord>
+            {
+                Items = items.ToList(),
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages
+            };
         }
 
         public async Task<ProfanityWord?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             const string sql = """
-                SELECT *
-                FROM dbo.ProfanityWord
-                WHERE Id = @Id;
-                """;
+                            SELECT *
+                            FROM dbo.ProfanityWord
+                            WHERE Id = @Id;
+                            """;
 
             return await _db.QuerySingleOrDefaultAsync<ProfanityWord>(
                 new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
@@ -66,10 +115,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<ProfanityWord?> GetByWordAsync(string normalizedWord, CancellationToken ct = default)
         {
             const string sql = """
-                SELECT TOP 1 *
-                FROM dbo.ProfanityWord
-                WHERE NormalizedWord = @NormalizedWord AND Active = 1;
-                """;
+                            SELECT TOP 1 *
+                            FROM dbo.ProfanityWord
+                            WHERE NormalizedWord = @NormalizedWord AND Active = 1;
+                            """;
 
             return await _db.QuerySingleOrDefaultAsync<ProfanityWord>(
                 new CommandDefinition(sql, new { NormalizedWord = normalizedWord }, cancellationToken: ct));
@@ -78,28 +127,28 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<ProfanityWord> InsertAsync(ProfanityWord entity, CancellationToken ct = default)
         {
             const string sql = """
-                INSERT INTO dbo.ProfanityWord
-                (
-                    Word,
-                    NormalizedWord,
-                    LanguageCode,
-                    Weight,
-                    IsRegex,
-                    Category,
-                    Active
-                )
-                OUTPUT INSERTED.*
-                VALUES
-                (
-                    @Word,
-                    @NormalizedWord,
-                    @LanguageCode,
-                    @Weight,
-                    @IsRegex,
-                    @Category,
-                    @Active
-                );
-                """;
+                            INSERT INTO dbo.ProfanityWord
+                            (
+                                Word,
+                                NormalizedWord,
+                                LanguageCode,
+                                Weight,
+                                IsRegex,
+                                Category,
+                                Active
+                            )
+                            OUTPUT INSERTED.*
+                            VALUES
+                            (
+                                @Word,
+                                @NormalizedWord,
+                                @LanguageCode,
+                                @Weight,
+                                @IsRegex,
+                                @Category,
+                                @Active
+                            );
+                            """;
 
             return await _db.QuerySingleAsync<ProfanityWord>(
                 new CommandDefinition(sql, entity, cancellationToken: ct));
@@ -108,17 +157,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<bool> UpdateAsync(ProfanityWord entity, CancellationToken ct = default)
         {
             const string sql = """
-                UPDATE dbo.ProfanityWord
-                SET
-                    Word = @Word,
-                    NormalizedWord = @NormalizedWord,
-                    LanguageCode = @LanguageCode,
-                    Weight = @Weight,
-                    IsRegex = @IsRegex,
-                    Category = @Category,
-                    UpdatedAtUtc = SYSUTCDATETIME()
-                WHERE Id = @Id;
-                """;
+                            UPDATE dbo.ProfanityWord
+                            SET
+                                Word = @Word,
+                                NormalizedWord = @NormalizedWord,
+                                LanguageCode = @LanguageCode,
+                                Weight = @Weight,
+                                IsRegex = @IsRegex,
+                                Category = @Category,
+                                UpdatedAtUtc = SYSUTCDATETIME()
+                            WHERE Id = @Id;
+                            """;
 
             var affected = await _db.ExecuteAsync(
                 new CommandDefinition(sql, entity, cancellationToken: ct));
@@ -129,12 +178,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<bool> SoftDeleteAsync(int id, CancellationToken ct = default)
         {
             const string sql = """
-                UPDATE dbo.ProfanityWord
-                SET
-                    Active = 0,
-                    UpdatedAtUtc = SYSUTCDATETIME()
-                WHERE Id = @Id AND Active = 1;
-                """;
+                            UPDATE dbo.ProfanityWord
+                            SET
+                                Active = 0,
+                                UpdatedAtUtc = SYSUTCDATETIME()
+                            WHERE Id = @Id AND Active = 1;
+                            """;
 
             var affected = await _db.ExecuteAsync(
                 new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
@@ -145,12 +194,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<bool> SetActiveAsync(int id, bool active, CancellationToken ct = default)
         {
             const string sql = """
-                UPDATE dbo.ProfanityWord
-                SET
-                    Active = @Active,
-                    UpdatedAtUtc = SYSUTCDATETIME()
-                WHERE Id = @Id;
-                """;
+                            UPDATE dbo.ProfanityWord
+                            SET
+                                Active = @Active,
+                                UpdatedAtUtc = SYSUTCDATETIME()
+                            WHERE Id = @Id;
+                            """;
 
             var affected = await _db.ExecuteAsync(
                 new CommandDefinition(sql, new { Id = id, Active = active }, cancellationToken: ct));

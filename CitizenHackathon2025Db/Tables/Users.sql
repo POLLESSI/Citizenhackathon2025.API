@@ -3,7 +3,7 @@
     [Email] NVARCHAR(64) NOT NULL,
     [PasswordHash] BINARY(64) NOT NULL,         -- SHA-512 = 64 octets
     [SecurityStamp] UNIQUEIDENTIFIER NOT NULL,  -- used to invalidate tokens
-    [Role] INT NOT NULL DEFAULT 0,              -- UserRole (enum : 0=User, 1=Admin, 2=Modo, 4=Guest)
+    [Role] INT DEFAULT 0,              -- UserRole (enum : 0=User, 1=Admin, 2=Modo, 4=Guest)
     [Status] INT NOT NULL,                      -- Status (ex: 0=Inactive, 1=Active, 2=Banned ?)
     [Active] BIT NOT NULL DEFAULT 1,            -- Soft delete
     CONSTRAINT [PK_Users] PRIMARY KEY ([Id]),

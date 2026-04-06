@@ -23,11 +23,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 var crowd = await _db.QueryFirstOrDefaultAsync<(int Id, string LocationName, decimal Lat, decimal Lon)>(
                     new CommandDefinition(@"
-                SELECT TOP 1 Id, LocationName, Latitude, Longitude
-                FROM dbo.CrowdInfo
-                WHERE Active = 1
-                  AND LocationName LIKE '%' + @t + '%'
-                ORDER BY [Timestamp] DESC;",
+                                        SELECT TOP 1 Id, LocationName, Latitude, Longitude
+                                        FROM dbo.CrowdInfo
+                                        WHERE Active = 1
+                                          AND LocationName LIKE '%' + @t + '%'
+                                        ORDER BY [Timestamp] DESC;",
                         new { t }, cancellationToken: ct));
 
                 if (crowd.Id != 0)
@@ -46,11 +46,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 var ev = await _db.QueryFirstOrDefaultAsync<(int Id, string Name, decimal Lat, decimal Lon)>(
                     new CommandDefinition(@"
-                SELECT TOP 1 Id, [Name], Latitude, Longitude
-                FROM dbo.Event
-                WHERE Active = 1
-                  AND [Name] LIKE '%' + @t + '%'
-                ORDER BY DateEvent DESC;",
+                                        SELECT TOP 1 Id, [Name], Latitude, Longitude
+                                        FROM dbo.Event
+                                        WHERE Active = 1
+                                          AND [Name] LIKE '%' + @t + '%'
+                                        ORDER BY DateEvent DESC;",
                         new { t }, cancellationToken: ct));
 
                 if (ev.Id != 0)
@@ -69,11 +69,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 var place = await _db.QueryFirstOrDefaultAsync<(int Id, string Name, decimal Lat, decimal Lon)>(
                     new CommandDefinition(@"
-                SELECT TOP 1 Id, [Name], Latitude, Longitude
-                FROM dbo.Place
-                WHERE Active = 1
-                  AND [Name] LIKE '%' + @t + '%'
-                ORDER BY Id DESC;",
+                                        SELECT TOP 1 Id, [Name], Latitude, Longitude
+                                        FROM dbo.Place
+                                        WHERE Active = 1
+                                          AND [Name] LIKE '%' + @t + '%'
+                                        ORDER BY Id DESC;",
                         new { t }, cancellationToken: ct));
 
                 if (place.Id != 0)

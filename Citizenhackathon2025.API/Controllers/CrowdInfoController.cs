@@ -1,9 +1,10 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Contracts.Hubs;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
-using CitizenHackathon2025.Contracts.Hubs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -94,7 +95,7 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpPost("archive-expired")]
-        [Authorize(Policy = "Admin")]
+        [Authorize(Policy = Policies.AdminPolicy)]
         public async Task<IActionResult> ArchiveExpiredCrowdInfos()
         {
             var archived = await _crowdInfoRepository.ArchivePastCrowdInfosAsync();

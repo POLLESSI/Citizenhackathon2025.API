@@ -135,6 +135,7 @@
     <None Include="Scripts\Post-Deployement\Script.PostDeployment.sql" />
     <None Include="Scripts\CrowdAntennaSeedCheckScript.sql" />
     <None Include="Scripts\ProfanityWordSeedScript.sql" />
+    <None Include="Scripts\ProfanityWordSeedScript_1.sql" />
   </ItemGroup>
   <ItemGroup>
     <PreDeploy Include="Scripts\CrowdAntennaSeedScript.sql" />

@@ -3,6 +3,7 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Enums;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Models;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -30,7 +31,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .Replace("$", "s")
                 .Replace("!", "i");
 
-            normalized = Regex.Replace(normalized, @"[\.\-_\*]+", "");
+            // We remove the extraneous punctuation, but we keep the spaces to tokenize correctly.
+            normalized = Regex.Replace(normalized, @"[^\p{L}\p{Nd}\s]+", " ");
             normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
 
             return normalized;
@@ -50,23 +52,44 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var matched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var score = 0;
 
+            var tokens = Regex
+                .Split(normalized, @"\s+")
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             foreach (var word in words)
             {
-                if (string.IsNullOrWhiteSpace(word.NormalizedWord))
+                if (string.IsNullOrWhiteSpace(word.Word))
                     continue;
+
+                var normalizedWord = string.IsNullOrWhiteSpace(word.NormalizedWord)
+                    ? Normalize(word.Word)
+                    : word.NormalizedWord;
 
                 if (word.IsRegex)
                 {
-                    if (Regex.IsMatch(normalized, word.NormalizedWord, RegexOptions.IgnoreCase | RegexOptions.Compiled))
+                    try
                     {
-                        matched.Add(word.Word);
-                        score += Math.Max(1, word.Weight);
+                        if (Regex.IsMatch(
+                            normalized,
+                            word.Word,
+                            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                            TimeSpan.FromMilliseconds(150)))
+                        {
+                            matched.Add(word.Word);
+                            score += Math.Max(1, word.Weight);
+                        }
+                    }
+                    catch
+                    {
+                        // Invalid regex in base -> we ignore
                     }
 
                     continue;
                 }
 
-                if (normalized.Contains(word.NormalizedWord, StringComparison.OrdinalIgnoreCase))
+                // Exact match on token to avoid false positives like "con" in "consequuntur"
+                if (tokens.Contains(normalizedWord))
                 {
                     matched.Add(word.Word);
                     score += Math.Max(1, word.Weight);
@@ -97,22 +120,34 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public bool ContainsProfanity(string content)
         {
-            throw new NotImplementedException();
+            var normalized = Normalize(content);
+            return !string.IsNullOrWhiteSpace(normalized) && GetMatchedWords(content).Count > 0;
         }
 
         public int GetToxicityScore(string content)
         {
-            throw new NotImplementedException();
+            // simple sync version for local compatibility
+            var normalized = Normalize(content);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return 0;
+
+            // Here we can't properly call the sync repository, so :
+            // Either you remove this sync method,
+            // Either you assume that only AnalyzeAsync is used.
+            throw new NotSupportedException("Use AnalyzeAsync instead.");
         }
 
         public IReadOnlyCollection<string> GetMatchedWords(string content)
         {
-            throw new NotImplementedException();
+            throw new NotSupportedException("Use AnalyzeAsync instead.");
         }
 
         public string Sanitize(string content)
         {
-            throw new NotImplementedException();
+            if (string.IsNullOrWhiteSpace(content))
+                return string.Empty;
+
+            return content;
         }
     }
 }

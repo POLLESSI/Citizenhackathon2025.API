@@ -5,11 +5,12 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using System.Threading.Tasks;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
 using HubEvents = CitizenHackathon2025.Contracts.Hubs.GptInteractionHubMethods;
 
@@ -256,7 +257,7 @@ namespace CitizenHackathon2025.API.Controllers
             
         }
         [HttpPost("archive-expired")]
-        [Authorize(Policy = "Admin")]
+        [Authorize(Policy = Policies.AdminPolicy)]
         public async Task<IActionResult> ArchiveExpiredGptInteractions()
         {
             var archived = await _gptRepository.ArchivePastGptInteractionsAsync();

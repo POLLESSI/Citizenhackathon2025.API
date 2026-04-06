@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Contracts.Hubs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,7 @@ namespace CitizenHackathon2025.Hubs.Hubs
     /// Generic notification hub (system, user, broadcast).
     /// Use NotificationHubMethods for names/paths.
     /// </summary>
-    [Authorize(Policy = "User")]
+    [Authorize(Policy = Policies.UserPolicy)]
     public class NotificationHub : Hub
     {
         private readonly ILogger<NotificationHub> _logger;
@@ -24,14 +25,14 @@ namespace CitizenHackathon2025.Hubs.Hubs
         public Task Ping(string message = "ping")
         {
             _logger.LogInformation("[NotificationHub] Ping: {Message}", message);
-            return Clients.Caller.SendAsync(NotificationHubMethods.ToClient.Notify, $"pong: {message}");
+            return Clients.Caller.SendAsync(Contracts.Hubs.NotificationHubMethods.ToClient.Notify, $"pong: {message}");
         }
 
         /// <summary>Broadcast a message to all clients.</summary>
         public Task Broadcast(string message)
         {
             _logger.LogInformation("[NotificationHub] Broadcast: {Message}", message);
-            return Clients.All.SendAsync(NotificationHubMethods.ToClient.Notify, message);
+            return Clients.All.SendAsync(Contracts.Hubs.NotificationHubMethods.ToClient.Notify, message);
         }
 
         /// <summary>Targeted notification of a user (by groupId = email/userId, to be harmonized with your auth).</summary>
@@ -39,7 +40,7 @@ namespace CitizenHackathon2025.Hubs.Hubs
         {
             _logger.LogInformation("[NotificationHub] NotifyUser: {User} -> {Message}", userIdOrEmail, message);
             // Convention: each user joins a group named by their identifier
-            return Clients.Group(userIdOrEmail).SendAsync(NotificationHubMethods.ToClient.NotifyUser, userIdOrEmail, message);
+            return Clients.Group(userIdOrEmail).SendAsync(Contracts.Hubs.NotificationHubMethods.ToClient.NotifyUser, userIdOrEmail, message);
         }
 
         ///// <summary>Join a group (convention: userId/email, or functional group).</summary>

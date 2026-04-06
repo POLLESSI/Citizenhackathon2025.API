@@ -7,6 +7,7 @@ using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.Helpers;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -219,7 +220,7 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpPost("archive-expired")]
-        [Authorize(Policy = "Admin")]
+        [Authorize(Policy = Policies.AdminPolicy)]
         public async Task<IActionResult> ArchiveExpiredTrafficConditions()
         {
             var archived = await _trafficConditionRepository.ArchivePastTrafficConditionsAsync();
