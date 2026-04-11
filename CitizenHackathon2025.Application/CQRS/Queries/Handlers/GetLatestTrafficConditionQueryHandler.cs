@@ -24,7 +24,7 @@ namespace CitizenHackathon2025.Application.CQRS.Queries.Handlers
     CancellationToken cancellationToken)
         {
             var items = await _service.GetLatestTrafficConditionAsync(
-                limit: 10,                      // ✅ passe le 1er param obligatoire
+                limit: 10,                      // ✅ pass the first mandatory parameter
                 ct: cancellationToken);
 
             if (items is null) return [];

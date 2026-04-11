@@ -30,7 +30,7 @@ namespace CitizenHackathon2025.Application.Models
             {
                 ExternalId = "event-9001",
                 PlaceExternalId = "place-1001",
-                Name = "Événements locaux - Maison de famille",
+                Name = "Local Events - Family Home",
                 Latitude = 50.467388m,
                 Longitude = 4.871985m,
                 DateEvent = DateTime.UtcNow.AddDays(3),
@@ -42,3 +42,87 @@ namespace CitizenHackathon2025.Application.Models
             });
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

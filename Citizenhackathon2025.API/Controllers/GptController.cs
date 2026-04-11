@@ -4,15 +4,12 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
-using CitizenHackathon2025.Infrastructure.Repositories;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
-using System.Threading.Tasks;
 using static CitizenHackathon2025.Application.Extensions.MapperExtensions;
-using HubEvents = CitizenHackathon2025.Contracts.Hubs.GptInteractionHubMethods;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -24,24 +21,23 @@ namespace CitizenHackathon2025.API.Controllers
         private readonly IGptInteractionRepository _gptRepository;
         private readonly IHubContext<GPTHub> _hubContext;
         private readonly IMistralAIService _mistralAIService;
+        private readonly IGptRequestRegistry _gptRequestRegistry;
         private readonly ILogger<GptController> _logger;
 
-        public GptController(IGptInteractionRepository gptRepository, IHubContext<GPTHub> hubContext, IMistralAIService mistralAIService, ILogger<GptController> logger)
+        public GptController(
+            IGptInteractionRepository gptRepository,
+            IHubContext<GPTHub> hubContext,
+            IMistralAIService mistralAIService,
+            IGptRequestRegistry gptRequestRegistry,
+            ILogger<GptController> logger)
         {
             _gptRepository = gptRepository;
             _hubContext = hubContext;
             _mistralAIService = mistralAIService;
+            _gptRequestRegistry = gptRequestRegistry;
             _logger = logger;
         }
 
-        //[HttpGet("all")]
-        //public async Task<IActionResult> GetAllInteractions()
-        //{
-        //    var interactions = await _gptRepository.GetAllInteractionsAsync();
-        //    // Secure null and avoid double mapping if the repo already returned DTOs
-        //    var dtos = interactions?.Select(e => e.MapToGptInteractionDTO()).ToList() ?? new List<GptInteractionDTO>();
-        //    return Ok(dtos);
-        //}
         [HttpGet("all")]
         public async Task<IActionResult> GetAll()
         {
@@ -53,7 +49,8 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetById(int id)
         {
-            if (id <= 0) return BadRequest("The provided ID is invalid.");
+            if (id <= 0)
+                return BadRequest("The provided ID is invalid.");
 
             var interaction = await _gptRepository.GetByIdAsync(id);
             if (interaction == null)
@@ -62,13 +59,6 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(interaction.MapToGptInteractionDTO());
         }
 
-        /// <summary>
-        /// Sends a query to the AI ​​and returns an intelligent response.
-        /// The response is also broadcast via SignalR to all connected clients.
-        /// </summary>
-        /// <param name="prompt">The text sent by the user.</param>
-        /// <returns>An AI-generated response (simulated here).</returns>
-        /// 
         [HttpPost("ask")]
         public async Task<IActionResult> Ask([FromBody] string question)
         {
@@ -92,97 +82,180 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(dto);
         }
 
-        //[Consumes("application/json")]
         [HttpPost("ask-mistral")]
         public async Task<IActionResult> AskMistral([FromBody] GptPromptRequest request)
         {
-            _logger.LogInformation("=== ASK MISTRAL ENTER ===");
+            _logger.LogInformation("=== ASK MISTRAL STREAM ENTER ===");
             _logger.LogInformation("Prompt={Prompt}", request?.Prompt);
             _logger.LogInformation("Lat={Lat}, Lng={Lng}", request?.Latitude, request?.Longitude);
 
             if (!ModelState.IsValid)
-            {
-                _logger.LogWarning("ModelState invalid");
                 return BadRequest(ModelState);
-            }
+
+            if (request is null || string.IsNullOrWhiteSpace(request.Prompt))
+                return BadRequest("The prompt cannot be empty.");
+
+            GPTInteraction? saved = null;
+            CancellationTokenSource? linkedCts = null;
+            string? requestId = null;
 
             try
             {
-                _logger.LogInformation("Calling _mistralAIService.GenerateSuggestionAsync...");
-
-                var mistralResponse = await _mistralAIService.GenerateSuggestionAsync(
-                    request.Prompt,
-                    request.Latitude,
-                    request.Longitude,
-                    HttpContext.RequestAborted
-                );
-
-                _logger.LogInformation("GenerateSuggestionAsync OK");
-                _logger.LogInformation("Response length={Len}", mistralResponse?.Length ?? 0);
-
-                var interaction = new GPTInteraction
+                saved = await _gptRepository.UpsertInteractionAsync(new GPTInteraction
                 {
-                    Prompt = request.Prompt,
-                    Response = mistralResponse,
+                    Prompt = request.Prompt.Trim(),
+                    Response = string.Empty,
                     Active = true,
                     Model = "mistral",
                     Temperature = 0.7f,
                     SourceType = "MistralLocal"
-                };
+                });
 
-                _logger.LogInformation("Calling UpsertInteractionAsync...");
-                var saved = await _gptRepository.UpsertInteractionAsync(interaction);
-                _logger.LogInformation("UpsertInteractionAsync OK, Id={Id}", saved?.Id);
+                if (saved is null || saved.Id <= 0)
+                    return StatusCode(500, "Unable to create GPT interaction.");
 
-                var dto = new GptAnswerDTO
-                {
-                    Id = saved?.Id,
-                    Prompt = saved?.Prompt ?? request.Prompt,
-                    Response = saved?.Response ?? mistralResponse,
-                    CreatedAt = saved?.CreatedAt ?? DateTime.UtcNow
-                };
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+                requestId = _gptRequestRegistry.Register(saved.Id, linkedCts);
 
-                try
-                {
-                    await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new GptInteractionDTO
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponseStarted",
+                    saved.Id,
+                    requestId,
+                    linkedCts.Token);
+
+                var finalResponse = await _mistralAIService.StreamSuggestionAsync(
+                    request.Prompt,
+                    request.Latitude,
+                    request.Longitude,
+                    async chunk =>
                     {
-                        Id = dto.Id ?? 0,
-                        Prompt = dto.Prompt,
-                        Response = dto.Response,
-                        CreatedAt = dto.CreatedAt
-                    });
+                        chunk.InteractionId = saved.Id;
+                        chunk.RequestId = requestId!;
 
-                    _logger.LogInformation("SignalR broadcast OK");
-                }
-                catch (Exception hubEx)
+                        await _hubContext.Clients.All.SendAsync(
+                            "ReceiveGptResponseChunk",
+                            chunk.InteractionId,
+                            chunk.RequestId,
+                            chunk.Chunk,
+                            false,
+                            linkedCts.Token);
+                    },
+                    linkedCts.Token);
+
+                saved.Response = finalResponse;
+
+                var updated = await _gptRepository.UpsertInteractionAsync(saved);
+
+                var finalDto = new GptInteractionDTO
                 {
-                    _logger.LogWarning(hubEx, "GPT saved but SignalR broadcast failed.");
+                    Id = updated?.Id ?? saved.Id,
+                    Prompt = updated?.Prompt ?? saved.Prompt,
+                    Response = updated?.Response ?? finalResponse,
+                    CreatedAt = updated?.CreatedAt != default ? updated.CreatedAt : DateTime.UtcNow};
+
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponseChunk",
+                    finalDto.Id,
+                    requestId!,
+                    string.Empty,
+                    true,
+                    linkedCts.Token);
+
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponse",
+                    finalDto,
+                    linkedCts.Token);
+
+                return Ok(finalDto);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation(
+                    "GPT generation cancelled. InteractionId={InteractionId}, RequestId={RequestId}",
+                    saved?.Id,
+                    requestId);
+
+                if (saved is not null && saved.Id > 0)
+                {
+                    await _hubContext.Clients.All.SendAsync(
+                        "ReceiveGptResponseCancelled",
+                        saved.Id,
+                        requestId ?? string.Empty,
+                        CancellationToken.None);
                 }
 
-                return Ok(dto);
+                return Ok(new
+                {
+                    cancelled = true,
+                    interactionId = saved?.Id,
+                    requestId
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error calling Mistral (Ollama)");
+                _logger.LogError(ex, "Error streaming Mistral response.");
+
+                if (saved is not null && saved.Id > 0)
+                {
+                    await _hubContext.Clients.All.SendAsync(
+                        "ReceiveGptResponseFailed",
+                        saved.Id,
+                        ex.Message,
+                        CancellationToken.None);
+                }
+
                 return StatusCode(500, $"Error: {ex.Message}");
+            }
+            finally
+            {
+                if (saved is not null && saved.Id > 0)
+                    _gptRequestRegistry.Remove(saved.Id);
+
+                linkedCts?.Dispose();
+            }
+        }
+
+        [HttpPost("cancel/{interactionId:int}")]
+        public IActionResult Cancel(int interactionId, [FromQuery] string? requestId = null)
+        {
+            if (interactionId <= 0)
+                return BadRequest("The provided interaction ID is invalid.");
+
+            try
+            {
+                var cancelled = _gptRequestRegistry.TryCancel(interactionId, requestId);
+
+                if (!cancelled)
+                {
+                    return NotFound(new
+                    {
+                        message = "No active GPT request found for this interaction, or the requestId does not match.",
+                        interactionId,
+                        requestId
+                    });
+                }
+
+                return Ok(new
+                {
+                    cancellationRequested = true,
+                    interactionId,
+                    requestId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling GPT request. InteractionId={InteractionId}", interactionId);
+                return StatusCode(500, $"Error while cancelling request: {ex.Message}");
             }
         }
 
         [HttpGet("test-gpt")]
         public async Task<IActionResult> TestGPT([FromServices] IAIRepository aiService)
         {
-            try
-            {
-                var result = await aiService.AskChatGptAsync("Give me 3 ideas for activities on a rainy day in Han-Sur-Lesse.");
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-
-                throw;
-            }
-            
+            var result = await aiService.AskChatGptAsync("Give me 3 ideas for activities on a rainy day in Han-Sur-Lesse.");
+            return Ok(result);
         }
+
         [HttpPost("suggest")]
         public async Task<IActionResult> SuggestAlternative([FromBody] GptPromptRequest request)
         {
@@ -210,52 +283,36 @@ namespace CitizenHackathon2025.API.Controllers
         {
             if (id <= 0)
                 return BadRequest("The provided ID is invalid.");
-            try
-            {
-                var success = await _gptRepository.DeactivateInteractionAsync(id);
-                if (!success)
-                    return NotFound($"No active GPT interaction with ID {id} found.");
 
-                return Ok(new { message = "Interaction deactivated successfully." });
-            }
-            catch (Exception ex)
-            {
+            var success = await _gptRepository.DeactivateInteractionAsync(id);
+            if (!success)
+                return NotFound($"No active GPT interaction with ID {id} found.");
 
-                throw;
-            }
-            
+            return Ok(new { message = "Interaction deactivated successfully." });
         }
 
         [HttpPost("replay/{id}")]
         public async Task<IActionResult> ReplayInteraction(int id)
         {
-            try
+            var interaction = await _gptRepository.GetByIdAsync(id);
+            if (interaction == null)
+                return NotFound();
+
+            await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
             {
-                var interaction = await _gptRepository.GetByIdAsync(id);
-                if (interaction == null)
-                    return NotFound();
+                Id = interaction.Id,
+                prompt = interaction.Prompt,
+                response = interaction.Response,
+                createdAt = interaction.CreatedAt
+            });
 
-                await _hubContext.Clients.All.SendAsync("ReceiveGptResponse", new
-                {
-                    Id = interaction.Id,
-                    prompt = interaction.Prompt,
-                    response = interaction.Response,
-                    createdAt = interaction.CreatedAt
-                });
-
-                return Ok(new
-                {
-                    message = "Replayed successfully.",
-                    interaction = interaction
-                });
-            }
-            catch (Exception ex)
+            return Ok(new
             {
-
-                throw;
-            }
-            
+                message = "Replayed successfully.",
+                interaction
+            });
         }
+
         [HttpPost("archive-expired")]
         [Authorize(Policy = Policies.AdminPolicy)]
         public async Task<IActionResult> ArchiveExpiredGptInteractions()

@@ -549,7 +549,7 @@ internal class Program
         services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
         {
             client.BaseAddress = new Uri("http://127.0.0.1:11434/");
-            client.Timeout = TimeSpan.FromSeconds(300);
+            client.Timeout = Timeout.InfiniteTimeSpan;
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
         })
         .AddHttpMessageHandler(sp =>
@@ -664,8 +664,9 @@ internal class Program
         services.AddSingleton<ITimeZoneConverter, DefaultTimeZoneConverter>();
         services.AddSingleton<TokenGenerator>();
         services.AddSingleton<IDeviceHasher, DeviceHasher>();
-
+        services.AddSingleton<IGptRequestRegistry, GptRequestRegistry>();
         services.AddSingleton<ICspViolationStore, CspViolationStore>();
+
         services.AddMemoryCache();
         services.AddScoped<MemoryCacheService>();
 
