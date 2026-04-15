@@ -25,25 +25,25 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         private static string GetIcon(int level)
         {
-            if (level <= 3) return "✅";
-            if (level <= 6) return "⚠️";
-            if (level <= 8) return "🔥";
+            if (level <= 1) return "✅";
+            if (level <= 2) return "⚠️";
+            if (level <= 3) return "🔥";
             return "⛔";
         }
 
         private static string GetColor(int level)
         {
-            if (level <= 3) return "#4CAF50";   // Green
-            if (level <= 6) return "#FFC107";   // Yellow
-            if (level <= 8) return "#FF5722";   // dark orange
+            if (level <= 1) return "#4CAF50";   // Green
+            if (level <= 2) return "#FFC107";   // Yellow
+            if (level <= 3) return "#FF5722";   // dark orange
             return "#D32F2F";                   // red
         }
 
         private static string GetVisualLevel(int level)
         {
-            if (level <= 3) return "Low";
-            if (level <= 6) return "Medium";
-            if (level <= 8) return "High";
+            if (level <= 1) return "Low";
+            if (level <= 2) return "Medium";
+            if (level <= 3) return "High";
             return "Critical";
         }
     }

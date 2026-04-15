@@ -11,7 +11,6 @@ namespace CitizenHackathon2025.API.Extensions
         {
             services.AddScoped<IAIRepository, AIRepository>();
             services.AddScoped<IAIService, AIService>();
-            services.AddScoped<IGPTService, GPTService>();
 
             return services;
         }

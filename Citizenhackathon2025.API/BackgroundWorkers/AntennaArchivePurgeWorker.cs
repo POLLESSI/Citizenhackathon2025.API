@@ -43,7 +43,7 @@ namespace CitizenHackathon2025.API.BackgroundWorkers
 
                         totalPurged += purged;
 
-                        // 0 => plus rien à purger
+                        // 0 => nothing left to purge
                         if (purged <= 0) break;
                     }
 

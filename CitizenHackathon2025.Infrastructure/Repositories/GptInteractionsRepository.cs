@@ -11,7 +11,7 @@ using System.Text;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
-    public class GptInteractionsRepository : IGptInteractionRepository, IGPTRepository
+    public class GptInteractionsRepository : IGptInteractionRepository
     {
 #nullable disable
         private readonly IDbConnection _connection;
@@ -305,10 +305,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             try
             {
+                _logger.LogInformation(
+                    "Calling sp_GptInteraction_Upsert. PromptHash={PromptHash}, ResponseLength={ResponseLength}",
+                    promptHash,
+                    interaction.Response?.Length ?? 0);
+
                 var result = await _connection.QuerySingleOrDefaultAsync<GPTInteraction>(
-                    "dbo.sp_GptInteraction_Upsert",
-                    parameters,
-                    commandType: CommandType.StoredProcedure);
+                    "dbo.sp_GptInteraction_Upsert", parameters, commandType: CommandType.StoredProcedure);
+
+                _logger.LogInformation("sp_GptInteraction_Upsert completed. PromptHash={PromptHash}, ReturnedId={ReturnedId}, ReturnedResponseLength={ReturnedResponseLength}",
+                    promptHash, result?.Id ?? 0, result?.Response?.Length ?? 0);
+
 
                 if (result == null)
                 {

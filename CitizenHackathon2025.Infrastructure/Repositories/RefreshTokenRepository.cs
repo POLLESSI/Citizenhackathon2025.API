@@ -36,19 +36,19 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public Task<IEnumerable<RefreshToken>> GetActiveByEmailAsync(string email)
     => _connection.QueryAsync<RefreshToken>(@"
-        SELECT *
-        FROM [RefreshTokens]
-        WHERE Email = @Email
-          AND Status = @Active
-          AND ExpiryDate > SYSUTCDATETIME()
-        ORDER BY CreatedAt DESC",
+                                        SELECT *
+                                        FROM [RefreshTokens]
+                                        WHERE Email = @Email
+                                          AND Status = @Active
+                                          AND ExpiryDate > SYSUTCDATETIME()
+                                        ORDER BY CreatedAt DESC",
         new { Email = email, Active = (int)RefreshTokenStatus.Active });
 
         // hash/salt writing (without clear token)
         public Task AddHashedAsync(string email, DateTime expiryDate, byte[] tokenHash, byte[] tokenSalt)
             => _connection.ExecuteAsync(@"
-                INSERT INTO [RefreshTokens](Email, ExpiryDate, Status, IsRevoked, CreatedAt, TokenHash, TokenSalt)
-                VALUES (@Email, @ExpiryDate, @Status, 0, SYSUTCDATETIME(), @TokenHash, @TokenSalt)",
+                                    INSERT INTO [RefreshTokens](Email, ExpiryDate, Status, IsRevoked, CreatedAt, TokenHash, TokenSalt)
+                                    VALUES (@Email, @ExpiryDate, @Status, 0, SYSUTCDATETIME(), @TokenHash, @TokenSalt)",
                 new
                 {
                     Email = email,
@@ -61,10 +61,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         // ========== CREATE ==========
         public Task AddAsync(RefreshToken refreshToken)
             => _connection.ExecuteAsync(@"
-                INSERT INTO [RefreshTokens]
-                    (Token, Email, ExpiryDate, Status, IsRevoked, CreatedAt, TokenHash, TokenSalt)
-                VALUES
-                    (@Token, @Email, @ExpiryDate, @Status, CASE WHEN @Status=@Revoked THEN 1 ELSE 0 END, SYSUTCDATETIME(), @TokenHash, @TokenSalt)",
+                                    INSERT INTO [RefreshTokens]
+                                        (Token, Email, ExpiryDate, Status, IsRevoked, CreatedAt, TokenHash, TokenSalt)
+                                    VALUES
+                                        (@Token, @Email, @ExpiryDate, @Status, CASE WHEN @Status=@Revoked THEN 1 ELSE 0 END, SYSUTCDATETIME(), @TokenHash, @TokenSalt)",
                 new
                 {
                     refreshToken.Token,           // if column kept during migration
@@ -79,12 +79,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         // ========== UPDATE ==========
         public Task UpdateStatusAsync(int id, RefreshTokenStatus status)
             => _connection.ExecuteAsync(@"
-                UPDATE [RefreshTokens]
-                SET Status   = @status,
-                    IsRevoked = CASE WHEN @status = @revoked THEN 1
-                                     WHEN @status = @active  THEN 0
-                                     ELSE IsRevoked END
-                WHERE Id = @id;",
+                                    UPDATE [RefreshTokens]
+                                    SET Status   = @status,
+                                        IsRevoked = CASE WHEN @status = @revoked THEN 1
+                                                         WHEN @status = @active  THEN 0
+                                                         ELSE IsRevoked END
+                                    WHERE Id = @id;",
                 new
                 {
                     id,
@@ -96,23 +96,23 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public Task RevokeAsync(string token)
             => _connection.ExecuteAsync(@"
-                UPDATE [RefreshTokens]
-                SET Status=@Revoked, IsRevoked=1
-                WHERE Token=@Token;",
+                                    UPDATE [RefreshTokens]
+                                    SET Status=@Revoked, IsRevoked=1
+                                    WHERE Token=@Token;",
                 new { Token = token, Revoked = (int)RefreshTokenStatus.Revoked });
 
         public Task ExpireAsync(string token)
             => _connection.ExecuteAsync(@"
-                UPDATE [RefreshTokens]
-                SET Status=@Expired
-                WHERE Token=@Token;",
+                                    UPDATE [RefreshTokens]
+                                    SET Status=@Expired
+                                    WHERE Token=@Token;",
                 new { Token = token, Expired = (int)RefreshTokenStatus.Expired });
 
         public Task DeactivateTokenAsync(int id)
             => _connection.ExecuteAsync(@"
-                UPDATE [RefreshTokens]
-                SET Status=@Revoked, IsRevoked=1
-                WHERE Id=@Id;",
+                                    UPDATE [RefreshTokens]
+                                    SET Status=@Revoked, IsRevoked=1
+                                    WHERE Id=@Id;",
                 new { Id = id, Revoked = (int)RefreshTokenStatus.Revoked });
     }
 }

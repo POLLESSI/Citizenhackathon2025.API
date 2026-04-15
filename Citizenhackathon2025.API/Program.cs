@@ -644,7 +644,6 @@ internal class Program
         services.AddScoped<ICrowdCalendarRepository, CrowdCalendarRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
-        services.AddScoped<IGPTRepository, GptInteractionsRepository>();
         services.AddScoped<ILocalAiDataRepository, LocalAiDataRepository>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
         services.AddScoped<IProfanityRepository, ProfanityRepository>();
@@ -681,7 +680,8 @@ internal class Program
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IEventReadService, EventReadService>();
         services.AddScoped<IGeoService, GeoService>();
-        services.AddScoped<IGPTService, GPTService>();
+        services.AddScoped<IGptOrchestrator, GptOrchestrator>();
+        services.AddScoped<ILocalAiContextService, LocalAiContextService>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
@@ -693,7 +693,7 @@ internal class Program
         services.AddScoped<ITrafficConditionService, TrafficConditionService>();
         services.AddScoped<ITrafficIngestionService, TrafficIngestionService>();
         services.AddScoped<ITrafficOdwbIngestionService, TrafficOdwbIngestionService>();
-        services.AddScoped<ILocalAiContextService, LocalAiContextService>();
+        services.AddScoped<IUiTextLocalizer, UiTextLocalizer>();
         services.AddScoped<IUserMessageService, UserMessageService>();
         services.AddScoped<IWallonieEnPocheSourceClient, FakeWallonieEnPocheSourceClient>();
         services.AddScoped<IWallonieEnPocheSyncRepository, WallonieEnPocheSyncRepository>();

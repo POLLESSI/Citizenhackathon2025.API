@@ -23,9 +23,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Event> CreateEventAsync(Event newEvent, CancellationToken ct = default)
         {
             const string sql = @"
-                INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
-                VALUES (@Name, @PlaceId, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
-                SELECT CAST(SCOPE_IDENTITY() as int);";
+                            INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
+                            VALUES (@Name, @PlaceId, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
+                            SELECT CAST(SCOPE_IDENTITY() as int);";
 
             try
             {
@@ -79,9 +79,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Event> GetByIdAsync(int id, CancellationToken ct = default)
         {
             const string sql = @"
-                                SELECT TOP(1) *
-                                FROM dbo.Event
-                                WHERE Id = @Id 
+                            SELECT TOP(1) *
+                            FROM dbo.Event
+                            WHERE Id = @Id 
                             ";
             try
             {
@@ -103,11 +103,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public Task<IEnumerable<Event>> GetLatestEventAsync(int limit = 10, CancellationToken ct = default)
         {
             const string sql = @"
-                    SELECT TOP(@Limit)
-                        [Id], [Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active]
-                    FROM [Event]
-                    WHERE [Active] = 1
-                    ORDER BY [DateEvent] DESC;";
+                            SELECT TOP(@Limit)
+                                [Id], [Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active]
+                            FROM [Event]
+                            WHERE [Active] = 1
+                            ORDER BY [DateEvent] DESC;";
 
             return _connection.QueryAsync<Event>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
@@ -115,20 +115,20 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<IEnumerable<Event>> GetUpcomingOutdoorEventsAsync(CancellationToken ct = default)
         {
             string sql = @"
-            SELECT [Id],
-                   [Name],
-                   [PlaceId],
-                   [Latitude],
-                   [Longitude],
-                   [DateEvent],
-                   [ExpectedCrowd],
-                   [IsOutdoor],
-                   [Active]
-            FROM [Event]
-            WHERE [IsOutdoor] = 1
-              AND [Active] = 1
-              AND [DateEvent] >= CAST(GETDATE() AS DATE)
-            ORDER BY [DateEvent] ASC;";
+                        SELECT [Id],
+                                [Name],
+                                [PlaceId],
+                                [Latitude],
+                                [Longitude],
+                                [DateEvent],
+                                [ExpectedCrowd],
+                                [IsOutdoor],
+                                [Active]
+                        FROM [Event]
+                        WHERE [IsOutdoor] = 1
+                            AND [Active] = 1
+                            AND [DateEvent] >= CAST(GETDATE() AS DATE)
+                        ORDER BY [DateEvent] ASC;";
 
             try
             {
@@ -176,9 +176,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Event> SaveEventAsync(Event @event, CancellationToken ct = default)
         {
             const string sql = @"
-                    INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
-                    VALUES (@Name, @PlaceId, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
-                    SELECT CAST(SCOPE_IDENTITY() as int);";
+                            INSERT INTO [Event] ([Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active])
+                            VALUES (@Name, @PlaceId, @Latitude, @Longitude, @DateEvent, @ExpectedCrowd, @IsOutdoor, 1);
+                            SELECT CAST(SCOPE_IDENTITY() as int);";
             try
             {
                 DynamicParameters parameters = new DynamicParameters();
@@ -216,15 +216,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
 
             const string sql = @"
-                    UPDATE [Event]
-                    SET Name = @Name,
-                        PlaceId = @PlaceId,
-                        Latitude = @Latitude,     
-                        Longitude = @Longitude,    
-                        DateEvent = @DateEvent,
-                        ExpectedCrowd = @ExpectedCrowd,
-                        IsOutdoor = @IsOutdoor
-                    WHERE Id = @Id AND Active = 1;";
+                            UPDATE [Event]
+                            SET Name = @Name,
+                                PlaceId = @PlaceId,
+                                Latitude = @Latitude,     
+                                Longitude = @Longitude,    
+                                DateEvent = @DateEvent,
+                                ExpectedCrowd = @ExpectedCrowd,
+                                IsOutdoor = @IsOutdoor
+                            WHERE Id = @Id AND Active = 1;";
 
             try
             {
@@ -261,10 +261,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<int> ArchivePastEventsAsync(CancellationToken ct = default)
         {
             const string sql = @"
-                        UPDATE [Event]
-                        SET [Active] = 0
-                        WHERE [Active] = 1
-                          AND [DateEvent] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
+                            UPDATE [Event]
+                            SET [Active] = 0
+                            WHERE [Active] = 1
+                              AND [DateEvent] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
 
             try
             {

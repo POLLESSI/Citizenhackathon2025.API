@@ -24,11 +24,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public Task<IEnumerable<Place>> GetLatestPlaceAsync(int limit = 200, CancellationToken ct = default)
         {
             const string sql = @"
-                SELECT TOP(@Limit)
-                    [Id], [Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag], [Active]
-                FROM [Place]
-                WHERE [Active] = 1
-                ORDER BY Id DESC;";
+                            SELECT TOP(@Limit)
+                                [Id], [Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag], [Active]
+                            FROM [Place]
+                            WHERE [Active] = 1
+                            ORDER BY Id DESC;";
             return _connection.QueryAsync<Place>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
         public Task<IEnumerable<Place>> GetNearbyPlacesAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default)
@@ -40,7 +40,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             try
             {
                 const string sql = "INSERT INTO [Place] ([Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag])" +
-                "VALUES (@Name, @Type, @Indoor, @Latitude, @Longitude, @Capacity, @Tag)";
+                                    "VALUES (@Name, @Type, @Indoor, @Latitude, @Longitude, @Capacity, @Tag)";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Name", place.Name);
                 parameters.Add("@Type", place.Type);
@@ -64,9 +64,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<Place> GetByIdAsync(int id, CancellationToken ct = default)
         {
             const string sql = @"
-                                SELECT TOP(1) *
-                                FROM dbo.Place
-                                WHERE Id = @Id /* AND Active = 1 si tu as ce champ */
+                            SELECT TOP(1) *
+                            FROM dbo.Place
+                            WHERE Id = @Id /* AND Active = 1 si tu as ce champ */
                             ";
             try
             {
@@ -94,12 +94,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             try
             {
                 const string sql = @"
-                            IF EXISTS (SELECT 1 FROM Place WHERE Name=@Name)
-                              UPDATE [Place] SET Type=@Type, Indoor=@Indoor, Latitude=@Latitude, Longitude=@Longitude, Capacity=@Capacity, Tag=@Tag
-                              WHERE Name=@Name;
-                            ELSE
-                              INSERT INTO [Place]([Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag], [Active])
-                              VALUES (@Name, @Type, @Indoor, @Latitude, @Longitude, @Capacity, @Tag, 1);";
+                                IF EXISTS (SELECT 1 FROM Place WHERE Name=@Name)
+                                  UPDATE [Place] SET Type=@Type, Indoor=@Indoor, Latitude=@Latitude, Longitude=@Longitude, Capacity=@Capacity, Tag=@Tag
+                                  WHERE Name=@Name;
+                                ELSE
+                                  INSERT INTO [Place]([Name], [Type], [Indoor], [Latitude], [Longitude], [Capacity], [Tag], [Active])
+                                  VALUES (@Name, @Type, @Indoor, @Latitude, @Longitude, @Capacity, @Tag, 1);";
                 DynamicParameters parameters = new DynamicParameters();
                 //parameters.Add("@Id", place.Id, DbType.Int64);
                 parameters.Add("@Name", place.Name, DbType.String);

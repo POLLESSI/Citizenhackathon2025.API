@@ -1,17 +1,24 @@
-﻿using MediatR;
-using CitizenHackathon2025.DTOs.UI;
+﻿using CitizenHackathon2025.DTOs.UI;
+using MediatR;
 
 namespace CitizenHackathon2025.Application.CQRS.Commands
 {
-    public class SuggestAlternativeCommand : IRequest<SuggestionUIResponseDTO>
+    public sealed class SuggestAlternativeCommand : IRequest<SuggestionUIResponseDTO>
     {
-        public string Destination { get; set; }
-        public string UserPosition { get; set; } 
+        public string Destination { get; }
+        public string UserPosition { get; }
+        public string LanguageCode { get; }
 
-        public SuggestAlternativeCommand(string destination, string userPosition)
+        public SuggestAlternativeCommand(
+            string destination,
+            string userPosition,
+            string languageCode = "fr")
         {
-            Destination = destination;
-            UserPosition = userPosition;
+            Destination = destination ?? string.Empty;
+            UserPosition = userPosition ?? string.Empty;
+            LanguageCode = string.IsNullOrWhiteSpace(languageCode)
+                ? "fr"
+                : languageCode.Trim().ToLowerInvariant();
         }
     }
 }

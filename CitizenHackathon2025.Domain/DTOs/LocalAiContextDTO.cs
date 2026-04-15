@@ -5,9 +5,9 @@
         public string UserPrompt { get; set; } = string.Empty;
         public string? LocationLabel { get; set; }
 
-        public DateTime? TargetDate { get; set; }
-        public double? Latitude { get; set; }
-        public double? Longitude { get; set; }
+        public DateTime TargetDate { get; set; }
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
 
         public List<LocalAiEventContextDTO> Events { get; set; } = new();
         public List<LocalAiCrowdCalendarContextDTO> CrowdCalendar { get; set; } = new();

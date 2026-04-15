@@ -37,7 +37,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     if (!entered) { _logger.LogWarning("GPT Interactions archiving overlap, skipping."); continue; }
 
                     using var scope = _scopeFactory.CreateScope();
-                    var repo = scope.ServiceProvider.GetRequiredService<IGPTRepository>();
+                    var repo = scope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();
                     var n = await repo.ArchivePastGptInteractionsAsync();
                     _logger.LogInformation("Archived {Count} GPT interactions.", n);
                 }

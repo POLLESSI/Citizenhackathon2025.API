@@ -1,12 +1,11 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Services;
-using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.Services;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Moq.Protected;
+using System.Net;
+using System.Text;
 using Xunit;
 
 namespace CitizenHackathon2025.API.Tests
@@ -14,81 +13,117 @@ namespace CitizenHackathon2025.API.Tests
     public class MistralAIServiceTests
     {
         [Fact]
-        public async Task GenerateSuggestionAsync_ReturnsValidResponse()
+        public async Task GenerateFromPromptAsync_ReturnsValidResponse()
         {
             // Arrange
-            var mockMistralService = new Mock<IMistralAIService>();
+            var json = """
+            {
+              "message": {
+                "content": "Test suggestion"
+              }
+            }
+            """;
 
-            mockMistralService
-                .Setup(s => s.GenerateSuggestionAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<double?>(),
-                    It.IsAny<double?>(),
-                    It.IsAny<CancellationToken>()))
-                .ReturnsAsync("Test suggestion");
+            var handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
 
-            var suggestionService = new SuggestionService(
-                Mock.Of<ISuggestionRepository>(),
-                Mock.Of<IPlaceRepository>(),
-                Mock.Of<IEventRepository>(),
-                mockMistralService.Object,
-                Mock.Of<IUserRepository>(),
-                new MemoryCache(new MemoryCacheOptions()),
-                Mock.Of<ILogger<SuggestionService>>()
-            );
+            handlerMock
+                .Protected()
+                .Setup<Task<HttpResponseMessage>>(
+                    "SendAsync",
+                    ItExpr.Is<HttpRequestMessage>(req =>
+                        req.Method == HttpMethod.Post),
+                    ItExpr.IsAny<CancellationToken>())
+                .ReturnsAsync(new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                });
+
+            var httpClient = new HttpClient(handlerMock.Object)
+            {
+                BaseAddress = new Uri("http://localhost:11434/")
+            };
+
+            var config = new Mock<IConfiguration>();
+            config.Setup(c => c["MistralAI:Model"]).Returns("mistral");
+            config.Setup(c => c["MistralAI:Temperature"]).Returns("0.3");
+
+            var logger = new Mock<ILogger<MistralAIService>>();
+
+            var service = new MistralAIService(
+                httpClient,
+                config.Object,
+                logger.Object);
 
             // Act
-            var result = await suggestionService.GenerateSuggestionAsync("context", CancellationToken.None);
+            var result = await service.GenerateFromPromptAsync("Prompt de test", CancellationToken.None);
 
             // Assert
             Assert.NotNull(result);
+            Assert.Equal("Test suggestion", result);
         }
 
         [Fact]
-        public async Task SaveSuggestionAsync_ValidSuggestion_ReturnsSavedSuggestion()
+        public async Task StreamFromPromptAsync_ReturnsConcatenatedStream()
         {
             // Arrange
-            var mockRepo = new Mock<ISuggestionRepository>();
-            mockRepo
-                .Setup(r => r.SaveSuggestionAsync(It.IsAny<Suggestion>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Suggestion { Id = 1, User_Id = 1 });
+            var streamPayload =
+                """
+                {"message":{"content":"Bonjour "},"done":false}
+                {"message":{"content":"le monde"},"done":false}
+                {"message":{"content":""},"done":true}
+                """;
 
-            var mockLogger = new Mock<ILogger<MistralAIService>>();
-            var mockConfig = new Mock<IConfiguration>();
-            var mockCache = new Mock<IMemoryCache>();
-            var mockLocalAiContextService = new Mock<ILocalAiContextService>();
+            var handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
 
-            // Dummy setup
-            mockConfig.Setup(c => c["MistralAI:ApiKey"]).Returns("test-api-key");
-            mockConfig.Setup(c => c["MistralAI:ApiUrl"]).Returns("https://test-api-url.com");
-            mockConfig.Setup(c => c["MistralAI:Model"]).Returns("mistral-test-model");
+            handlerMock
+                .Protected()
+                .Setup<Task<HttpResponseMessage>>(
+                    "SendAsync",
+                    ItExpr.Is<HttpRequestMessage>(req =>
+                        req.Method == HttpMethod.Post),
+                    ItExpr.IsAny<CancellationToken>())
+                .ReturnsAsync(new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent(streamPayload, Encoding.UTF8, "application/json")
+                });
 
-            var service = new MistralAIService(
-                new HttpClient(),
-                mockConfig.Object,
-                mockLogger.Object,
-                Mock.Of<MistralContextBuilder>(),
-                mockRepo.Object,
-                mockCache.Object,
-                mockLocalAiContextService.Object
-            );
-
-            var suggestion = new Suggestion
+            var httpClient = new HttpClient(handlerMock.Object)
             {
-                User_Id = 1,
-                Message = "Test suggestion",
-                DateSuggestion = DateTime.UtcNow
+                BaseAddress = new Uri("http://localhost:11434/")
             };
 
+            var config = new Mock<IConfiguration>();
+            config.Setup(c => c["MistralAI:Model"]).Returns("mistral");
+            config.Setup(c => c["MistralAI:Temperature"]).Returns("0.3");
+
+            var logger = new Mock<ILogger<MistralAIService>>();
+
+            var service = new MistralAIService(
+                httpClient,
+                config.Object,
+                logger.Object);
+
+            var receivedChunks = new List<string>();
+
             // Act
-            var result = await service.SaveSuggestionAsync(suggestion);
+            var result = await service.StreamFromPromptAsync(
+                "Prompt stream test",
+                chunk =>
+                {
+                    if (!string.IsNullOrWhiteSpace(chunk.Chunk))
+                        receivedChunks.Add(chunk.Chunk);
+
+                    return Task.CompletedTask;
+                },
+                CancellationToken.None);
 
             // Assert
-            Assert.NotNull(result);
-            Assert.Equal(1, result.Id);
-            mockRepo.Verify(
-                r => r.SaveSuggestionAsync(It.IsAny<Suggestion>(), It.IsAny<CancellationToken>()),
-                Times.Once);
+            Assert.Equal("Bonjour le monde", result);
+            Assert.Equal(2, receivedChunks.Count);
+            Assert.Equal("Bonjour ", receivedChunks[0]);
+            Assert.Equal("le monde", receivedChunks[1]);
         }
     }
 }

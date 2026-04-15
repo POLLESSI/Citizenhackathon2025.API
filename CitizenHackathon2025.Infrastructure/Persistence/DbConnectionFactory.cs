@@ -1,28 +1,25 @@
 ﻿using System.Data;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 
 namespace CitizenHackathon2025.Infrastructure.Persistence
 {
-    public class DbConnectionFactory
+    public sealed class DbConnectionFactory
     {
-        private readonly IConfiguration _configuration;
         private readonly string _connectionString;
 
         public DbConnectionFactory(IConfiguration configuration)
         {
-            _configuration = configuration;
-            _connectionString = _configuration.GetConnectionString("default")
+            _connectionString = configuration.GetConnectionString("default")
                 ?? throw new InvalidOperationException("Connection string 'default' not found.");
         }
 
         public IDbConnection CreateConnection()
         {
-            return null /*new SqlConnection(_connectionString)*/; // SqlConnection now uses the correct namespace  
+            return new SqlConnection(_connectionString);
         }
     }
 }
-
 
 
 

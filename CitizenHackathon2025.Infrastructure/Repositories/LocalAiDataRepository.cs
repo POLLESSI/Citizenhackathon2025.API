@@ -1,20 +1,41 @@
 ﻿using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.Persistence;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using System.Data;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
-    public class LocalAiDataRepository : ILocalAiDataRepository
+    public sealed class LocalAiDataRepository : ILocalAiDataRepository
     {
-        private readonly IDbConnection _connection;
+        private readonly DbConnectionFactory _connectionFactory;
 
-        public LocalAiDataRepository(IDbConnection connection)
+        public LocalAiDataRepository(DbConnectionFactory connectionFactory)
         {
-            _connection = connection;
+            _connectionFactory = connectionFactory;
         }
 
-        public async Task<IEnumerable<LocalAiCrowdCalendarContextDTO>> GetNearbyCrowdCalendarAsync(double latitude, double longitude, DateTime targetDate, double radiusKm, CancellationToken ct = default)
+        private async Task<IDbConnection> OpenConnectionAsync(CancellationToken ct)
+        {
+            var connection = _connectionFactory.CreateConnection();
+
+            if (connection is SqlConnection sqlConnection)
+            {
+                await sqlConnection.OpenAsync(ct);
+                return sqlConnection;
+            }
+
+            connection.Open();
+            return connection;
+        }
+
+        public async Task<IEnumerable<LocalAiCrowdCalendarContextDTO>> GetNearbyCrowdCalendarAsync(
+            double latitude,
+            double longitude,
+            DateTime targetDate,
+            double radiusKm,
+            CancellationToken ct = default)
         {
             const string sql = @"
                             WITH CrowdCalendarBase AS
@@ -35,7 +56,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                     Latitude = CAST(cc.Latitude AS float),
                                     Longitude = CAST(cc.Longitude AS float),
                                     cc.Active,
-                                    cc.CreatedAt,
                                     DistanceKm =
                                         6371.0 * ACOS(
                                             CASE
@@ -75,8 +95,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Latitude,
                                 Longitude,
                                 DistanceKm,
-                                Active,
-                                CreatedAt
+                                Active
                             FROM CrowdCalendarBase
                             WHERE DistanceKm <= @RadiusKm
                             ORDER BY DistanceKm ASC, ExpectedLevel DESC, Confidence DESC;";
@@ -87,11 +106,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
-            return await _connection.QueryAsync<LocalAiCrowdCalendarContextDTO>(
+            using var connection = await OpenConnectionAsync(ct);
+            return await connection.QueryAsync<LocalAiCrowdCalendarContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiCrowdInfoContextDTO>> GetNearbyCrowdInfoAsync(double latitude, double longitude, DateTime targetDate, double radiusKm, CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiCrowdInfoContextDTO>> GetNearbyCrowdInfoAsync(
+            double latitude,
+            double longitude,
+            DateTime targetDate,
+            double radiusKm,
+            CancellationToken ct = default)
         {
             const string sql = @"
                             WITH CrowdInfoBase AS
@@ -101,7 +126,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                     ci.LocationName,
                                     Latitude = CAST(ci.Latitude AS float),
                                     Longitude = CAST(ci.Longitude AS float),
-                                    ci.CrowdLevel,
+                                    CrowdLevel = CAST(ci.CrowdLevel AS int),
                                     [Timestamp] = ci.[Timestamp],
                                     ci.Active,
                                     DistanceKm =
@@ -146,11 +171,17 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
-            return await _connection.QueryAsync<LocalAiCrowdInfoContextDTO>(
+            using var connection = await OpenConnectionAsync(ct);
+            return await connection.QueryAsync<LocalAiCrowdInfoContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiEventContextDTO>> GetNearbyEventsAsync(double latitude, double longitude, DateTime targetDate, double radiusKm, CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiEventContextDTO>> GetNearbyEventsAsync(
+            double latitude,
+            double longitude,
+            DateTime targetDate,
+            double radiusKm,
+            CancellationToken ct = default)
         {
             const string sql = @"
                             WITH EventBase AS
@@ -188,9 +219,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.CrowdCalendar cc
                                 WHERE cc.Active = 1
-                                  AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
-                                  AND cc.Latitude IS NOT NULL
-                                  AND cc.Longitude IS NOT NULL
+                                    AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
+                                    AND cc.Latitude IS NOT NULL
+                                    AND cc.Longitude IS NOT NULL
                             )
                             SELECT TOP (8)
                                 Id,
@@ -215,22 +246,34 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
-            return await _connection.QueryAsync<LocalAiEventContextDTO>(
+            using var connection = await OpenConnectionAsync(ct);
+            return await connection.QueryAsync<LocalAiEventContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiTrafficContextDTO>> GetNearbyTrafficAsync(double latitude, double longitude, DateTime targetDate, double radiusKm, CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiTrafficContextDTO>> GetNearbyTrafficAsync(
+            double latitude,
+            double longitude,
+            DateTime targetDate,
+            double radiusKm,
+            CancellationToken ct = default)
         {
             const string sql = @"
                             WITH TrafficBase AS
                             (
                                 SELECT
                                     tc.Id,
-                                    Description = COALESCE(tc.Title, tc.IncidentType, tc.Road, 'Incident trafic'),
+                                    tc.DateCondition,
+                                    tc.CongestionLevel,
+                                    tc.IncidentType,
+                                    tc.Provider,
+                                    tc.ExternalId,
+                                    tc.Title,
+                                    tc.Road,
                                     Severity = CAST(tc.Severity AS int),
-                                    DateObserved = tc.DateCondition,
                                     Latitude = CAST(tc.Latitude AS float),
                                     Longitude = CAST(tc.Longitude AS float),
+                                    tc.Active,
                                     DistanceKm =
                                         6371.0 * ACOS(
                                             CASE
@@ -252,21 +295,25 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.TrafficCondition tc
                                 WHERE tc.Active = 1
-                                  AND tc.Latitude IS NOT NULL
-                                  AND tc.Longitude IS NOT NULL
                                   AND CAST(tc.DateCondition AS date) BETWEEN DATEADD(DAY, -1, @TargetDate) AND DATEADD(DAY, 1, @TargetDate)
                             )
                             SELECT TOP (5)
                                 Id,
-                                Description,
+                                DateCondition,
+                                CongestionLevel,
+                                IncidentType,
+                                Provider,
+                                ExternalId,
+                                Title,
+                                Road,
                                 Severity,
-                                DateObserved,
                                 Latitude,
                                 Longitude,
-                                DistanceKm
+                                DistanceKm,
+                                Active
                             FROM TrafficBase
                             WHERE DistanceKm <= @RadiusKm
-                            ORDER BY Severity DESC, DistanceKm ASC, DateObserved DESC;";
+                            ORDER BY Severity DESC, DistanceKm ASC, DateCondition DESC;";
 
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
@@ -274,25 +321,39 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
-            return await _connection.QueryAsync<LocalAiTrafficContextDTO>(
+            using var connection = await OpenConnectionAsync(ct);
+            return await connection.QueryAsync<LocalAiTrafficContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiWeatherContextDTO>> GetNearbyWeatherAsync(double latitude, double longitude, DateTime targetDate, double radiusKm, CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiWeatherContextDTO>> GetNearbyWeatherAsync(
+            double latitude,
+            double longitude,
+            DateTime targetDate,
+            double radiusKm,
+            CancellationToken ct = default)
         {
             const string sql = @"
                             WITH WeatherBase AS
                             (
                                 SELECT
                                     wf.Id,
-                                    ForecastDate = wf.DateWeather,
-                                    TemperatureC = CAST(wf.TemperatureC AS float),
-                                    Humidity = wf.Humidity,
-                                    WindSpeedKmh = CAST(wf.WindSpeedKmh AS float),
-                                    RainProbability = CAST(wf.RainfallMm AS float),
-                                    IsSevere = wf.IsSevere,
+                                    DateWeather = wf.DateWeather,
                                     Latitude = CAST(wf.Latitude AS float),
                                     Longitude = CAST(wf.Longitude AS float),
+                                    TemperatureC = CAST(wf.TemperatureC AS int),
+                                    TemperatureF = CAST(wf.TemperatureF AS int),
+                                    wf.Summary,
+                                    RainfallMm = CAST(wf.RainfallMm AS float),
+                                    Humidity = CAST(wf.Humidity AS int),
+                                    WindSpeedKmh = CAST(wf.WindSpeedKmh AS float),
+                                    wf.WeatherMain,
+                                    wf.Description,
+                                    wf.Icon,
+                                    wf.IconUrl,
+                                    WeatherType = CAST(wf.WeatherType AS int),
+                                    IsSevere = CAST(wf.IsSevere AS bit),
+                                    wf.Active,
                                     DistanceKm =
                                         6371.0 * ACOS(
                                             CASE
@@ -314,24 +375,30 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.WeatherForecast wf
                                 WHERE wf.Active = 1
-                                  AND wf.Latitude IS NOT NULL
-                                  AND wf.Longitude IS NOT NULL
                                   AND CAST(wf.DateWeather AS date) BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
                             )
                             SELECT TOP (3)
                                 Id,
-                                ForecastDate,
-                                TemperatureC,
-                                Humidity,
-                                WindSpeedKmh,
-                                RainProbability,
-                                IsSevere,
+                                DateWeather,
                                 Latitude,
                                 Longitude,
-                                DistanceKm
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                IsSevere,
+                                DistanceKm,
+                                Active
                             FROM WeatherBase
                             WHERE DistanceKm <= @RadiusKm
-                            ORDER BY DistanceKm ASC, ForecastDate ASC;";
+                            ORDER BY DistanceKm ASC, DateWeather ASC;";
 
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
@@ -339,7 +406,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
-            return await _connection.QueryAsync<LocalAiWeatherContextDTO>(
+            using var connection = await OpenConnectionAsync(ct);
+            return await connection.QueryAsync<LocalAiWeatherContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
     }

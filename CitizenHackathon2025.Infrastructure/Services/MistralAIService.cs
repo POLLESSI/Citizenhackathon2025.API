@@ -1,28 +1,25 @@
-﻿using CitizenHackathon2025.Application.Extensions;
-using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Application.Services;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    public class MistralAIService : IMistralAIService
+    public sealed class MistralAIService : IMistralAIService
     {
+        private const string OllamaChatEndpoint = "api/chat";
+        private const string SystemPrompt =
+            "You are a reliable local OutZen assistant. You never invent information outside the provided context.";
+
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<MistralAIService> _logger;
-        private readonly MistralContextBuilder _contextBuilder;
-        private readonly ISuggestionRepository _suggestionRepository;
-        private readonly IMemoryCache _cache;
-        private readonly ILocalAiContextService _localAiContextService;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -32,142 +29,119 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public MistralAIService(
             HttpClient httpClient,
             IConfiguration config,
-            ILogger<MistralAIService> logger,
-            MistralContextBuilder contextBuilder,
-            ISuggestionRepository suggestionRepository,
-            IMemoryCache cache,
-            ILocalAiContextService localAiContextService)
+            ILogger<MistralAIService> logger)
         {
-            _httpClient = httpClient;
-            _config = config;
-            _logger = logger;
-            _contextBuilder = contextBuilder;
-            _suggestionRepository = suggestionRepository;
-            _cache = cache;
-            _localAiContextService = localAiContextService;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<string> GenerateSuggestionAsync(string prompt, double? latitude, double? longitude, CancellationToken ct = default)
+        public async Task<string> GenerateFromPromptAsync(string groundedPrompt, CancellationToken ct = default)
         {
-            try
-            {
-                var model = _config["MistralAI:Model"] ?? "mistral";
+            if (string.IsNullOrWhiteSpace(groundedPrompt))
+                throw new ArgumentException("Grounded prompt cannot be null or empty.", nameof(groundedPrompt));
 
-                var localContext = await _localAiContextService.BuildContextAsync(prompt, latitude, longitude, ct);
-                var groundedPrompt = _localAiContextService.BuildPrompt(localContext);
+            var stopwatch = Stopwatch.StartNew();
+            var model = GetModel();
+            var temperature = GetTemperature();
 
-                var request = new
-                {
-                    model,
-                    messages = new[]
-                    {
-                        new
-                        {
-                            role = "system",
-                            content = "You are a reliable local OutZen assistant. You never invent information that is not in context."
-                        },
-                        new
-                        {
-                            role = "user",
-                            content = groundedPrompt
-                        }
-                    },
-                    stream = false,
-                    options = new
-                    {
-                        temperature = _config.GetValue<float?>("MistralAI:Temperature") ?? 0.3f
-                    }
-                };
+            var requestBody = BuildChatRequest(
+                groundedPrompt: groundedPrompt,
+                model: model,
+                temperature: temperature,
+                stream: false);
 
-                using var response = await _httpClient.PostAsJsonAsync("api/chat", request, ct);
-                var responseContent = await response.Content.ReadAsStringAsync(ct);
-
-                _logger.LogInformation("Ollama status code: {StatusCode}", (int)response.StatusCode);
-                _logger.LogDebug("Ollama raw response: {Response}", responseContent);
-
-                response.EnsureSuccessStatusCode();
-
-                var jsonResponse = JsonSerializer.Deserialize<MistralResponse>(responseContent, JsonOptions);
-                return jsonResponse?.Message?.Content?.Trim() ?? "No response from Mistral.";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error calling Mistral API");
-                throw;
-            }
-        }
-
-        public async Task<string> CallOllamaApi(string prompt, CancellationToken ct)
-        {
-            var endpoint = _config["MistralAI:ApiUrl"] ?? "http://localhost:11434/api/chat";
-            var model = _config["MistralAI:Model"] ?? "mistral";
-
-            var request = new
-            {
+            _logger.LogInformation(
+                "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
+                _httpClient.BaseAddress,
                 model,
-                messages = new[] { new { role = "user", content = prompt } },
-                stream = false,
-                options = new { temperature = _config.GetValue<float>("MistralAI:Temperature", 0.7f) }
-            };
+                temperature,
+                groundedPrompt.Length);
 
+            using var response = await _httpClient.PostAsJsonAsync(OllamaChatEndpoint, requestBody, ct);
+            var rawResponse = await response.Content.ReadAsStringAsync(ct);
+
+            _logger.LogInformation(
+                "[OLLAMA][SYNC] HTTP response received. StatusCode={StatusCode}, ElapsedMs={ElapsedMs}, ContentLength={ContentLength}",
+                (int)response.StatusCode,
+                stopwatch.ElapsedMilliseconds,
+                rawResponse?.Length ?? 0);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "[OLLAMA][SYNC] Non-success response from Ollama. StatusCode={StatusCode}, BodyPreview={BodyPreview}",
+                    (int)response.StatusCode,
+                    Truncate(rawResponse, 500));
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            MistralResponse? parsedResponse;
             try
             {
-                using var response = await _httpClient.PostAsJsonAsync(endpoint, request, ct);
-                response.EnsureSuccessStatusCode();
-
-                var responseContent = await response.Content.ReadAsStringAsync(ct);
-                var jsonResponse = JsonSerializer.Deserialize<MistralResponse>(responseContent, JsonOptions);
-
-                return jsonResponse?.Message?.Content ?? "No response from Mistral.";
+                parsedResponse = JsonSerializer.Deserialize<MistralResponse>(rawResponse, JsonOptions);
             }
-            catch (Exception ex)
+            catch (JsonException ex)
             {
-                _logger.LogError(ex, "Ollama error");
+                _logger.LogError(
+                    ex,
+                    "[OLLAMA][SYNC] Failed to deserialize Ollama response. BodyPreview={BodyPreview}",
+                    Truncate(rawResponse, 1000));
                 throw;
             }
+
+            var finalText = parsedResponse?.Message?.Content?.Trim();
+
+            if (string.IsNullOrWhiteSpace(finalText))
+            {
+                _logger.LogWarning(
+                    "[OLLAMA][SYNC] Empty assistant content returned. ElapsedMs={ElapsedMs}",
+                    stopwatch.ElapsedMilliseconds);
+
+                return "No response from Mistral.";
+            }
+
+            _logger.LogInformation(
+                "[OLLAMA][SYNC] Request completed. FinalLength={FinalLength}, ElapsedMs={ElapsedMs}",
+                finalText.Length,
+                stopwatch.ElapsedMilliseconds);
+
+            return finalText;
         }
 
-        public async Task<string> StreamSuggestionAsync(
-            string prompt,
-            double? latitude,
-            double? longitude,
+        public async Task<string> StreamFromPromptAsync(
+            string groundedPrompt,
             Func<GptResponseChunkDto, Task> onChunk,
             CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(onChunk);
 
-            var model = _config["MistralAI:Model"] ?? "mistral";
-            var temperature = _config.GetValue<float?>("MistralAI:Temperature") ?? 0.3f;
+            if (string.IsNullOrWhiteSpace(groundedPrompt))
+                throw new ArgumentException("Grounded prompt cannot be null or empty.", nameof(groundedPrompt));
 
-            var localContext = await _localAiContextService.BuildContextAsync(prompt, latitude, longitude, ct);
-            var groundedPrompt = _localAiContextService.BuildPrompt(localContext);
+            var stopwatch = Stopwatch.StartNew();
+            var model = GetModel();
+            var temperature = GetTemperature();
 
-            var requestBody = new
-            {
+            var requestBody = BuildChatRequest(
+                groundedPrompt: groundedPrompt,
+                model: model,
+                temperature: temperature,
+                stream: true);
+
+            _logger.LogInformation(
+                "[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
+                _httpClient.BaseAddress,
                 model,
-                messages = new[]
-                {
-                    new
-                    {
-                        role = "system",
-                        content = "You are a reliable local OutZen assistant. You never invent information that is not in context."
-                    },
-                    new
-                    {
-                        role = "user",
-                        content = groundedPrompt
-                    }
-                },
-                stream = true,
-                options = new
-                {
-                    temperature
-                }
-            };
+                temperature,
+                groundedPrompt.Length);
 
-            var accumulated = new StringBuilder();
+            var accumulated = new StringBuilder(4096);
+            var chunkCount = 0;
+            var lineCount = 0;
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, "api/chat")
+            using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
             {
                 Content = JsonContent.Create(requestBody)
             };
@@ -177,7 +151,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 HttpCompletionOption.ResponseHeadersRead,
                 ct);
 
-            _logger.LogInformation("Ollama streaming status code: {StatusCode}", (int)response.StatusCode);
+            _logger.LogInformation(
+                "[OLLAMA][STREAM] Response headers received. StatusCode={StatusCode}, ElapsedMs={ElapsedMs}",
+                (int)response.StatusCode,
+                stopwatch.ElapsedMilliseconds);
 
             response.EnsureSuccessStatusCode();
 
@@ -189,27 +166,34 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 ct.ThrowIfCancellationRequested();
 
                 var line = await reader.ReadLineAsync(ct);
+                lineCount++;
 
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
-                OllamaChatStreamResponse? chunkEnvelope;
+                OllamaChatStreamResponse? envelope;
                 try
                 {
-                    chunkEnvelope = JsonSerializer.Deserialize<OllamaChatStreamResponse>(line, JsonOptions);
+                    envelope = JsonSerializer.Deserialize<OllamaChatStreamResponse>(line, JsonOptions);
                 }
-                catch (Exception ex)
+                catch (JsonException ex)
                 {
-                    _logger.LogWarning(ex, "Failed to deserialize Ollama stream line: {Line}", line);
+                    _logger.LogWarning(
+                        ex,
+                        "[OLLAMA][STREAM] Failed to deserialize stream line #{LineCount}. LinePreview={LinePreview}",
+                        lineCount,
+                        Truncate(line, 500));
                     continue;
                 }
 
-                if (chunkEnvelope is null)
+                if (envelope is null)
                     continue;
 
-                var chunkText = chunkEnvelope.Message?.Content ?? string.Empty;
-                if (!string.IsNullOrEmpty(chunkText))
+                var chunkText = envelope.Message?.Content ?? string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(chunkText))
                 {
+                    chunkCount++;
                     accumulated.Append(chunkText);
 
                     await onChunk(new GptResponseChunkDto
@@ -219,96 +203,110 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     });
                 }
 
-                if (chunkEnvelope.Done)
+                if (envelope.Done)
+                {
+                    _logger.LogInformation(
+                        "[OLLAMA][STREAM] Stream completion received. DoneReason={DoneReason}, ChunkCount={ChunkCount}, TotalLength={TotalLength}, ElapsedMs={ElapsedMs}",
+                        envelope.DoneReason,
+                        chunkCount,
+                        accumulated.Length,
+                        stopwatch.ElapsedMilliseconds);
                     break;
+                }
             }
 
             var finalText = accumulated.ToString().Trim();
-            return string.IsNullOrWhiteSpace(finalText)
-                ? "No response from Mistral."
-                : finalText;
+
+            if (string.IsNullOrWhiteSpace(finalText))
+            {
+                _logger.LogWarning(
+                    "[OLLAMA][STREAM] Empty final content returned. ChunkCount={ChunkCount}, LineCount={LineCount}, ElapsedMs={ElapsedMs}",
+                    chunkCount,
+                    lineCount,
+                    stopwatch.ElapsedMilliseconds);
+
+                return "No response from Mistral.";
+            }
+
+            _logger.LogInformation(
+                "[OLLAMA][STREAM] Request completed. ChunkCount={ChunkCount}, LineCount={LineCount}, FinalLength={FinalLength}, ElapsedMs={ElapsedMs}",
+                chunkCount,
+                lineCount,
+                finalText.Length,
+                stopwatch.ElapsedMilliseconds);
+
+            return finalText;
         }
 
-        public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(string prompt, CancellationToken ct = default)
+        public Task<IEnumerable<Suggestion>> GetWeatherAdvisoryAsync(string location, CancellationToken ct = default)
         {
-            var suggestionText = await GenerateSuggestionAsync(prompt, null, null, ct);
+            throw new NotImplementedException();
+        }
 
-            return new List<Suggestion>
+        public Task<string> CallOllamaApi(string prompt, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<int> ArchivePastGptInteractionsAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        private string GetModel()
+            => _config["MistralAI:Model"] ?? "mistral";
+
+        private float GetTemperature()
+            => _config.GetValue<float?>("MistralAI:Temperature") ?? 0.3f;
+
+        private static object BuildChatRequest(
+            string groundedPrompt,
+            string model,
+            float temperature,
+            bool stream)
+        {
+            return new
             {
-                new Suggestion
+                model,
+                messages = new[]
                 {
-                    Message = suggestionText,
-                    Context = prompt,
-                    DateSuggestion = DateTime.UtcNow
+                    new
+                    {
+                        role = "system",
+                        content = SystemPrompt
+                    },
+                    new
+                    {
+                        role = "user",
+                        content = groundedPrompt
+                    }
+                },
+                stream,
+                options = new
+                {
+                    temperature
                 }
             };
         }
 
-        public async Task<IEnumerable<Suggestion>> GetWeatherAdvisoryAsync(string location, CancellationToken ct = default)
+        private static string Truncate(string? value, int maxLength)
         {
-            double? lat = 50.8503;
-            double? lon = 4.3517;
+            if (string.IsNullOrWhiteSpace(value))
+                return "<empty>";
 
-            var prompt = $"Generates a weather report for {location} in compliance with the GDPR.";
-            var suggestionText = await GenerateSuggestionAsync(prompt, lat, lon, ct);
+            var normalized = value
+                .Replace(Environment.NewLine, " ")
+                .Replace("\n", " ")
+                .Replace("\r", " ")
+                .Trim();
 
-            return new List<Suggestion>
-            {
-                new Suggestion
-                {
-                    Message = suggestionText,
-                    LocationName = location,
-                    DateSuggestion = DateTime.UtcNow,
-                    Latitude = lat,
-                    Longitude = lon
-                }
-            };
-        }
+            if (normalized.Length <= maxLength)
+                return normalized;
 
-        public Task<int> ArchivePastGptInteractionsAsync() => Task.FromResult(0);
-        public Task DeleteSuggestionAsync(int id) => Task.CompletedTask;
-        public Task<Suggestion?> GetSuggestionByIdAsync(int id) => Task.FromResult<Suggestion?>(null);
-        public Task<IEnumerable<Suggestion>> GetSuggestionsByEventIdAsync(int id) => Task.FromResult(Enumerable.Empty<Suggestion>());
-        public Task<IEnumerable<Suggestion>> GetSuggestionsByForecastIdAsync(int id) => Task.FromResult(Enumerable.Empty<Suggestion>());
-        public Task<IEnumerable<Suggestion>> GetSuggestionsByTrafficIdAsync(int id) => Task.FromResult(Enumerable.Empty<Suggestion>());
-        public Task<IEnumerable<SuggestionGroupedByPlaceDTO>> GetRecommendationsForSwimmingAreasAsync() => Task.FromResult(Enumerable.Empty<SuggestionGroupedByPlaceDTO>());
-
-        public async Task<Suggestion?> SaveSuggestionAsync(Suggestion suggestion, CancellationToken ct = default)
-        {
-            if (suggestion == null)
-            {
-                _logger.LogWarning("Attempting to save a null suggestion.");
-                return null;
-            }
-
-            try
-            {
-                if (suggestion.User_Id <= 0)
-                {
-                    _logger.LogWarning("Invalid User_Id for the suggestion.");
-                    return null;
-                }
-
-                if (suggestion.Latitude.HasValue)
-                    suggestion.Latitude = (double)MapperExtensions.RoundLat(suggestion.Latitude.Value);
-
-                if (suggestion.Longitude.HasValue)
-                    suggestion.Longitude = (double)MapperExtensions.RoundLon(suggestion.Longitude.Value);
-
-                suggestion.DateSuggestion = MapperExtensions.TruncateToSecond(suggestion.DateSuggestion);
-
-                return await _suggestionRepository.SaveSuggestionAsync(suggestion, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error saving suggestion.");
-                return null;
-            }
+            return normalized[..maxLength] + "...";
         }
     }
 }
-
-
 
 
 

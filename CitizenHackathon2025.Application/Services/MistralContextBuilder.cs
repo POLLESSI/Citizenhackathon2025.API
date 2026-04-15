@@ -1,6 +1,9 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace CitizenHackathon2025.Application.Services
@@ -13,14 +16,9 @@ namespace CitizenHackathon2025.Application.Services
         private readonly ITrafficConditionRepository _trafficRepo;
         private readonly IWeatherForecastRepository _weatherRepo;
         private readonly ISuggestionRepository _suggestionRepo;
+        private readonly ILogger<MistralContextBuilder> _logger;
 
-        public MistralContextBuilder(
-            ICrowdInfoRepository crowdInfoRepo,
-            IEventRepository eventRepo,
-            IPlaceRepository placeRepo,
-            ITrafficConditionRepository trafficRepo,
-            IWeatherForecastRepository weatherRepo,
-            ISuggestionRepository suggestionRepo)
+        public MistralContextBuilder(ICrowdInfoRepository crowdInfoRepo, IEventRepository eventRepo, IPlaceRepository placeRepo, ITrafficConditionRepository trafficRepo, IWeatherForecastRepository weatherRepo, ISuggestionRepository suggestionRepo, ILogger<MistralContextBuilder> logger)
         {
             _crowdInfoRepo = crowdInfoRepo;
             _eventRepo = eventRepo;
@@ -28,6 +26,7 @@ namespace CitizenHackathon2025.Application.Services
             _trafficRepo = trafficRepo;
             _weatherRepo = weatherRepo;
             _suggestionRepo = suggestionRepo;
+            _logger = logger;
         }
 
         public async Task<string> BuildContextAsync(string userPrompt, double? latitude = null, double? longitude = null,int radiusKm = 50)
@@ -51,6 +50,7 @@ namespace CitizenHackathon2025.Application.Services
             var suggestions = ((Task<IEnumerable<Suggestion>>)tasks[3]).Result;
             var traffic = ((Task<IEnumerable<TrafficCondition>>)tasks[4]).Result;
             var weather = ((Task<WeatherForecast>)tasks[5]).Result;
+            var sw = Stopwatch.StartNew();
 
             // 2. Building the structured context for Mistral
             return $@"
@@ -89,8 +89,8 @@ namespace CitizenHackathon2025.Application.Services
                 2. Offers alternatives if the venue is overcrowded.
                 3. Format your answer in Markdown with clear headings.
                 ";
+            _logger.LogInformation("BuildContextAsync took {ElapsedMs} ms", sw.ElapsedMilliseconds);
         }
-
     }
 }
 
