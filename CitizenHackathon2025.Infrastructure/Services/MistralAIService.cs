@@ -90,6 +90,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     Truncate(rawResponse, 1000));
                 throw;
             }
+            catch (HttpRequestException ex) when (ex.Message.Contains("127.0.0.1:11434", StringComparison.OrdinalIgnoreCase) || ex.InnerException is not null)
+            {
+                _logger.LogError(ex, "Ollama local endpoint unavailable.");
+                throw new InvalidOperationException(
+                    "The local Mistral/Ollama engine is unavailable. Check that Ollama is running on http://127.0.0.1:11434.");
+            }
 
             var finalText = parsedResponse?.Message?.Content?.Trim();
 
@@ -184,6 +190,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         lineCount,
                         Truncate(line, 500));
                     continue;
+                }
+                catch (HttpRequestException ex) when (ex.Message.Contains("127.0.0.1:11434", StringComparison.OrdinalIgnoreCase) || ex.InnerException is not null)
+                {
+                    _logger.LogError(ex, "Ollama local endpoint unavailable.");
+                    throw new InvalidOperationException(
+                        "The local Mistral/Ollama engine is unavailable. Check that Ollama is running on http://127.0.0.1:11434.");
                 }
 
                 if (envelope is null)

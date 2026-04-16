@@ -77,7 +77,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.CrowdCalendar cc
                                 WHERE cc.Active = 1
-                                  AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
+                                    AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
+                                    AND cc.Latitude IS NOT NULL
+                                    AND cc.Longitude IS NOT NULL
+                                    AND (
+                                        NULLIF(LTRIM(RTRIM(cc.EventName)), '') IS NOT NULL
+                                        OR NULLIF(LTRIM(RTRIM(cc.RegionCode)), '') IS NOT NULL
+                                        )
                             )
                             SELECT TOP (8)
                                 Id,
@@ -98,7 +104,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM CrowdCalendarBase
                             WHERE DistanceKm <= @RadiusKm
-                            ORDER BY DistanceKm ASC, ExpectedLevel DESC, Confidence DESC;";
+                            ORDER BY
+                                CASE WHEN NULLIF(LTRIM(RTRIM(EventName)), '') IS NOT NULL THEN 0 ELSE 1 END,
+                                DistanceKm ASC,
+                                ExpectedLevel DESC,
+                                Confidence DESC;";
 
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
@@ -150,6 +160,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.CrowdInfo ci
                                 WHERE ci.Active = 1
+                                  AND ci.Latitude IS NOT NULL
+                                  AND ci.Longitude IS NOT NULL
+                                  AND NULLIF(LTRIM(RTRIM(ci.LocationName)), '') IS NOT NULL
                                   AND CAST(ci.[Timestamp] AS date) BETWEEN DATEADD(DAY, -1, @TargetDate) AND DATEADD(DAY, 1, @TargetDate)
                             )
                             SELECT TOP (8)
@@ -163,7 +176,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM CrowdInfoBase
                             WHERE DistanceKm <= @RadiusKm
-                            ORDER BY [Timestamp] DESC, DistanceKm ASC, CrowdLevel DESC;";
+                            ORDER BY
+                                [Timestamp] DESC,
+                                DistanceKm ASC,
+                                CrowdLevel DESC;";
 
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
@@ -219,9 +235,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.CrowdCalendar cc
                                 WHERE cc.Active = 1
-                                    AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
-                                    AND cc.Latitude IS NOT NULL
-                                    AND cc.Longitude IS NOT NULL
+                                  AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
+                                  AND cc.Latitude IS NOT NULL
+                                  AND cc.Longitude IS NOT NULL
+                                  AND NULLIF(LTRIM(RTRIM(cc.EventName)), '') IS NOT NULL
                             )
                             SELECT TOP (8)
                                 Id,
@@ -238,7 +255,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 DistanceKm
                             FROM EventBase
                             WHERE DistanceKm <= @RadiusKm
-                            ORDER BY DistanceKm ASC, CrowdLevel DESC, MaxCapacity DESC;";
+                            ORDER BY
+                                DistanceKm ASC,
+                                CrowdLevel DESC,
+                                MaxCapacity DESC,
+                                EventDate ASC;";
 
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
@@ -295,7 +316,15 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.TrafficCondition tc
                                 WHERE tc.Active = 1
+                                  AND tc.Latitude IS NOT NULL
+                                  AND tc.Longitude IS NOT NULL
                                   AND CAST(tc.DateCondition AS date) BETWEEN DATEADD(DAY, -1, @TargetDate) AND DATEADD(DAY, 1, @TargetDate)
+                                  AND (
+                                        NULLIF(LTRIM(RTRIM(tc.Title)), '') IS NOT NULL
+                                        OR NULLIF(LTRIM(RTRIM(tc.IncidentType)), '') IS NOT NULL
+                                        OR NULLIF(LTRIM(RTRIM(tc.Road)), '') IS NOT NULL
+                                        OR ISNULL(tc.Severity, 0) > 0
+                                      )
                             )
                             SELECT TOP (5)
                                 Id,
@@ -313,7 +342,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM TrafficBase
                             WHERE DistanceKm <= @RadiusKm
-                            ORDER BY Severity DESC, DistanceKm ASC, DateCondition DESC;";
+                            ORDER BY
+                                Severity DESC,
+                                DistanceKm ASC,
+                                DateCondition DESC;";
 
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
@@ -375,9 +407,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                         )
                                 FROM dbo.WeatherForecast wf
                                 WHERE wf.Active = 1
+                                  AND wf.Latitude IS NOT NULL
+                                  AND wf.Longitude IS NOT NULL
                                   AND CAST(wf.DateWeather AS date) BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
                             )
-                            SELECT TOP (3)
+                            SELECT TOP (6)
                                 Id,
                                 DateWeather,
                                 Latitude,
@@ -398,8 +432,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM WeatherBase
                             WHERE DistanceKm <= @RadiusKm
-                            ORDER BY DistanceKm ASC, DateWeather ASC;";
-
+                            ORDER BY
+                                DateWeather ASC,
+                                DistanceKm ASC;";
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
             parameters.Add("@Lng", longitude, DbType.Double);
