@@ -3,9 +3,12 @@
     public interface IGptRequestRegistry
     {
         string Register(int interactionId, CancellationTokenSource cts);
-        bool TryCancel(int interactionId, string? requestId);
-        bool TryGet(int interactionId, out CancellationTokenSource? cts);
-        void Remove(int interactionId);
+
+        bool TryGet(int interactionId, out string requestId, out CancellationTokenSource? cts);
+
+        bool TryCancel(int interactionId, string? requestId = null);
+
+        void Remove(int interactionId, string? requestId = null);
     }
 }
 

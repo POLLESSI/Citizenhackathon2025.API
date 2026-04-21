@@ -2,20 +2,22 @@
 {
     public sealed class LocalAiContextDTO
     {
-        public string UserPrompt { get; set; } = string.Empty;
-        public string? LocationLabel { get; set; }
+        public string UserPrompt { get; init; } = string.Empty;
+        public string? LocationLabel { get; init; }
 
-        public DateTime TargetDate { get; set; }
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+        public DateTime TargetDate { get; init; }
+        public double Latitude { get; init; }
+        public double Longitude { get; init; }
 
-        public List<LocalAiEventContextDTO> Events { get; set; } = new();
-        public List<LocalAiCrowdCalendarContextDTO> CrowdCalendar { get; set; } = new();
-        public List<LocalAiCrowdInfoContextDTO> CrowdInfo { get; set; } = new();
-        public List<LocalAiTrafficContextDTO> Traffic { get; set; } = new();
-        public List<LocalAiWeatherContextDTO> Weather { get; set; } = new();
+        public List<LocalAiPlaceContextDTO> Places { get; init; } = new();
+        public List<LocalAiEventContextDTO> Events { get; init; } = new();
+        public List<LocalAiCrowdCalendarContextDTO> CrowdCalendar { get; init; } = new();
+        public List<LocalAiCrowdInfoContextDTO> CrowdInfo { get; init; } = new();
+        public List<LocalAiTrafficContextDTO> Traffic { get; init; } = new();
+        public List<LocalAiWeatherContextDTO> Weather { get; init; } = new();
     }
 }
+
 
 
 

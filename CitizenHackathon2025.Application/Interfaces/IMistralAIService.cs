@@ -1,18 +1,18 @@
-﻿using CitizenHackathon2025.Contracts.DTOs;
-using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.Domain.DTOs;
-using CitizenHackathon2025.DTOs.DTOs;
+﻿using CitizenHackathon2025.Domain.Entities;
 
 namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IMistralAIService
     {
         Task<IEnumerable<Suggestion>> GetWeatherAdvisoryAsync(string location, CancellationToken ct = default);
+
         Task<string> CallOllamaApi(string prompt, CancellationToken ct);
+
         Task<int> ArchivePastGptInteractionsAsync();
+
         Task<string> GenerateFromPromptAsync(string groundedPrompt, CancellationToken ct = default);
 
-        Task<string> StreamFromPromptAsync(string groundedPrompt, Func<GptResponseChunkDto, Task> onChunk, CancellationToken ct = default);
+        Task<string> StreamFromPromptAsync(string groundedPrompt, Func<string, Task> onChunk, CancellationToken ct = default);
     }
 }
 

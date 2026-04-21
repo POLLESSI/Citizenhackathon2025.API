@@ -1,6 +1,8 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.DTOs;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Domain.Models;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
@@ -8,17 +10,23 @@ namespace CitizenHackathon2025.Infrastructure.Services
 {
     public sealed class LocalAiContextService : ILocalAiContextService
     {
-        private readonly ILocalAiDataRepository _repo;
+        private const double DefaultLatitude = 50.4114;
+        private const double DefaultLongitude = 4.4445;
+
+        private readonly ILocalAiDataRepository _localAiRepo;
+        private readonly IPlaceRepository _placeRepository;
         private readonly ILogger<LocalAiContextService> _logger;
 
         private static readonly LocalAiContextLimits Limits = new();
 
         public LocalAiContextService(
-            ILocalAiDataRepository repo,
+            ILocalAiDataRepository localAiRepo,
+            IPlaceRepository placeRepository,
             ILogger<LocalAiContextService> logger)
         {
-            _repo = repo;
-            _logger = logger;
+            _localAiRepo = localAiRepo ?? throw new ArgumentNullException(nameof(localAiRepo));
+            _placeRepository = placeRepository ?? throw new ArgumentNullException(nameof(placeRepository));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<LocalAiContextDTO> BuildContextAsync(
@@ -27,44 +35,64 @@ namespace CitizenHackathon2025.Infrastructure.Services
             double? longitude,
             CancellationToken ct = default)
         {
-            var lat = latitude ?? 50.4114;
-            var lng = longitude ?? 4.4445;
-
-            var safePrompt = prompt ?? string.Empty;
+            var safePrompt = prompt?.Trim() ?? string.Empty;
+            var lat = NormalizeLatitude(latitude);
+            var lng = NormalizeLongitude(longitude);
+            var radiusKm = NormalizeRadiusKm(Limits.RadiusKm);
             var targetDate = ResolveTargetDate(safePrompt);
             var intent = ResolveIntent(safePrompt);
 
             _logger.LogInformation(
-                "Building local AI context. PromptLength={PromptLength}, Lat={Lat}, Lng={Lng}, TargetDate={TargetDate:yyyy-MM-dd}, Intent={@Intent}",
+                "Building local AI context. PromptLength={PromptLength}, Lat={Lat}, Lng={Lng}, RadiusKm={RadiusKm}, TargetDate={TargetDate:yyyy-MM-dd}, Intent={@Intent}",
                 safePrompt.Length,
                 lat,
                 lng,
+                radiusKm,
                 targetDate,
                 intent);
 
-            var eventsTask = intent.NeedEvents
-                ? _repo.GetNearbyEventsAsync(lat, lng, targetDate, Limits.RadiusKm, ct)
+            Task<IEnumerable<Place>> placesTask = intent.NeedPlaces
+                ? _placeRepository.GetNearbyPlacesAsync(lat, lng, radiusKm, ct)
+                : Task.FromResult(Enumerable.Empty<Place>());
+
+            Task<IEnumerable<LocalAiEventContextDTO>> eventsTask = intent.NeedEvents
+                ? _localAiRepo.GetNearbyEventsAsync(lat, lng, targetDate, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiEventContextDTO>());
 
-            var crowdCalendarTask = intent.NeedCrowdCalendar
-                ? _repo.GetNearbyCrowdCalendarAsync(lat, lng, targetDate, Limits.RadiusKm, ct)
+            Task<IEnumerable<LocalAiCrowdCalendarContextDTO>> crowdCalendarTask = intent.NeedCrowdCalendar
+                ? _localAiRepo.GetNearbyCrowdCalendarAsync(lat, lng, targetDate, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiCrowdCalendarContextDTO>());
 
-            var crowdInfoTask = intent.NeedCrowdInfo
-                ? _repo.GetNearbyCrowdInfoAsync(lat, lng, targetDate, Limits.RadiusKm, ct)
+            Task<IEnumerable<LocalAiCrowdInfoContextDTO>> crowdInfoTask = intent.NeedCrowdInfo
+                ? _localAiRepo.GetNearbyCrowdInfoAsync(lat, lng, targetDate, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiCrowdInfoContextDTO>());
 
-            var trafficTask = intent.NeedTraffic
-                ? _repo.GetNearbyTrafficAsync(lat, lng, targetDate, Limits.RadiusKm, ct)
+            Task<IEnumerable<LocalAiTrafficContextDTO>> trafficTask = intent.NeedTraffic
+                ? _localAiRepo.GetNearbyTrafficAsync(lat, lng, targetDate, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiTrafficContextDTO>());
 
-            var weatherTask = intent.NeedWeather
-                ? _repo.GetNearbyWeatherAsync(lat, lng, targetDate, Limits.RadiusKm, ct)
+            Task<IEnumerable<LocalAiWeatherContextDTO>> weatherTask = intent.NeedWeather
+                ? _localAiRepo.GetNearbyWeatherAsync(lat, lng, targetDate, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiWeatherContextDTO>());
 
-            await Task.WhenAll(eventsTask, crowdCalendarTask, crowdInfoTask, trafficTask, weatherTask);
+            await Task.WhenAll(
+                placesTask,
+                eventsTask,
+                crowdCalendarTask,
+                crowdInfoTask,
+                trafficTask,
+                weatherTask).ConfigureAwait(false);
 
-            var events = (await eventsTask)
+            var places = (await placesTask.ConfigureAwait(false))
+                .Where(IsPlaceRelevant)
+                .Select(MapPlaceToLocalAiPlaceContext)
+                .OrderBy(x => x.DistanceKm ?? double.MaxValue)
+                .ThenByDescending(x => x.Capacity ?? int.MinValue)
+                .ThenBy(x => x.Name ?? string.Empty)
+                .Take(Limits.MaxPlaces)
+                .ToList();
+
+            var events = (await eventsTask.ConfigureAwait(false))
                 .Where(IsEventRelevant)
                 .OrderBy(x => x.DistanceKm ?? double.MaxValue)
                 .ThenByDescending(x => x.CrowdLevel ?? int.MinValue)
@@ -72,7 +100,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .Take(Limits.MaxEvents)
                 .ToList();
 
-            var crowdCalendar = (await crowdCalendarTask)
+            var crowdCalendar = (await crowdCalendarTask.ConfigureAwait(false))
                 .Where(IsCrowdCalendarRelevant)
                 .OrderBy(x => x.DistanceKm ?? double.MaxValue)
                 .ThenByDescending(x => x.ExpectedLevel ?? int.MinValue)
@@ -80,21 +108,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .Take(Limits.MaxCrowdCalendar)
                 .ToList();
 
-            var crowdInfo = (await crowdInfoTask)
+            var crowdInfo = (await crowdInfoTask.ConfigureAwait(false))
                 .Where(IsCrowdInfoRelevant)
                 .OrderByDescending(x => x.Timestamp ?? DateTime.MinValue)
                 .ThenBy(x => x.DistanceKm ?? double.MaxValue)
                 .Take(Limits.MaxCrowdInfo)
                 .ToList();
 
-            var traffic = (await trafficTask)
+            var traffic = (await trafficTask.ConfigureAwait(false))
                 .Where(IsTrafficRelevant)
                 .OrderByDescending(x => x.Severity ?? int.MinValue)
                 .ThenBy(x => x.DistanceKm ?? double.MaxValue)
                 .Take(Limits.MaxTraffic)
                 .ToList();
 
-            var weather = (await weatherTask)
+            var weather = (await weatherTask.ConfigureAwait(false))
                 .Where(IsWeatherSignificant)
                 .OrderBy(x => x.DistanceKm ?? double.MaxValue)
                 .ThenBy(x => x.DateWeather ?? DateTime.MaxValue)
@@ -102,7 +130,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .ToList();
 
             _logger.LogInformation(
-                "Local AI context built. Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}",
+                "Local AI context built. Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}",
+                places.Count,
                 events.Count,
                 crowdCalendar.Count,
                 crowdInfo.Count,
@@ -115,6 +144,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Latitude = lat,
                 Longitude = lng,
                 TargetDate = targetDate,
+                Places = places,
                 Events = events,
                 CrowdCalendar = crowdCalendar,
                 CrowdInfo = crowdInfo,
@@ -131,24 +161,26 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             sb.AppendLine("You are OutZen local assistant.");
             sb.AppendLine("Answer only with facts present in the provided context.");
-            sb.AppendLine("Do not invent places, events, traffic, weather, or crowd data.");
+            sb.AppendLine("Do not invent places, visits, events, traffic, weather, or crowd data.");
             sb.AppendLine("Answer in French.");
             sb.AppendLine("Be concise, concrete, and useful.");
             sb.AppendLine();
 
             sb.AppendLine("Priority rules:");
-            sb.AppendLine("1. Prioritize real nearby places, visits, and events.");
-            sb.AppendLine("2. Mention planned or observed crowd only if it helps the user choose where or when to go.");
-            sb.AppendLine("3. Mention traffic only if it materially affects access or comfort.");
-            sb.AppendLine("4. Mention weather only if it has a significant practical impact on the outing.");
-            sb.AppendLine("5. Weather is never a point of interest by itself.");
-            sb.AppendLine("6. Never present a raw weather observation as something interesting to see or do.");
-            sb.AppendLine("7. If no real nearby place or event is available, say it clearly.");
-            sb.AppendLine("8. If data is missing, say it clearly.");
+            sb.AppendLine("1. Prioritize real nearby places from the places dataset.");
+            sb.AppendLine("2. Then use real nearby events if available.");
+            sb.AppendLine("3. Mention planned or observed crowd only if it helps the user choose where or when to go.");
+            sb.AppendLine("4. Mention traffic only if it materially affects access or comfort.");
+            sb.AppendLine("5. Mention weather only if it has a significant practical impact on the outing.");
+            sb.AppendLine("6. Weather is never a point of interest by itself.");
+            sb.AppendLine("7. Never present a raw weather observation as something interesting to see or do.");
+            sb.AppendLine("8. If no real nearby place or event is available, say it clearly.");
+            sb.AppendLine("9. If data is missing, say it clearly.");
             sb.AppendLine();
 
             sb.AppendLine("Response style:");
-            sb.AppendLine("- start with the most relevant real nearby place or event if one exists");
+            sb.AppendLine("- start with the most relevant real nearby place if one exists");
+            sb.AppendLine("- if no place is available, use the most relevant real nearby event");
             sb.AppendLine("- if none exists, explicitly say that no precise nearby place or event was found in the available data");
             sb.AppendLine("- add crowd, traffic, or weather only as practical context");
             sb.AppendLine("- do not turn temperature, rain, wind, or weather measurements into attractions");
@@ -160,6 +192,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine($"Coordinates: {context.Latitude:F6}, {context.Longitude:F6}");
             sb.AppendLine();
 
+            AppendPlaces(sb, context);
             AppendEvents(sb, context);
             AppendCrowdCalendar(sb, context);
             AppendCrowdInfo(sb, context);
@@ -167,12 +200,49 @@ namespace CitizenHackathon2025.Infrastructure.Services
             AppendWeather(sb, context);
 
             sb.AppendLine("Final reminder:");
-            sb.AppendLine("- real places and events first");
-            sb.AppendLine("- practical constraints second");
+            sb.AppendLine("- real places first");
+            sb.AppendLine("- real events second");
+            sb.AppendLine("- practical constraints third");
             sb.AppendLine("- no invention");
             sb.AppendLine("- no weather-as-attraction");
 
             return sb.ToString();
+        }
+
+        private static double NormalizeLatitude(double? latitude)
+            => latitude ?? DefaultLatitude;
+
+        private static double NormalizeLongitude(double? longitude)
+            => longitude ?? DefaultLongitude;
+
+        private static double NormalizeRadiusKm(double radiusKm)
+            => radiusKm > 0d ? radiusKm : 25d;
+
+        private static LocalAiPlaceContextDTO MapPlaceToLocalAiPlaceContext(Place p)
+        {
+            return new LocalAiPlaceContextDTO
+            {
+                Id = p.Id,
+                Name = p.Name?.Trim() ?? string.Empty,
+                Type = p.Type,
+                Indoor = p.Indoor,
+                Latitude = (double?)p.Latitude,
+                Longitude = (double?)p.Longitude,
+                Capacity = p.Capacity,
+                Tag = p.Tag,
+                ExternalSource = p.ExternalSource,
+                ExternalId = p.ExternalId,
+                SourceUpdatedAtUtc = p.SourceUpdatedAtUtc,
+                Active = true,
+                DistanceKm = null
+            };
+        }
+
+        private static bool IsPlaceRelevant(Place p)
+        {
+            if (p is null) return false;
+            if (string.IsNullOrWhiteSpace(p.Name)) return false;
+            return true;
         }
 
         private static bool IsEventRelevant(LocalAiEventContextDTO e)
@@ -213,8 +283,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             if (w.IsSevere == true) return true;
             if ((w.RainfallMm ?? 0d) >= 5.0d) return true;
             if ((w.WindSpeedKmh ?? 0d) >= 50.0d) return true;
-            if ((w.TemperatureC ?? 15) <= 0) return true;
-            if ((w.TemperatureC ?? 15) >= 32) return true;
+            if ((w.TemperatureC ?? 15d) <= 0d) return true;
+            if ((w.TemperatureC ?? 15d) >= 32d) return true;
 
             var main = (w.WeatherMain ?? string.Empty).ToLowerInvariant();
             var desc = (w.Description ?? string.Empty).ToLowerInvariant();
@@ -230,6 +300,30 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return true;
 
             return false;
+        }
+
+        private static void AppendPlaces(StringBuilder sb, LocalAiContextDTO context)
+        {
+            sb.AppendLine("Nearby real places:");
+
+            if (context.Places is null || context.Places.Count == 0)
+            {
+                sb.AppendLine("- none");
+                sb.AppendLine();
+                return;
+            }
+
+            foreach (var p in context.Places)
+            {
+                sb.AppendLine(
+                    $"- {p.Name}, " +
+                    $"type {p.Type ?? "—"}, " +
+                    $"indoor {(p.Indoor.HasValue ? (p.Indoor.Value ? "yes" : "no") : "—")}, " +
+                    $"capacity {(p.Capacity?.ToString() ?? "—")}, " +
+                    $"tag {p.Tag ?? "—"}");
+            }
+
+            sb.AppendLine();
         }
 
         private static void AppendEvents(StringBuilder sb, LocalAiContextDTO context)
@@ -365,7 +459,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private static string FmtDistance(double? distanceKm)
             => distanceKm.HasValue ? $"{distanceKm.Value:0.0} km" : "— km";
 
-        private static LocalAiIntent ResolveIntent(string? prompt)
+        private static LocalAiContextIntent ResolveIntent(string? prompt)
         {
             var p = (prompt ?? string.Empty).ToLowerInvariant();
 
@@ -389,10 +483,28 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 p.Contains("intéressant") || p.Contains("interessant") ||
                 p.Contains("quoi faire") || p.Contains("à voir") || p.Contains("a voir");
 
-            if (!asksTraffic && !asksWeather && !asksCrowd && !asksEvent)
+            var asksPlaces =
+                asksEvent ||
+                p.Contains("lieu") ||
+                p.Contains("lieux") ||
+                p.Contains("endroit") ||
+                p.Contains("endroits") ||
+                p.Contains("visite") ||
+                p.Contains("visiter") ||
+                p.Contains("voir") ||
+                p.Contains("découvrir") ||
+                p.Contains("decouvrir") ||
+                p.Contains("près de") ||
+                p.Contains("proche") ||
+                p.Contains("alentours") ||
+                p.Contains("autour de") ||
+                p.Contains("dans les environs");
+
+            if (!asksTraffic && !asksWeather && !asksCrowd && !asksEvent && !asksPlaces)
             {
-                return new LocalAiIntent
+                return new LocalAiContextIntent
                 {
+                    NeedPlaces = true,
                     NeedEvents = true,
                     NeedCrowdCalendar = true,
                     NeedCrowdInfo = true,
@@ -401,8 +513,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 };
             }
 
-            return new LocalAiIntent
+            return new LocalAiContextIntent
             {
+                NeedPlaces = asksPlaces,
                 NeedEvents = asksEvent,
                 NeedCrowdCalendar = asksEvent || asksCrowd,
                 NeedCrowdInfo = asksCrowd || asksEvent,

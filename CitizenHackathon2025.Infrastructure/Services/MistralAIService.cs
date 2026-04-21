@@ -1,5 +1,4 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.Extensions.Configuration;
@@ -36,6 +35,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        private Uri BuildChatUri()
+        {
+            var baseUrl = _config["MistralAI:ApiBaseUrl"];
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("Missing configuration key 'MistralAI:ApiBaseUrl'.");
+
+            return new Uri(new Uri(baseUrl), OllamaChatEndpoint);
+        }
+
         public async Task<string> GenerateFromPromptAsync(string groundedPrompt, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(groundedPrompt))
@@ -44,6 +53,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var stopwatch = Stopwatch.StartNew();
             var model = GetModel();
             var temperature = GetTemperature();
+            var chatUri = BuildChatUri();
 
             var requestBody = BuildChatRequest(
                 groundedPrompt: groundedPrompt,
@@ -52,13 +62,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 stream: false);
 
             _logger.LogInformation(
-                "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
-                _httpClient.BaseAddress,
+                "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, ChatUri={ChatUri}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
+                _httpClient.BaseAddress?.ToString() ?? "<null>",
+                chatUri,
                 model,
                 temperature,
                 groundedPrompt.Length);
 
-            using var response = await _httpClient.PostAsJsonAsync(OllamaChatEndpoint, requestBody, ct);
+            using var response = await _httpClient.PostAsJsonAsync(chatUri, requestBody, ct);
             var rawResponse = await response.Content.ReadAsStringAsync(ct);
 
             _logger.LogInformation(
@@ -90,12 +101,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     Truncate(rawResponse, 1000));
                 throw;
             }
-            catch (HttpRequestException ex) when (ex.Message.Contains("127.0.0.1:11434", StringComparison.OrdinalIgnoreCase) || ex.InnerException is not null)
-            {
-                _logger.LogError(ex, "Ollama local endpoint unavailable.");
-                throw new InvalidOperationException(
-                    "The local Mistral/Ollama engine is unavailable. Check that Ollama is running on http://127.0.0.1:11434.");
-            }
 
             var finalText = parsedResponse?.Message?.Content?.Trim();
 
@@ -118,7 +123,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<string> StreamFromPromptAsync(
             string groundedPrompt,
-            Func<GptResponseChunkDto, Task> onChunk,
+            Func<string, Task> onChunk,
             CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(onChunk);
@@ -129,6 +134,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var stopwatch = Stopwatch.StartNew();
             var model = GetModel();
             var temperature = GetTemperature();
+            var chatUri = BuildChatUri();
 
             var requestBody = BuildChatRequest(
                 groundedPrompt: groundedPrompt,
@@ -137,8 +143,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 stream: true);
 
             _logger.LogInformation(
-                "[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
-                _httpClient.BaseAddress,
+                "[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, ChatUri={ChatUri}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
+                _httpClient.BaseAddress?.ToString() ?? "<null>",
+                chatUri,
                 model,
                 temperature,
                 groundedPrompt.Length);
@@ -147,7 +154,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var chunkCount = 0;
             var lineCount = 0;
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
+            using var request = new HttpRequestMessage(HttpMethod.Post, chatUri)
             {
                 Content = JsonContent.Create(requestBody)
             };
@@ -161,6 +168,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 "[OLLAMA][STREAM] Response headers received. StatusCode={StatusCode}, ElapsedMs={ElapsedMs}",
                 (int)response.StatusCode,
                 stopwatch.ElapsedMilliseconds);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
+
+                _logger.LogWarning(
+                    "[OLLAMA][STREAM] Non-success response from Ollama. StatusCode={StatusCode}, BodyPreview={BodyPreview}",
+                    (int)response.StatusCode,
+                    Truncate(errorBody, 500));
+            }
 
             response.EnsureSuccessStatusCode();
 
@@ -191,12 +208,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         Truncate(line, 500));
                     continue;
                 }
-                catch (HttpRequestException ex) when (ex.Message.Contains("127.0.0.1:11434", StringComparison.OrdinalIgnoreCase) || ex.InnerException is not null)
-                {
-                    _logger.LogError(ex, "Ollama local endpoint unavailable.");
-                    throw new InvalidOperationException(
-                        "The local Mistral/Ollama engine is unavailable. Check that Ollama is running on http://127.0.0.1:11434.");
-                }
 
                 if (envelope is null)
                     continue;
@@ -208,11 +219,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     chunkCount++;
                     accumulated.Append(chunkText);
 
-                    await onChunk(new GptResponseChunkDto
-                    {
-                        Chunk = chunkText,
-                        IsFinal = false
-                    });
+                    await onChunk(chunkText);
                 }
 
                 if (envelope.Done)
@@ -251,19 +258,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
 
         public Task<IEnumerable<Suggestion>> GetWeatherAdvisoryAsync(string location, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
-        }
+            => throw new NotImplementedException();
 
         public Task<string> CallOllamaApi(string prompt, CancellationToken ct)
-        {
-            throw new NotImplementedException();
-        }
+            => throw new NotImplementedException();
 
         public Task<int> ArchivePastGptInteractionsAsync()
-        {
-            throw new NotImplementedException();
-        }
+            => throw new NotImplementedException();
 
         private string GetModel()
             => _config["MistralAI:Model"] ?? "mistral";

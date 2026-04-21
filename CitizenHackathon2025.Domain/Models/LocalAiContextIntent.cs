@@ -1,7 +1,8 @@
-﻿namespace CitizenHackathon2025.Domain.Entities
+﻿namespace CitizenHackathon2025.Domain.Models
 {
-    public sealed class LocalAiIntent
+    public sealed class LocalAiContextIntent
     {
+        public bool NeedPlaces { get; init; }
         public bool NeedEvents { get; init; }
         public bool NeedCrowdCalendar { get; init; }
         public bool NeedCrowdInfo { get; init; }

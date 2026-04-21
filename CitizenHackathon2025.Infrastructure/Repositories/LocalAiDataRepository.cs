@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.DTOs;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.Persistence;
 using Dapper;
@@ -269,6 +270,82 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             using var connection = await OpenConnectionAsync(ct);
             return await connection.QueryAsync<LocalAiEventContextDTO>(
+                new CommandDefinition(sql, parameters, cancellationToken: ct));
+        }
+
+        public async Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(
+    double latitude,
+    double longitude,
+    double radiusKm,
+    CancellationToken ct = default)
+        {
+            const string sql = @"
+                            WITH PlaceBase AS
+                            (
+                                SELECT
+                                    p.Id,
+                                    p.Name,
+                                    p.Type,
+                                    p.Indoor,
+                                    Latitude = CAST(p.Latitude AS float),
+                                    Longitude = CAST(p.Longitude AS float),
+                                    Capacity = CAST(p.Capacity AS int),
+                                    p.Tag,
+                                    p.ExternalSource,
+                                    p.ExternalId,
+                                    p.SourceUpdatedAtUtc,
+                                    p.Active,
+                                    DistanceKm =
+                                        6371.0 * ACOS(
+                                            CASE
+                                                WHEN
+                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(p.Latitude AS float))) *
+                                                    COS(RADIANS(CAST(p.Longitude AS float)) - RADIANS(@Lng)) +
+                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(p.Latitude AS float))) > 1
+                                                THEN 1
+                                                WHEN
+                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(p.Latitude AS float))) *
+                                                    COS(RADIANS(CAST(p.Longitude AS float)) - RADIANS(@Lng)) +
+                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(p.Latitude AS float))) < -1
+                                                THEN -1
+                                                ELSE
+                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(p.Latitude AS float))) *
+                                                    COS(RADIANS(CAST(p.Longitude AS float)) - RADIANS(@Lng)) +
+                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(p.Latitude AS float)))
+                                            END
+                                        )
+                                FROM dbo.Place p
+                                WHERE p.Active = 1
+                                    AND p.Name IS NOT NULL
+                                    AND LTRIM(RTRIM(p.Name)) <> ''
+                                    AND p.Latitude IS NOT NULL
+                                    AND p.Longitude IS NOT NULL
+                            )
+                            SELECT TOP (12)
+                                Id,
+                                Name,
+                                Type,
+                                Indoor,
+                                Latitude,
+                                Longitude,
+                                Capacity,
+                                Tag,
+                                ExternalSource,
+                                ExternalId,
+                                SourceUpdatedAtUtc,
+                                DistanceKm,
+                                Active
+                            FROM PlaceBase
+                            WHERE DistanceKm <= @RadiusKm
+                            ORDER BY DistanceKm ASC, Capacity DESC, Name ASC;";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@Lat", latitude, DbType.Double);
+            parameters.Add("@Lng", longitude, DbType.Double);
+            parameters.Add("@RadiusKm", radiusKm, DbType.Double);
+
+            using var connection = await OpenConnectionAsync(ct);
+            return await connection.QueryAsync<LocalAiPlaceContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 

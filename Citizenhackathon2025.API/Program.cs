@@ -548,9 +548,13 @@ internal class Program
 
         services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
         {
-            client.BaseAddress = new Uri("http://127.0.0.1:11434/");
-            client.Timeout = Timeout.InfiniteTimeSpan;
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+            var configuration = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = configuration["MistralAI:ApiBaseUrl"] ?? "http://127.0.0.1:11434/";
+
+            client.BaseAddress = new Uri(baseUrl);
+
+            // Optional but recommended to avoid infinite pending requests.
+            client.Timeout = TimeSpan.FromMinutes(10);
         })
         .AddHttpMessageHandler(sp =>
         {

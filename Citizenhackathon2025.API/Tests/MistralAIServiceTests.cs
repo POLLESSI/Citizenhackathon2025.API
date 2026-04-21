@@ -1,5 +1,4 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Infrastructure.Services;
+﻿using CitizenHackathon2025.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -112,8 +111,8 @@ namespace CitizenHackathon2025.API.Tests
                 "Prompt stream test",
                 chunk =>
                 {
-                    if (!string.IsNullOrWhiteSpace(chunk.Chunk))
-                        receivedChunks.Add(chunk.Chunk);
+                    if (!string.IsNullOrWhiteSpace(chunk))
+                        receivedChunks.Add(chunk);
 
                     return Task.CompletedTask;
                 },

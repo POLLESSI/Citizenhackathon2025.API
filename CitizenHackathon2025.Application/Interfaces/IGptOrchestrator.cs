@@ -6,8 +6,7 @@ namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface IGptOrchestrator
     {
-        Task<GptStartResponseDto> StartMistralRequestAsync(GptPromptRequest request, CancellationToken ct = default);
-
+        Task<GptStartResponseDto> StartMistralRequestAsync(GptPromptRequest request,CancellationToken ct = default);
         Task<GptInteractionDTO> RunMistralRequestAsync(GptPromptRequest request, CancellationToken ct = default);
 
         Task<bool> CancelAsync(int interactionId, string? requestId = null);

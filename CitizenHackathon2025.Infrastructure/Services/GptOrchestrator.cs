@@ -28,160 +28,43 @@ namespace CitizenHackathon2025.Infrastructure.Services
             IHostApplicationLifetime appLifetime,
             ILogger<GptOrchestrator> logger)
         {
-            _scopeFactory = scopeFactory;
-            _hubContext = hubContext;
-            _gptRequestRegistry = gptRequestRegistry;
-            _appLifetime = appLifetime;
-            _logger = logger;
+            _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+            _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+            _gptRequestRegistry = gptRequestRegistry ?? throw new ArgumentNullException(nameof(gptRequestRegistry));
+            _appLifetime = appLifetime ?? throw new ArgumentNullException(nameof(appLifetime));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<GptStartResponseDto> StartMistralRequestAsync(
             GptPromptRequest request,
             CancellationToken ct = default)
         {
-            Console.WriteLine("### GPT ORCHESTRATOR START CALLED ###");
-
             ValidateRequest(request);
 
             var prompt = request.Prompt.Trim();
-            var startedAtUtc = DateTime.UtcNow;
+            var interaction = await CreateInitialInteractionAsync(request, prompt, ct).ConfigureAwait(false);
 
-            _logger.LogInformation(
-                "[GPT-PIPELINE][ASYNC] ASK-MISTRAL accepted. PromptLength={PromptLength}, Lat={Lat}, Lng={Lng}, HttpTokenCanBeCanceled={HttpTokenCanBeCanceled}, HttpTokenIsCanceled={HttpTokenIsCanceled}",
-                prompt.Length,
-                request.Latitude,
-                request.Longitude,
-                ct.CanBeCanceled,
-                ct.IsCancellationRequested);
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _appLifetime.ApplicationStopping);
+            var requestId = _gptRequestRegistry.Register(interaction.Id, linkedCts);
 
-            var created = await CreateInitialInteractionAsync(request, prompt, CancellationToken.None);
-            var interactionId = created.Id;
-
-            // Do not link to the HTTP token here under any circumstances:
-            // otherwise the pipeline is cancelled as soon as the 202 is returned.
-            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_appLifetime.ApplicationStopping);
-            var requestId = _gptRequestRegistry.Register(interactionId, linkedCts);
-
-            _logger.LogInformation(
-                "[GPT-PIPELINE][ASYNC] Request registered. InteractionId={InteractionId}, RequestId={RequestId}, BackgroundTokenCanBeCanceled={CanBeCanceled}, BackgroundTokenIsCanceled={IsCanceled}",
-                interactionId,
-                requestId,
-                linkedCts.Token.CanBeCanceled,
-                linkedCts.Token.IsCancellationRequested);
-
-            await _hubContext.Clients.All.SendAsync(
-                "ReceiveGptResponseStarted",
-                interactionId,
-                requestId,
+            _ = Task.Run(
+                () => RunPipelineAsync(interaction, request, requestId, linkedCts.Token),
                 CancellationToken.None);
 
             _logger.LogInformation(
-                "[GPT-PIPELINE][ASYNC] Start event sent to hub. InteractionId={InteractionId}, RequestId={RequestId}",
-                interactionId,
-                requestId);
-
-            _ = Task.Run(async () =>
-            {
-                Console.WriteLine($"### BACKGROUND START interactionId={interactionId} ###");
-
-                try
-                {
-                    var finalDto = await ExecutePipelineInternalAsync(
-                        request: request,
-                        prompt: prompt,
-                        interactionId: interactionId,
-                        requestId: requestId,
-                        ct: linkedCts.Token,
-                        pushChunksToHub: true,
-                        emitStartedEvent: false);
-
-                    await _hubContext.Clients.All.SendAsync(
-                        "ReceiveGptResponseChunk",
-                        finalDto.Id,
-                        requestId,
-                        string.Empty,
-                        true,
-                        CancellationToken.None);
-
-                    await _hubContext.Clients.All.SendAsync(
-                        "ReceiveGptResponse",
-                        finalDto,
-                        CancellationToken.None);
-
-                    _logger.LogInformation(
-                        "[GPT-PIPELINE][ASYNC] Final hub payload sent. InteractionId={InteractionId}, RequestId={RequestId}",
-                        finalDto.Id,
-                        requestId);
-                }
-                catch (OperationCanceledException ex)
-                {
-                    _logger.LogWarning(
-                        ex,
-                        "[GPT-PIPELINE][ASYNC] Request cancelled. InteractionId={InteractionId}, RequestId={RequestId}, AppStopping={AppStopping}, TokenIsCanceled={TokenIsCanceled}",
-                        interactionId,
-                        requestId,
-                        _appLifetime.ApplicationStopping.IsCancellationRequested,
-                        linkedCts.Token.IsCancellationRequested);
-
-                    await _hubContext.Clients.All.SendAsync(
-                        "ReceiveGptResponseCancelled",
-                        interactionId,
-                        requestId,
-                        CancellationToken.None);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"### GPT PIPELINE EXCEPTION TYPE={ex.GetType().FullName} ###");
-                    Console.WriteLine($"### GPT PIPELINE EXCEPTION MESSAGE={ex.Message} ###");
-                    Console.WriteLine($"### GPT PIPELINE EXCEPTION STACK={ex} ###");
-
-                    _logger.LogError(
-                        ex,
-                        "[GPT-PIPELINE][ASYNC] Request failed. InteractionId={InteractionId}, RequestId={RequestId}",
-                        interactionId,
-                        requestId);
-
-                    try
-                    {
-                        await _hubContext.Clients.All.SendAsync(
-                            "ReceiveGptResponseFailed",
-                            interactionId,
-                            ex.Message,
-                            CancellationToken.None);
-                    }
-                    catch (Exception hubEx)
-                    {
-                        Console.WriteLine($"### GPT HUB FAILURE TYPE={hubEx.GetType().FullName} ###");
-                        Console.WriteLine($"### GPT HUB FAILURE MESSAGE={hubEx.Message} ###");
-                        Console.WriteLine($"### GPT HUB FAILURE STACK={hubEx} ###");
-
-                        _logger.LogError(
-                            hubEx,
-                            "[GPT-PIPELINE][ASYNC] Failed to send failure notification to hub. InteractionId={InteractionId}, RequestId={RequestId}",
-                            interactionId,
-                            requestId);
-                    }
-                }
-                finally
-                {
-                    _gptRequestRegistry.Remove(interactionId);
-                    linkedCts.Dispose();
-
-                    _logger.LogInformation(
-                        "[GPT-PIPELINE][ASYNC] Cleanup done. InteractionId={InteractionId}, RequestId={RequestId}",
-                        interactionId,
-                        requestId);
-                }
-            }, CancellationToken.None);
+                "[GPT-PIPELINE][ASYNC] Accepted. InteractionId={InteractionId}, RequestId={RequestId}, PromptLength={PromptLength}",
+                interaction.Id,
+                requestId,
+                prompt.Length);
 
             return new GptStartResponseDto
             {
                 Accepted = true,
-                InteractionId = interactionId,
+                InteractionId = interaction.Id,
                 RequestId = requestId,
-                StartedAtUtc = startedAtUtc,
-                Status = "started",
-                Message = "GPT generation started."
+                StartedAtUtc = DateTime.UtcNow,
+                Status = "accepted",
+                Message = "GPT request accepted and processing started."
             };
         }
 
@@ -189,24 +72,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
             GptPromptRequest request,
             CancellationToken ct = default)
         {
-            Console.WriteLine("### GPT ORCHESTRATOR SYNC START CALLED ###");
-
             ValidateRequest(request);
 
             var prompt = request.Prompt.Trim();
 
             _logger.LogInformation(
-                "[GPT-PIPELINE][SYNC] ASK-MISTRAL-SYNC started. PromptLength={PromptLength}, Lat={Lat}, Lng={Lng}, HttpTokenCanBeCanceled={HttpTokenCanBeCanceled}, HttpTokenIsCanceled={HttpTokenIsCanceled}",
+                "[GPT-PIPELINE][SYNC] Started. PromptLength={PromptLength}, Lat={Lat}, Lng={Lng}, HttpTokenCanBeCanceled={HttpTokenCanBeCanceled}, HttpTokenIsCanceled={HttpTokenIsCanceled}",
                 prompt.Length,
                 request.Latitude,
                 request.Longitude,
                 ct.CanBeCanceled,
                 ct.IsCancellationRequested);
 
-            var created = await CreateInitialInteractionAsync(request, prompt, ct);
-            var interactionId = created.Id;
+            var interaction = await CreateInitialInteractionAsync(request, prompt, ct).ConfigureAwait(false);
+            var interactionId = interaction.Id;
 
-            // Here, in synchronous mode, we can link to the HTTP token + application shutdown
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _appLifetime.ApplicationStopping);
             var requestId = _gptRequestRegistry.Register(interactionId, linkedCts);
 
@@ -214,8 +94,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 await _hubContext.Clients.All.SendAsync(
                     "ReceiveGptResponseStarted",
-                    interactionId,
-                    requestId,
+                    new GptResponseStartedDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        StartedAtUtc = DateTime.UtcNow
+                    },
                     CancellationToken.None);
 
                 var finalDto = await ExecutePipelineInternalAsync(
@@ -225,19 +109,18 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     requestId: requestId,
                     ct: linkedCts.Token,
                     pushChunksToHub: false,
-                    emitStartedEvent: false);
+                    emitStartedEvent: false).ConfigureAwait(false);
 
                 await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseChunk",
-                    finalDto.Id,
-                    requestId,
-                    string.Empty,
-                    true,
-                    CancellationToken.None);
-
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponse",
-                    finalDto,
+                    "ReceiveGptResponseStatus",
+                    new GptResponseStatusDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        Status = "completed",
+                        Message = "Generation completed.",
+                        TimestampUtc = DateTime.UtcNow
+                    },
                     CancellationToken.None);
 
                 return finalDto;
@@ -246,14 +129,20 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 _logger.LogWarning(
                     ex,
-                    "[GPT-PIPELINE][SYNC] Request cancelled. InteractionId={InteractionId}, RequestId={RequestId}",
+                    "[GPT-PIPELINE][SYNC] Cancelled. InteractionId={InteractionId}, RequestId={RequestId}",
                     interactionId,
                     requestId);
 
                 await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseCancelled",
-                    interactionId,
-                    requestId,
+                    "ReceiveGptResponseStatus",
+                    new GptResponseStatusDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        Status = "cancelled",
+                        Message = "Generation cancelled.",
+                        TimestampUtc = DateTime.UtcNow
+                    },
                     CancellationToken.None);
 
                 throw;
@@ -262,21 +151,29 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 _logger.LogError(
                     ex,
-                    "[GPT-PIPELINE][SYNC] Request failed. InteractionId={InteractionId}, RequestId={RequestId}",
+                    "[GPT-PIPELINE][SYNC] Failed. InteractionId={InteractionId}, RequestId={RequestId}",
                     interactionId,
                     requestId);
 
+                await MarkFailedSafeAsync(interactionId, ex.Message).ConfigureAwait(false);
+
                 await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseFailed",
-                    interactionId,
-                    ex.Message,
+                    "ReceiveGptResponseStatus",
+                    new GptResponseStatusDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        Status = "failed",
+                        Message = ex.Message,
+                        TimestampUtc = DateTime.UtcNow
+                    },
                     CancellationToken.None);
 
                 throw;
             }
             finally
             {
-                _gptRequestRegistry.Remove(interactionId);
+                _gptRequestRegistry.Remove(interactionId, requestId);
 
                 _logger.LogInformation(
                     "[GPT-PIPELINE][SYNC] Cleanup done. InteractionId={InteractionId}, RequestId={RequestId}",
@@ -298,6 +195,92 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return Task.FromResult(cancelled);
         }
 
+        private async Task RunPipelineAsync(
+            GPTInteraction interaction,
+            GptPromptRequest request,
+            string requestId,
+            CancellationToken ct)
+        {
+            try
+            {
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponseStarted",
+                    new GptResponseStartedDto
+                    {
+                        InteractionId = interaction.Id,
+                        RequestId = requestId,
+                        StartedAtUtc = DateTime.UtcNow
+                    },
+                    CancellationToken.None);
+
+                await ExecutePipelineInternalAsync(
+                    request: request,
+                    prompt: request.Prompt.Trim(),
+                    interactionId: interaction.Id,
+                    requestId: requestId,
+                    ct: ct,
+                    pushChunksToHub: true,
+                    emitStartedEvent: false).ConfigureAwait(false);
+
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponseStatus",
+                    new GptResponseStatusDto
+                    {
+                        InteractionId = interaction.Id,
+                        RequestId = requestId,
+                        Status = "completed",
+                        Message = "Generation completed.",
+                        TimestampUtc = DateTime.UtcNow
+                    },
+                    CancellationToken.None);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning(
+                    "[GPT-PIPELINE][ASYNC] Cancelled. InteractionId={InteractionId}, RequestId={RequestId}",
+                    interaction.Id,
+                    requestId);
+
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponseStatus",
+                    new GptResponseStatusDto
+                    {
+                        InteractionId = interaction.Id,
+                        RequestId = requestId,
+                        Status = "cancelled",
+                        Message = "Generation cancelled.",
+                        TimestampUtc = DateTime.UtcNow
+                    },
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "[GPT-PIPELINE][ASYNC] Failed. InteractionId={InteractionId}, RequestId={RequestId}",
+                    interaction.Id,
+                    requestId);
+
+                await MarkFailedSafeAsync(interaction.Id, ex.Message).ConfigureAwait(false);
+
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponseStatus",
+                    new GptResponseStatusDto
+                    {
+                        InteractionId = interaction.Id,
+                        RequestId = requestId,
+                        Status = "failed",
+                        Message = ex.Message,
+                        TimestampUtc = DateTime.UtcNow
+                    },
+                    CancellationToken.None);
+            }
+            finally
+            {
+                _gptRequestRegistry.Remove(interaction.Id, requestId);
+            }
+        }
+
         private static void ValidateRequest(GptPromptRequest request)
         {
             if (request is null)
@@ -312,32 +295,32 @@ namespace CitizenHackathon2025.Infrastructure.Services
             string prompt,
             CancellationToken ct)
         {
-            await using var createScope = _scopeFactory.CreateAsyncScope();
-            var gptRepository = createScope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var gptRepository = scope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();
 
-            _logger.LogInformation("[GPT-PIPELINE] Persisting initial interaction with empty response...");
-
-            var created = await gptRepository.UpsertInteractionAsync(new GPTInteraction
+            var interaction = new GPTInteraction
             {
                 Prompt = prompt,
                 Response = string.Empty,
                 Active = true,
+                CreatedAt = DateTime.UtcNow,
                 Model = "mistral",
                 Temperature = 0.3f,
                 SourceType = "MistralLocal",
                 Latitude = request.Latitude,
                 Longitude = request.Longitude
-            });
+            };
+
+            var created = await gptRepository.CreatePendingAsync(interaction, ct).ConfigureAwait(false);
 
             if (created is null || created.Id <= 0)
                 throw new InvalidOperationException("Unable to create GPT interaction.");
 
             _logger.LogInformation(
-                "[GPT-PIPELINE] Initial interaction persisted. InteractionId={InteractionId}, PromptHash={PromptHash}, CreatedAt={CreatedAt}, ResponseLength={ResponseLength}",
+                "[GPT-PIPELINE] Initial interaction persisted. InteractionId={InteractionId}, PromptHash={PromptHash}, CreatedAt={CreatedAt}",
                 created.Id,
                 created.PromptHash,
-                created.CreatedAt,
-                created.Response?.Length ?? 0);
+                created.CreatedAt);
 
             return created;
         }
@@ -357,34 +340,37 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 await _hubContext.Clients.All.SendAsync(
                     "ReceiveGptResponseStarted",
-                    interactionId,
-                    requestId,
+                    new GptResponseStartedDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        StartedAtUtc = DateTime.UtcNow
+                    },
                     CancellationToken.None);
             }
 
             await using var scope = _scopeFactory.CreateAsyncScope();
 
-            var scopedRepository = scope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();
+            var gptRepository = scope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();
             var localAiContextService = scope.ServiceProvider.GetRequiredService<ILocalAiContextService>();
             var mistralAiService = scope.ServiceProvider.GetRequiredService<IMistralAIService>();
 
-            Console.WriteLine("### BEFORE OLLAMA CALL ###");
-
-            var beforeContext = Stopwatch.StartNew();
+            var swContext = Stopwatch.StartNew();
 
             var localContext = await localAiContextService.BuildContextAsync(
                 prompt,
                 request.Latitude,
                 request.Longitude,
-                ct);
+                ct).ConfigureAwait(false);
 
-            beforeContext.Stop();
+            swContext.Stop();
 
             _logger.LogInformation(
-                "[GPT-PIPELINE] Local context built. InteractionId={InteractionId}, RequestId={RequestId}, ElapsedMs={ElapsedMs}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}",
+                "[GPT-PIPELINE] Local context built. InteractionId={InteractionId}, RequestId={RequestId}, ElapsedMs={ElapsedMs}, Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}",
                 interactionId,
                 requestId,
-                beforeContext.ElapsedMilliseconds,
+                swContext.ElapsedMilliseconds,
+                localContext.Places.Count,
                 localContext.Events.Count,
                 localContext.CrowdCalendar.Count,
                 localContext.CrowdInfo.Count,
@@ -398,11 +384,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 interactionId,
                 requestId,
                 groundedPrompt.Length,
-                groundedPrompt.Substring(0, Math.Min(300, groundedPrompt.Length)));
-
-            Console.WriteLine("### BEFORE NON-STREAM OLLAMA CALL ###");
+                groundedPrompt[..Math.Min(300, groundedPrompt.Length)]);
 
             string finalResponse;
+
             if (pushChunksToHub)
             {
                 var chunkCount = 0;
@@ -410,67 +395,70 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 finalResponse = await mistralAiService.StreamFromPromptAsync(
                     groundedPrompt,
-                    async chunk =>
+                    async chunkText =>
                     {
                         chunkCount++;
-                        streamedChars += chunk.Chunk?.Length ?? 0;
+                        streamedChars += chunkText?.Length ?? 0;
 
                         _logger.LogInformation(
-                            "[GPT-PIPELINE] Chunk received. InteractionId={InteractionId}, RequestId={RequestId}, ChunkIndex={ChunkIndex}, ChunkLength={ChunkLength}, TotalChars={TotalChars}, IsFinal={IsFinal}",
+                            "[GPT-PIPELINE] Chunk received. InteractionId={InteractionId}, RequestId={RequestId}, ChunkIndex={ChunkIndex}, ChunkLength={ChunkLength}, TotalChars={TotalChars}",
                             interactionId,
                             requestId,
                             chunkCount,
-                            chunk.Chunk?.Length ?? 0,
-                            streamedChars,
-                            chunk.IsFinal);
-
-                        chunk.InteractionId = interactionId;
-                        chunk.RequestId = requestId;
+                            chunkText?.Length ?? 0,
+                            streamedChars);
 
                         await _hubContext.Clients.All.SendAsync(
                             "ReceiveGptResponseChunk",
-                            interactionId,
-                            requestId,
-                            chunk.Chunk,
-                            false,
+                            new GptResponseChunkDto
+                            {
+                                InteractionId = interactionId,
+                                RequestId = requestId,
+                                Chunk = chunkText ?? string.Empty,
+                                IsFinal = false
+                            },
                             CancellationToken.None);
                     },
-                    ct);
+                    ct).ConfigureAwait(false);
             }
             else
             {
                 finalResponse = await mistralAiService.GenerateFromPromptAsync(
                     groundedPrompt,
-                    ct);
+                    ct).ConfigureAwait(false);
             }
-
-            Console.WriteLine($"### AFTER NON-STREAM OLLAMA CALL finalResponseLength={finalResponse?.Length ?? 0} ###");
 
             if (string.IsNullOrWhiteSpace(finalResponse))
                 finalResponse = "No response from Mistral.";
 
-            Console.WriteLine("### BEFORE LOAD EXISTING ###");
+            var updated = await gptRepository.UpdateResponseAsync(
+                interactionId,
+                finalResponse,
+                ct).ConfigureAwait(false);
 
-            var existing = await scopedRepository.GetByIdAsync(interactionId);
+            if (!updated)
+                throw new InvalidOperationException($"Failed to persist final GPT response for interaction {interactionId}.");
 
-            Console.WriteLine($"### AFTER LOAD EXISTING found={(existing is not null)} ###");
+            var persisted = await gptRepository.GetByIdAsync(interactionId).ConfigureAwait(false);
 
-            if (existing is null)
-                throw new InvalidOperationException($"GPT interaction {interactionId} not found for final update.");
+            if (persisted is null)
+                throw new InvalidOperationException($"GPT interaction {interactionId} not found after update.");
 
-            existing.Response = finalResponse;
-            existing.Active = true;
-            existing.Model ??= "mistral";
-            existing.Temperature ??= 0.3f;
-            existing.SourceType ??= "MistralLocal";
+            var finalDto = persisted.MapToGptInteractionDTO();
 
-            Console.WriteLine("### BEFORE FINAL UPSERT ###");
-
-            var updated = await scopedRepository.UpsertInteractionAsync(existing);
-
-            Console.WriteLine($"### AFTER FINAL UPSERT updatedNull={(updated is null)} responseLength={updated?.Response?.Length ?? existing.Response?.Length ?? 0} ###");
-
-            var finalDto = (updated ?? existing).MapToGptInteractionDTO();
+            if (pushChunksToHub)
+            {
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceiveGptResponseChunk",
+                    new GptResponseChunkDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        Chunk = string.Empty,
+                        IsFinal = true
+                    },
+                    CancellationToken.None);
+            }
 
             _logger.LogInformation(
                 "[GPT-PIPELINE] Final interaction persisted. InteractionId={InteractionId}, RequestId={RequestId}, TotalElapsedMs={ElapsedMs}, PersistedResponseLength={PersistedResponseLength}",
@@ -479,9 +467,25 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 sw.ElapsedMilliseconds,
                 finalDto.Response?.Length ?? 0);
 
-            Console.WriteLine($"### AFTER OLLAMA CALL finalResponseLength={finalResponse?.Length ?? 0} ###");
-
             return finalDto;
+        }
+
+        private async Task MarkFailedSafeAsync(int interactionId, string? errorMessage)
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var gptRepository = scope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();
+
+                await gptRepository.MarkFailedAsync(interactionId, errorMessage).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "[GPT-PIPELINE] Failed to mark interaction as failed. InteractionId={InteractionId}",
+                    interactionId);
+            }
         }
     }
 }

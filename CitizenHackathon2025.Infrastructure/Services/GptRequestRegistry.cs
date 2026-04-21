@@ -1,25 +1,11 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
     public sealed class GptRequestRegistry : IGptRequestRegistry
     {
-        private sealed class ActiveRequest
-        {
-            public string RequestId { get; init; } = Guid.NewGuid().ToString("N");
-            public CancellationTokenSource CancellationTokenSource { get; init; } = default!;
-            public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
-        }
-
-        private readonly ConcurrentDictionary<int, ActiveRequest> _requests = new();
-        private readonly ILogger<GptRequestRegistry> _logger;
-
-        public GptRequestRegistry(ILogger<GptRequestRegistry> logger)
-        {
-            _logger = logger;
-        }
+        private readonly ConcurrentDictionary<int, ActiveGptRequest> _requests = new();
 
         public string Register(int interactionId, CancellationTokenSource cts)
         {
@@ -28,101 +14,62 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             ArgumentNullException.ThrowIfNull(cts);
 
-            var request = new ActiveRequest
+            var requestId = Guid.NewGuid().ToString("N");
+
+            var request = new ActiveGptRequest
             {
-                RequestId = Guid.NewGuid().ToString("N"),
-                CancellationTokenSource = cts,
-                CreatedUtc = DateTime.UtcNow
+                RequestId = requestId,
+                CancellationTokenSource = cts
             };
-
-            if (_requests.TryRemove(interactionId, out var previous))
-            {
-                try
-                {
-                    previous.CancellationTokenSource.Cancel();
-                }
-                catch { }
-
-                previous.CancellationTokenSource.Dispose();
-            }
 
             _requests[interactionId] = request;
 
-            _logger.LogInformation(
-                "GPT request registered. InteractionId={InteractionId}, RequestId={RequestId}",
-                interactionId,
-                request.RequestId);
-
-            return request.RequestId;
+            return requestId;
         }
 
-        public bool TryCancel(int interactionId, string? requestId)
+        public bool TryGet(int interactionId, out string requestId, out CancellationTokenSource? cts)
         {
-            if (!_requests.TryGetValue(interactionId, out var entry))
-                return false;
-
-            if (!string.IsNullOrWhiteSpace(requestId) &&
-                !string.Equals(entry.RequestId, requestId, StringComparison.Ordinal))
+            if (_requests.TryGetValue(interactionId, out var request))
             {
-                _logger.LogWarning(
-                    "GPT cancel rejected due to requestId mismatch. InteractionId={InteractionId}, Expected={Expected}, Actual={Actual}",
-                    interactionId,
-                    entry.RequestId,
-                    requestId);
-
-                return false;
-            }
-
-            try
-            {
-                entry.CancellationTokenSource.Cancel();
-
-                _logger.LogInformation(
-                    "GPT request cancelled. InteractionId={InteractionId}, RequestId={RequestId}",
-                    interactionId,
-                    entry.RequestId);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Error while cancelling GPT request. InteractionId={InteractionId}, RequestId={RequestId}",
-                    interactionId,
-                    entry.RequestId);
-
-                return false;
-            }
-        }
-
-        public bool TryGet(int interactionId, out CancellationTokenSource? cts)
-        {
-            if (_requests.TryGetValue(interactionId, out var entry))
-            {
-                cts = entry.CancellationTokenSource;
+                requestId = request.RequestId;
+                cts = request.CancellationTokenSource;
                 return true;
             }
 
+            requestId = string.Empty;
             cts = null;
             return false;
         }
 
-        public void Remove(int interactionId)
+        public bool TryCancel(int interactionId, string? requestId = null)
         {
-            if (_requests.TryRemove(interactionId, out var entry))
-            {
-                try
-                {
-                    entry.CancellationTokenSource.Dispose();
-                }
-                catch { }
+            if (!_requests.TryGetValue(interactionId, out var request))
+                return false;
 
-                _logger.LogInformation(
-                    "GPT request removed. InteractionId={InteractionId}, RequestId={RequestId}",
-                    interactionId,
-                    entry.RequestId);
+            if (!string.IsNullOrWhiteSpace(requestId) &&
+                !string.Equals(request.RequestId, requestId, StringComparison.Ordinal))
+            {
+                return false;
             }
+
+            if (!request.CancellationTokenSource.IsCancellationRequested)
+                request.CancellationTokenSource.Cancel();
+
+            return true;
+        }
+
+        public void Remove(int interactionId, string? requestId = null)
+        {
+            if (!_requests.TryGetValue(interactionId, out var request))
+                return;
+
+            if (!string.IsNullOrWhiteSpace(requestId) &&
+                !string.Equals(request.RequestId, requestId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _requests.TryRemove(interactionId, out _);
         }
     }
 }
