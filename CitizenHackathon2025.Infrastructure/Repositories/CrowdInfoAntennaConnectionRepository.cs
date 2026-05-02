@@ -12,6 +12,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task UpsertPingAsync(
             int antennaId,
+            int? eventId,
             byte[] deviceHash,
             byte[]? ipHash,
             byte[]? macHash,
@@ -20,33 +21,70 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             string? band,
             string? additionalJson,
             CancellationToken ct)
-        {
-            // MERGE on (AntennaId, DeviceHash) thanks to your unique constraint UQ
-            const string sql = @"
-                            DECLARE @NowUtc DATETIME2(3) = SYSUTCDATETIME();
+                {
+                    const string sql = @"
+                                    DECLARE @NowUtc DATETIME2(3) = SYSUTCDATETIME();
 
-                            MERGE dbo.CrowdInfoAntennaConnection AS T
-                            USING (SELECT @AntennaId AS AntennaId, @DeviceHash AS DeviceHash) AS S
-                            ON (T.AntennaId = S.AntennaId AND T.DeviceHash = S.DeviceHash)
-                            WHEN MATCHED THEN
-                                UPDATE SET
-                                    T.LastSeenUtc = @NowUtc,
-                                    T.Active = 1,
-                                    T.IpHash = COALESCE(@IpHash, T.IpHash),
-                                    T.MacHash = COALESCE(@MacHash, T.MacHash),
-                                    T.Source = @Source,
-                                    T.SignalStrength = @SignalStrength,
-                                    T.Band = @Band,
-                                    T.AdditionalJson = @AdditionalJson
-                            WHEN NOT MATCHED THEN
-                                INSERT (AntennaId, DeviceHash, IpHash, MacHash, Source, SignalStrength, Band, FirstSeenUtc, LastSeenUtc, Active, AdditionalJson)
-                                VALUES (@AntennaId, @DeviceHash, @IpHash, @MacHash, @Source, @SignalStrength, @Band, @NowUtc, @NowUtc, 1, @AdditionalJson);";
-            
-            DynamicParameters parameters = new DynamicParameters();
+                                    MERGE dbo.CrowdInfoAntennaConnection AS T
+                                    USING (
+                                        SELECT
+                                            @AntennaId AS AntennaId,
+                                            @EventId AS EventId,
+                                            @DeviceHash AS DeviceHash
+                                    ) AS S
+                                    ON (
+                                        T.AntennaId = S.AntennaId
+                                        AND ISNULL(T.EventId, -1) = ISNULL(S.EventId, -1)
+                                        AND T.DeviceHash = S.DeviceHash
+                                    )
+                                    WHEN MATCHED THEN
+                                        UPDATE SET
+                                            T.LastSeenUtc = @NowUtc,
+                                            T.Active = 1,
+                                            T.IpHash = COALESCE(@IpHash, T.IpHash),
+                                            T.MacHash = COALESCE(@MacHash, T.MacHash),
+                                            T.Source = @Source,
+                                            T.SignalStrength = @SignalStrength,
+                                            T.Band = @Band,
+                                            T.AdditionalJson = @AdditionalJson
+                                    WHEN NOT MATCHED THEN
+                                        INSERT
+                                        (
+                                            AntennaId,
+                                            EventId,
+                                            DeviceHash,
+                                            IpHash,
+                                            MacHash,
+                                            Source,
+                                            SignalStrength,
+                                            Band,
+                                            FirstSeenUtc,
+                                            LastSeenUtc,
+                                            Active,
+                                            AdditionalJson
+                                        )
+                                        VALUES
+                                        (
+                                            @AntennaId,
+                                            @EventId,
+                                            @DeviceHash,
+                                            @IpHash,
+                                            @MacHash,
+                                            @Source,
+                                            @SignalStrength,
+                                            @Band,
+                                            @NowUtc,
+                                            @NowUtc,
+                                            1,
+                                            @AdditionalJson
+                                        );";
+
+            var parameters = new DynamicParameters();
             parameters.Add("@AntennaId", antennaId, DbType.Int32);
-            parameters.Add("@DeviceHash", deviceHash, DbType.Binary);
-            parameters.Add("@IpHash", ipHash, DbType.Binary);
-            parameters.Add("@MacHash", macHash, DbType.Binary);
+            parameters.Add("@EventId", eventId, DbType.Int32);
+            parameters.Add("@DeviceHash", deviceHash, DbType.Binary, size: 32);
+            parameters.Add("@IpHash", ipHash, DbType.Binary, size: 32);
+            parameters.Add("@MacHash", macHash, DbType.Binary, size: 32);
             parameters.Add("@Source", source, DbType.Byte);
             parameters.Add("@SignalStrength", signalStrength, DbType.Int16);
             parameters.Add("@Band", band, DbType.String);

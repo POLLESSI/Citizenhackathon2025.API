@@ -11,9 +11,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
     {
     #nullable disable
         private readonly System.Data.IDbConnection _connection;
-        private readonly ILogger<EventRepository> _logger;
+        private readonly ILogger<CrowdInfoRepository> _logger;
 
-        public CrowdInfoRepository(IDbConnection connection, ILogger<EventRepository> logger)
+        public CrowdInfoRepository(IDbConnection connection, ILogger<CrowdInfoRepository> logger)
         {
             _connection = connection;
             _logger = logger;
@@ -55,12 +55,28 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default)
         {
             const string sql = @"
-        SELECT TOP(@Limit)
-            Id, LocationName, Latitude, Longitude, CrowdLevel, [Timestamp], Active
-        FROM dbo.CrowdInfo
-        WHERE Active = 1
-        ORDER BY [Timestamp] DESC;";
-            return _connection.QueryAsync<CrowdInfo>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
+                            SELECT TOP(@Limit)
+                                Id,
+                                LocationName,
+                                Latitude,
+                                Longitude,
+                                CrowdLevel,
+                                [Timestamp],
+                                Active
+                            FROM dbo.CrowdInfo
+                            WHERE Active = 1
+                              AND [Timestamp] >= DATEADD(MINUTE, -@MaxAgeMinutes, SYSUTCDATETIME())
+                            ORDER BY [Timestamp] DESC;";
+
+            return _connection.QueryAsync<CrowdInfo>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Limit = limit,
+                        MaxAgeMinutes = 30
+                    },
+                    cancellationToken: ct));
         }
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id)
@@ -136,24 +152,23 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
             return null;
         }
-        public async Task<int> ArchivePastCrowdInfosAsync()
+        public async Task<int> ArchivePastCrowdInfosAsync(CancellationToken ct = default)
         {
-            const string sql = @"
-                        UPDATE [CrowdInfo]
-                        SET [Active] = 0
-                        WHERE [Active] = 1
-                          AND [Timestamp] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
-
             try
             {
-                var affectedRows = await _connection.ExecuteAsync(sql);
-                _logger.LogInformation("{Count} Crowd info(s) archived.", affectedRows);
-                return affectedRows;
+                var archived = await _connection.ExecuteScalarAsync<int>(
+                    new CommandDefinition(
+                        "dbo.sp_ArchivePastCrowdInfo",
+                        new { MaxAgeMinutes = 30 },
+                        commandType: CommandType.StoredProcedure,
+                        cancellationToken: ct));
+
+                _logger.LogInformation("{Count} CrowdInfo archived.", archived);
+                return archived;
             }
             catch (Exception ex)
             {
-
-                _logger.LogError(ex, "Error archiving past Crowd infos.");
+                _logger.LogError(ex, "Error archiving expired CrowdInfo.");
                 return 0;
             }
         }
@@ -161,7 +176,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<CrowdInfo?> UpsertCrowdInfoAsync(CrowdInfo input, CancellationToken ct = default)
         {
             const string sql = @"EXEC dbo.sp_CrowdInfo_Upsert
-                         @LocationName, @Latitude, @Longitude, @CrowdLevel, @Timestamp;";
+                            @LocationName, @Latitude, @Longitude, @CrowdLevel, @Timestamp;";
 
             var parameters = new DynamicParameters();
             parameters.Add("@LocationName", input.LocationName);

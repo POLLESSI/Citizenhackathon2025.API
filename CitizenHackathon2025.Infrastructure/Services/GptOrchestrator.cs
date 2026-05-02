@@ -1,9 +1,11 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,14 +18,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public sealed class GptOrchestrator : IGptOrchestrator
     {
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly IHubContext<GPTHub> _hubContext;
+        private readonly IHubContext<GPTHub, IGptClient> _hubContext;
         private readonly IGptRequestRegistry _gptRequestRegistry;
         private readonly IHostApplicationLifetime _appLifetime;
         private readonly ILogger<GptOrchestrator> _logger;
 
         public GptOrchestrator(
             IServiceScopeFactory scopeFactory,
-            IHubContext<GPTHub> hubContext,
+            IHubContext<GPTHub, IGptClient> hubContext,
             IGptRequestRegistry gptRequestRegistry,
             IHostApplicationLifetime appLifetime,
             ILogger<GptOrchestrator> logger)
@@ -92,15 +94,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             try
             {
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStarted",
+                await _hubContext.SendStarted(
                     new GptResponseStartedDto
                     {
                         InteractionId = interactionId,
                         RequestId = requestId,
                         StartedAtUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
 
                 var finalDto = await ExecutePipelineInternalAsync(
                     request: request,
@@ -111,8 +111,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     pushChunksToHub: false,
                     emitStartedEvent: false).ConfigureAwait(false);
 
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStatus",
+                await _hubContext.SendCompleted(ToCompletedDto(finalDto));
+
+                await _hubContext.SendStatus(
                     new GptResponseStatusDto
                     {
                         InteractionId = interactionId,
@@ -120,8 +121,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         Status = "completed",
                         Message = "Generation completed.",
                         TimestampUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
 
                 return finalDto;
             }
@@ -133,8 +133,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     interactionId,
                     requestId);
 
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStatus",
+                await _hubContext.SendStatus(
                     new GptResponseStatusDto
                     {
                         InteractionId = interactionId,
@@ -142,8 +141,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         Status = "cancelled",
                         Message = "Generation cancelled.",
                         TimestampUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
 
                 throw;
             }
@@ -157,8 +155,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 await MarkFailedSafeAsync(interactionId, ex.Message).ConfigureAwait(false);
 
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStatus",
+                await _hubContext.SendStatus(
                     new GptResponseStatusDto
                     {
                         InteractionId = interactionId,
@@ -166,8 +163,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         Status = "failed",
                         Message = ex.Message,
                         TimestampUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
 
                 throw;
             }
@@ -203,17 +199,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             try
             {
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStarted",
+                await _hubContext.SendStarted(
                     new GptResponseStartedDto
                     {
                         InteractionId = interaction.Id,
                         RequestId = requestId,
                         StartedAtUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
 
-                await ExecutePipelineInternalAsync(
+                var finalDto = await ExecutePipelineInternalAsync(
                     request: request,
                     prompt: request.Prompt.Trim(),
                     interactionId: interaction.Id,
@@ -222,8 +216,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     pushChunksToHub: true,
                     emitStartedEvent: false).ConfigureAwait(false);
 
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStatus",
+                await _hubContext.SendCompleted(ToCompletedDto(finalDto));
+
+                await _hubContext.SendStatus(
                     new GptResponseStatusDto
                     {
                         InteractionId = interaction.Id,
@@ -231,8 +226,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         Status = "completed",
                         Message = "Generation completed.",
                         TimestampUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
             }
             catch (OperationCanceledException)
             {
@@ -241,8 +235,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     interaction.Id,
                     requestId);
 
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStatus",
+                await _hubContext.SendStatus(
                     new GptResponseStatusDto
                     {
                         InteractionId = interaction.Id,
@@ -250,8 +243,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         Status = "cancelled",
                         Message = "Generation cancelled.",
                         TimestampUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
             }
             catch (Exception ex)
             {
@@ -263,8 +255,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 await MarkFailedSafeAsync(interaction.Id, ex.Message).ConfigureAwait(false);
 
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStatus",
+                await _hubContext.SendStatus(
                     new GptResponseStatusDto
                     {
                         InteractionId = interaction.Id,
@@ -272,8 +263,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         Status = "failed",
                         Message = ex.Message,
                         TimestampUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
             }
             finally
             {
@@ -338,15 +328,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (emitStartedEvent)
             {
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseStarted",
+                await _hubContext.SendStarted(
                     new GptResponseStartedDto
                     {
                         InteractionId = interactionId,
                         RequestId = requestId,
                         StartedAtUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                    });
             }
 
             await using var scope = _scopeFactory.CreateAsyncScope();
@@ -408,16 +396,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
                             chunkText?.Length ?? 0,
                             streamedChars);
 
-                        await _hubContext.Clients.All.SendAsync(
-                            "ReceiveGptResponseChunk",
+                        await _hubContext.SendChunk(
                             new GptResponseChunkDto
                             {
                                 InteractionId = interactionId,
                                 RequestId = requestId,
                                 Chunk = chunkText ?? string.Empty,
                                 IsFinal = false
-                            },
-                            CancellationToken.None);
+                            });
                     },
                     ct).ConfigureAwait(false);
             }
@@ -448,16 +434,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (pushChunksToHub)
             {
-                await _hubContext.Clients.All.SendAsync(
-                    "ReceiveGptResponseChunk",
+                await _hubContext.SendChunk(
                     new GptResponseChunkDto
                     {
                         InteractionId = interactionId,
                         RequestId = requestId,
                         Chunk = string.Empty,
                         IsFinal = true
-                    },
-                    CancellationToken.None);
+                    });
             }
 
             _logger.LogInformation(
@@ -486,6 +470,33 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     "[GPT-PIPELINE] Failed to mark interaction as failed. InteractionId={InteractionId}",
                     interactionId);
             }
+        }
+
+        private static GptInteractionCompletedDto ToCompletedDto(GptInteractionDTO dto)
+        {
+            if (dto is null)
+                throw new ArgumentNullException(nameof(dto));
+
+            return new GptInteractionCompletedDto
+            {
+                Id = dto.Id,
+                Prompt = dto.Prompt ?? string.Empty,
+                Response = dto.Response ?? string.Empty,
+                PromptHash = dto.PromptHash,
+                CreatedAt = dto.CreatedAt,
+                Active = dto.Active,
+
+                EventId = dto.EventId,
+                CrowdInfoId = dto.CrowdInfoId,
+                PlaceId = dto.PlaceId,
+                TrafficConditionId = dto.TrafficConditionId,
+                WeatherForecastId = dto.WeatherForecastId,
+
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                SourceType = dto.SourceType,
+                CrowdLevel = dto.CrowdLevel
+            };
         }
     }
 }

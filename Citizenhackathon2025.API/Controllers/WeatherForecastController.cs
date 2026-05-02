@@ -51,7 +51,10 @@ namespace CitizenHackathon2025.API.Controllers
 
         [HttpGet("all")]
         public async Task<ActionResult<List<WeatherForecastDTO>>> GetAll(CancellationToken ct = default)
-            => Ok(await _app.GetAllAsync(ct));
+        {
+            await _app.ArchiveExpiredAsync(ct);
+            return Ok(await _app.GetAllAsync(ct));
+        }
 
         [HttpGet("current")]
         public async Task<IActionResult> GetCurrent([FromQuery] string? city = null, CancellationToken ct = default)
@@ -63,7 +66,10 @@ namespace CitizenHackathon2025.API.Controllers
 
         [HttpGet("history")]
         public async Task<IActionResult> GetHistory([FromQuery, Range(1, 500)] int limit = 10, CancellationToken ct = default)
-            => Ok(await _app.GetHistoryAsync(limit, ct));
+        {
+            await _app.ArchiveExpiredAsync(ct);
+            return Ok(await _app.GetHistoryAsync(limit, ct));
+        }
 
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct = default)
@@ -81,7 +87,7 @@ namespace CitizenHackathon2025.API.Controllers
         //    return Ok(new
         //    {
         //        Database = cn.Database,
-        //        DataSource = cn.ConnectionString
+        //        ConnectionString = cn.ConnectionString
         //    });
         //}
 

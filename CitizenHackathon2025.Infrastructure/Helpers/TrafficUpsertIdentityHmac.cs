@@ -8,7 +8,7 @@ namespace CitizenHackathon2025.Infrastructure.Helpers
 {
     public static class TrafficUpsertIdentityHmac
     {
-        // timeBucket: ex. 1 minute pour stabiliser les événements "proches"
+        // timeBucket: e.g., 1 minute to stabilize "nearby" events
         public static void Ensure(
             TrafficCondition tc,
             string defaultProvider,
@@ -16,13 +16,13 @@ namespace CitizenHackathon2025.Infrastructure.Helpers
             TimeSpan? timeBucket = null)
         {
             if (tc is null) throw new ArgumentNullException(nameof(tc));
-            if (hmacKey is null || hmacKey.Length < 16) // 16 min, 32+ recommandé
+            if (hmacKey is null || hmacKey.Length < 16) // 16 min, 32+ recommended
                 throw new ArgumentException("HMAC key too short", nameof(hmacKey));
 
             tc.Provider = string.IsNullOrWhiteSpace(tc.Provider) ? defaultProvider : tc.Provider.Trim();
             tc.LastSeenAt = tc.LastSeenAt == default ? DateTime.UtcNow : tc.LastSeenAt;
 
-            // Normalisation comme ta DB
+            // Normalization like your database
             var latN = Math.Round(tc.Latitude, 2).ToString("0.00", CultureInfo.InvariantCulture);
             var lonN = Math.Round(tc.Longitude, 3).ToString("0.000", CultureInfo.InvariantCulture);
 
@@ -33,9 +33,9 @@ namespace CitizenHackathon2025.Infrastructure.Helpers
 
             var bucketedUtc = Bucket(dateUtc, bucket);
 
-            // ⚠️ Champ source pour stabiliser l'identité
-            // Idée: provider + lat/lon normalisés + incidentType + bucket temps
-            // + (optionnels) Title/Road/Severity si tu veux distinguer plus finement
+            // ⚠️ Source field to stabilize the identity
+            // Idea: provider + normalized latitude/longitude + incident type + bucket time
+            // + (optional) Title/Road/Severity if you want to differentiate more precisely
             var incident = (tc.IncidentType ?? "").Trim();
             var congestion = (tc.CongestionLevel ?? "").Trim();
 
@@ -44,7 +44,7 @@ namespace CitizenHackathon2025.Infrastructure.Helpers
             // HMAC-SHA256 => 32 bytes
             var fp = HmacSha256(hmacKey, text);
 
-            // ExternalId stable et compact : Base64Url(fp) ~ 43 chars
+            // Stable and compact ExternalId: Base64Url(fp) ~ 43 chars
             tc.Fingerprint = fp;
             tc.ExternalId = WebEncoders.Base64UrlEncode(fp); // NVARCHAR(128) OK
         }

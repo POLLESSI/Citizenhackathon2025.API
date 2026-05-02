@@ -114,6 +114,9 @@
     <Build Include="Programmability\Procedures\sp_Event_UpsertExternal.sql" />
     <Build Include="Tables\BannedWords.sql" />
     <Build Include="Tables\ProfanityWord.sql" />
+    <Build Include="Programmability\Procedures\sp_CrowdInfoAntenna_UpsertFromCadastre.sql" />
+    <Build Include="Tables\CrowdSafetyAlert.sql" />
+    <Build Include="Programmability\Procedures\CrowdSafetyAlert_GetPendingReminders.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />

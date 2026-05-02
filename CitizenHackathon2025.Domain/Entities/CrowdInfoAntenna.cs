@@ -10,6 +10,9 @@
         public DateTime CreatedUtc { get; set; }
         public string? Description { get; set; }
         public int? MaxCapacity { get; set; }
+        public string? ExternalSource { get; set; }
+        public string? ExternalId { get; set; }
+        public DateTime? LastSyncedUtc { get; set; }
     }
 }
 

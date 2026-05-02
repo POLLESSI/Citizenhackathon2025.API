@@ -21,8 +21,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default)
             => _app.GenerateAsync(ct);
 
-        public Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default)
-            => _app.GetAllAsync(ct);
+        public async Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default)
+        {
+            await _app.ArchiveExpiredAsync(ct);
+
+            return await _app.GetAllAsync(ct);
+        }
         public Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit = 128, CancellationToken ct = default)
             => _app.GetHistoryAsync(limit, ct);
 

@@ -1,6 +1,7 @@
 ﻿using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using CitizenHackathon2025.API.Azure.Security.KeyVault;
+using CitizenHackathon2025.API.BackgroundServices;
 using CitizenHackathon2025.API.BackgroundWorkers;
 using CitizenHackathon2025.API.Extensions;
 using CitizenHackathon2025.API.Hubs;
@@ -24,6 +25,7 @@ using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
+using CitizenHackathon2025.Infrastructure.Background;
 using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.Extensions;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB;
@@ -32,6 +34,7 @@ using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Services;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Wallonie.Antennas;
 using CitizenHackathon2025.Infrastructure.Init;
 using CitizenHackathon2025.Infrastructure.Options;
 using CitizenHackathon2025.Infrastructure.Persistence;
@@ -228,6 +231,7 @@ internal class Program
         services.Configure<TrafficHmacOptions>(configuration.GetSection("Security"));
         services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(configuration.GetSection("CrowdAdvisory"));
         services.Configure<DeviceHasherOptions>(configuration.GetSection("DeviceHasher"));
+        services.Configure<PipelineOptions>(configuration.GetSection("Pipelines"));
 
         services.AddOptions<CitizenHackathon2025.Shared.Options.SecurityOptions>()
             .Bind(configuration.GetSection("Security"))
@@ -398,6 +402,7 @@ internal class Program
             o.AddPolicy(Policies.ModoPolicy, p => p.RequireRole(Roles.Admin, Roles.Moderator));
             o.AddPolicy(Policies.UserPolicy, p => p.RequireRole(Roles.Admin, Roles.Moderator, Roles.User));
             o.AddPolicy(Policies.GuestPolicy, p => p.RequireRole(Roles.Guest));
+            o.AddPolicy("CrowdSafetyPolicy", p => p.RequireRole(Roles.Admin, Roles.LawEnforcement));
         });
     }
 
@@ -481,14 +486,23 @@ internal class Program
 
     private static void ConfigureSignalR(IServiceCollection services)
     {
-        services.AddSignalR(o =>
+        services.AddSignalR(options =>
         {
-            o.EnableDetailedErrors = true;
-            o.MaximumReceiveMessageSize = 64 * 1024;
-            o.HandshakeTimeout = TimeSpan.FromSeconds(5);
-            o.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-            o.KeepAliveInterval = TimeSpan.FromSeconds(10);
-            o.AddFilter<ThrottleHubFilter>();
+            options.EnableDetailedErrors = true;
+
+            // More comfortable if you have slightly larger DTOs
+            options.MaximumReceiveMessageSize = 256 * 1024;
+
+            // 5 seconds is a bit too tight in dev/local
+            options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+
+            // Very important: avoids unnecessary client reconnections
+            options.ClientTimeoutInterval = TimeSpan.FromSeconds(90);
+
+            // eepAlive is consistent but not too aggressive
+            options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+
+            options.AddFilter<ThrottleHubFilter>();
         });
     }
 
@@ -637,6 +651,12 @@ internal class Program
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
             return new ResilienceHandler(pipelines.Ollama);
         });
+        services.AddHttpClient<WallonieAntennaCadastreClient>(client =>
+        {
+            client.BaseAddress = new Uri(
+                "https://geoservices.wallonie.be/arcgis/rest/services/INDUSTRIES_SERVICES/ANTENNES/MapServer/0/");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
+        });
     }
 
     private static void ConfigureRepositories(IServiceCollection services)
@@ -645,6 +665,7 @@ internal class Program
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
         services.AddScoped<ICrowdInfoAntennaRepository, CrowdInfoAntennaRepository>();
         services.AddScoped<ICrowdInfoAntennaConnectionRepository, CrowdInfoAntennaConnectionRepository>();
+        services.AddScoped<ICrowdSafetyAlertRepository, CrowdSafetyAlertRepository>();
         services.AddScoped<ICrowdCalendarRepository, CrowdCalendarRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
@@ -680,6 +701,7 @@ internal class Program
         services.AddScoped<ICrowdAdvisoryService, CrowdAdvisoryService>();
         services.AddScoped<ICrowdInfoAntennaService, CrowdInfoAntennaService>();
         services.AddScoped<ICrowdInfoAntennaConnectionService, CrowdInfoAntennaConnectionService>();
+        services.AddScoped<ICrowdSafetyAnalyzer, CrowdSafetyAnalyzer>();
         services.AddScoped<CitizenSuggestionService>();
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IEventReadService, EventReadService>();
@@ -733,6 +755,7 @@ internal class Program
     private static void ConfigureHostedServices(IServiceCollection services)
     {
         services.AddHostedService<CrowdInfoArchiverService>();
+        services.AddHostedService<CrowdSafetyAlertDetectorHostedService>();
         services.AddHostedService<AntennaConnectionCleanupWorker>();
         services.AddHostedService<GptInteractionArchiverService>();
         services.AddHostedService<TrafficConditionArchiverService>();
@@ -741,9 +764,16 @@ internal class Program
         services.AddHostedService<MorningCrowdAdvisoryHostedService>();
         services.AddHostedService<EventArchiverService>();
         services.AddHostedService<OdwbTrafficCollector>();
+        services.AddHostedService<SessionJanitor>();
         services.AddHostedService<WallonieEnPocheSyncWorker>();
         services.AddHostedService<WeatherService>();
-        services.AddHostedService<SessionJanitor>();
+        services.AddHostedService<WeatherForecastCleanupHostedService>();
+        services.AddHostedService<WeatherForecastCollectorHostedService>();
+        services.AddHostedService<TrafficConditionCollectorHostedService>();
+        services.AddHostedService<CrowdInfoAntennaCollectorHostedService>();
+        services.AddHostedService<WallonieAntennaCadastreSyncHostedService>();
+        services.AddHostedService<WallonieEnPocheSyncHostedService>();
+        services.AddHostedService<ExpiredDataArchiverHostedService>();
     }
 
     private static void ConfigureMediatR(IServiceCollection services)
@@ -934,11 +964,14 @@ internal class Program
         hubs.MapHub<CrowdCalendarHub>(CrowdCalendarHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdInfoAntennaHub>(CrowdInfoAntennaHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<CrowdSafetyHub>(CrowdSafetyHubMethods.HubPath).RequireAuthorization("CrowdSafetyPolicy");
         hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
-        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath).RequireAuthorization();
+        hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath, options =>
+        {
+            options.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
+        }).RequireAuthorization();
         hubs.MapHub<MessageHub>(MessageHubMethods.HubPath).RequireAuthorization();
-        //hubs.MapHub<ModerationHub>("moderationHub").RequireAuthorization(Policies.ModoPolicy);
         hubs.MapHub<ModerationHub>(ModerationHubMethods.HubPath).RequireAuthorization(Policies.ModoPolicy);
         hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<UpdateHub>(UpdateHubMethods.HubPath).RequireAuthorization();
@@ -974,6 +1007,38 @@ internal class Program
         app.MapGet("/", () => "OK");
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

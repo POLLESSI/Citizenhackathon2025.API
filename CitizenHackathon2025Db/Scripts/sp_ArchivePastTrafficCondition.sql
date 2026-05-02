@@ -4,15 +4,18 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE OR ALTER PROCEDURE dbo.sp_ArchivePastTrafficCondition
+    @MaxAgeMinutes INT = 15
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE [dbo].[TrafficCondition]
-    SET [Active] = 0
-    WHERE [Active] = 1
-      AND [DateCondition] < DATEADD(DAY, -1, SYSUTCDATETIME());
-END
+    UPDATE dbo.TrafficCondition
+    SET Active = 0
+    WHERE Active = 1
+      AND LastSeenAt < DATEADD(MINUTE, -@MaxAgeMinutes, SYSUTCDATETIME());
+
+    SELECT @@ROWCOUNT AS ArchivedCount;
+END;
 GO
 
 

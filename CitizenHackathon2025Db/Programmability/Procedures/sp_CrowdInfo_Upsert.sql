@@ -7,29 +7,50 @@
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
     BEGIN TRAN;
 
-    -- 1) Archive (soft-delete via INSTEAD OF DELETE trigger)
-    --    We remove the possible ACTIVE line which matches the same position
     DELETE FROM dbo.CrowdInfo WITH (ROWLOCK)
-     WHERE Active = 1
-       AND LocationName = @LocationName
-       AND Latitude     = @Latitude
-       AND Longitude    = @Longitude;
+    WHERE Active = 1
+      AND LocationName = @LocationName
+      AND Latitude = @Latitude
+      AND Longitude = @Longitude;
 
-    -- 2) Insert the new measure as ACTIVE
-    INSERT INTO dbo.CrowdInfo (LocationName, Latitude, Longitude, CrowdLevel, [Timestamp], Active)
-    VALUES (@LocationName, @Latitude, @Longitude, @CrowdLevel, @Timestamp, 1);
+    INSERT INTO dbo.CrowdInfo
+    (
+        LocationName,
+        Latitude,
+        Longitude,
+        CrowdLevel,
+        [Timestamp],
+        Active
+    )
+    VALUES
+    (
+        @LocationName,
+        @Latitude,
+        @Longitude,
+        @CrowdLevel,
+        @Timestamp,
+        1
+    );
 
-    DECLARE @NewId INT = SCOPE_IDENTITY();
+    DECLARE @NewId INT = CONVERT(INT, SCOPE_IDENTITY());
 
     COMMIT;
 
-    -- Return the inserted line
-    SELECT *
+    SELECT
+        Id,
+        LocationName,
+        Latitude,
+        Longitude,
+        CrowdLevel,
+        [Timestamp],
+        Active
     FROM dbo.CrowdInfo
     WHERE Id = @NewId;
-END
+END;
 GO
 
 

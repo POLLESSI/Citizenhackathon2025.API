@@ -34,14 +34,27 @@ CREATE TRIGGER [dbo].[OnDeleteTrafficCondition]
 	END
 GO
 
+CREATE INDEX IX_TrafficCondition_Active_LastSeenAt
+ON dbo.TrafficCondition(Active, LastSeenAt DESC)
+INCLUDE
+(
+    Latitude,
+    Longitude,
+    DateCondition,
+    CongestionLevel,
+    IncidentType,
+    Provider,
+    ExternalId,
+    Title,
+    Road,
+    Severity
+);
+GO
+
 CREATE INDEX IX_TrafficCondition_Active_DateCondition
 ON dbo.TrafficCondition (Active, DateCondition DESC);
 GO
 
---CREATE UNIQUE INDEX UX_TrafficCondition_Active_LatLon
---ON dbo.TrafficCondition(Latitude, Longitude)
---WHERE Active = 1;
---GO
 
 
 

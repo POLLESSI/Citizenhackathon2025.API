@@ -3,6 +3,7 @@
     public sealed class PingAntennaRequest
     {
         public int AntennaId { get; set; }
+        public int? EventId { get; set; }
 
         // In APIs, the hash is often transmitted in base64.
         public string DeviceHashBase64 { get; set; } = "";

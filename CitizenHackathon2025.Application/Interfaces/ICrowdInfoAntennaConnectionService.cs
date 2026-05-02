@@ -5,19 +5,9 @@ namespace CitizenHackathon2025.Application.Interfaces
     public interface ICrowdInfoAntennaConnectionService
     {
         // “Ping” = upsert LastSeen + FirstSeen so new
-        Task PingAsync(
-            int antennaId,
-            byte[] deviceHash,
-            byte[]? ipHash,
-            byte[]? macHash,
-            byte source,
-            short? signalStrength,
-            string? band,
-            string? additionalJson,
-            CancellationToken ct);
+        Task PingAsync(int antennaId, int? eventId, byte[] deviceHash, byte[]? ipHash, byte[]? macHash, byte source, short? signalStrength, string? band, string? additionalJson, CancellationToken ct);
 
-        Task<IReadOnlyList<DeletedAntennaConnectionDTO>> GetDeletedAsync(
-            int antennaId, DateTime sinceUtc, int take, long? cursorDeletedId, CancellationToken ct);
+        Task<IReadOnlyList<DeletedAntennaConnectionDTO>> GetDeletedAsync(int antennaId, DateTime sinceUtc, int take, long? cursorDeletedId, CancellationToken ct);
     }
 }
 

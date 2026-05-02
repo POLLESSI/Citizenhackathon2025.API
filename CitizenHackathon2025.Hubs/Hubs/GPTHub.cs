@@ -1,5 +1,4 @@
 ﻿using CitizenHackathon2025.Contracts.Hubs;
-using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -8,26 +7,39 @@ using System.Threading.Tasks;
 namespace CitizenHackathon2025.Hubs.Hubs
 {
     [Authorize]
-    public class GPTHub : Hub
+    public sealed class GPTHub : Hub<IGptClient>
     {
-#nullable disable
         private readonly ILogger<GPTHub> _logger;
+
         public GPTHub(ILogger<GPTHub> logger)
         {
             _logger = logger;
         }
-        public async Task RefreshGPT(string message)
+
+        public override async Task OnConnectedAsync()
         {
-            _logger.LogInformation("RefreshGPT called");
-            await Clients.All.SendAsync(GptInteractionHubMethods.ToClient.NotifyNewGpt, message);
+            _logger.LogInformation("[GPTHub] Connected: {ConnectionId}", Context.ConnectionId);
+            await base.OnConnectedAsync();
         }
-        public async Task NotifyNewGpt(GptInteractionDTO dto)
+
+        public override async Task OnDisconnectedAsync(System.Exception? exception)
         {
-            await Clients.All.SendAsync("ReceiveGptResponse", dto);
+            _logger.LogInformation(
+                "[GPTHub] Disconnected: {ConnectionId}. Reason={Reason}",
+                Context.ConnectionId,
+                exception?.Message);
+
+            await base.OnDisconnectedAsync(exception);
+        }
+
+        // Legacy only if you still need it.
+        public Task RefreshGpt(string message)
+        {
+            _logger.LogInformation("[GPTHub] RefreshGpt called. MessageLength={Length}", message?.Length ?? 0);
+            return Task.CompletedTask;
         }
     }
 }
-
 
 
 

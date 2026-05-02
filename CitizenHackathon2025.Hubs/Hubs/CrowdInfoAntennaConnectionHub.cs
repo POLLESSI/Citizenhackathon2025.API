@@ -41,6 +41,15 @@ namespace CitizenHackathon2025.Hubs.Hubs
             _logger.LogDebug("JoinAntenna {ConnId} -> {Group}", Context.ConnectionId, group);
             return Groups.AddToGroupAsync(Context.ConnectionId, group);
         }
+        public async Task JoinAntennas(int[] antennaIds)
+        {
+            foreach (var antennaId in antennaIds.Distinct().Take(100))
+            {
+                await Groups.AddToGroupAsync(
+                    Context.ConnectionId,
+                    CrowdInfoAntennaConnectionHubMethods.AntennaGroup(antennaId));
+            }
+        }
 
         public Task LeaveAntenna(int antennaId)
         {

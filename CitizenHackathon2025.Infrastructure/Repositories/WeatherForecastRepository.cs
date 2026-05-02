@@ -22,7 +22,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<WeatherForecast?> GetLatestWeatherForecastAsync(CancellationToken ct = default)
         {
             const string sql = @"
-                            SELECT TOP(1)
+                            SELECT
                                 Id,
                                 DateWeather AS DateWeatherUtc,
                                 Latitude,
@@ -42,6 +42,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
+                              AND DateWeather >= SYSUTCDATETIME()
                             ORDER BY DateWeather DESC;";
 
             return await _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
@@ -71,7 +72,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
-                            ORDER BY DateWeather DESC;";
+                              AND DateWeather >= SYSUTCDATETIME()
+                            ORDER BY DateWeather ASC;";
 
             var rows = await _connection.QueryAsync<WeatherForecast>(
                 new CommandDefinition(sql, cancellationToken: ct));
@@ -100,7 +102,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
-                            WHERE Active = 1
                             ORDER BY DateWeather DESC;";
 
             var rows = await _connection.QueryAsync<WeatherForecast>(
@@ -130,10 +131,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
-                            WHERE Id = @Id AND Active = 1;";
+                            WHERE Id = @Id
+                              AND Active = 1;";
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Id", id);
 
             return _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
-                new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
+                new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
         public Task<WeatherForecast> GetCurrentWeatherAsync(double? latitude, double? longitude, CancellationToken ct = default)
         {
@@ -198,7 +202,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             var wf = new WeatherForecast
             {
-                DateWeatherUtc = DateTime.UtcNow,
+                DateWeatherUtc = DateTime.UtcNow.AddMinutes(30 + _rng.Next(0, 60)),
                 Latitude = lat,
                 Longitude = lon,
                 TemperatureC = _rng.Next(-10, 35),
@@ -219,23 +223,20 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<int> ArchivePastWeatherForecastsAsync(CancellationToken ct = default)
         {
-            const string sql = @"
-                            UPDATE dbo.WeatherForecast
-                            SET Active = 0
-                            WHERE Active = 1
-                              AND DateWeather < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
-
             try
             {
-                var affected = await _connection.ExecuteAsync(
-                    new CommandDefinition(sql, cancellationToken: ct));
+                var archived = await _connection.ExecuteScalarAsync<int>(
+                    new CommandDefinition(
+                        "dbo.sp_ArchivePastWeatherForecast",
+                        commandType: CommandType.StoredProcedure,
+                        cancellationToken: ct));
 
-                _logger.LogInformation("{Count} Weather Forecast(s) archived.", affected);
-                return affected;
+                _logger.LogInformation("{Count} expired WeatherForecast archived.", archived);
+                return archived;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error archiving past Weather Forecasts.");
+                _logger.LogError(ex, "Error archiving expired WeatherForecast.");
                 return 0;
             }
         }

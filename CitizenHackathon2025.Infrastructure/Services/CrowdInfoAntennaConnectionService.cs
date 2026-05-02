@@ -26,6 +26,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
         public Task PingAsync(
             int antennaId,
+            int? eventId,
             byte[] deviceHash,
             byte[]? ipHash,
             byte[]? macHash,
@@ -35,6 +36,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
             string? additionalJson,
             CancellationToken ct)
         {
+            if (antennaId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(antennaId));
+
             if (deviceHash is null || deviceHash.Length != 32)
                 throw new ArgumentException("deviceHash must be 32 bytes (BINARY(32)).", nameof(deviceHash));
 
@@ -44,7 +48,17 @@ namespace CitizenHackathon2025.Infrastructure.Services
             if (macHash is not null && macHash.Length != 32)
                 throw new ArgumentException("macHash must be 32 bytes (BINARY(32)).", nameof(macHash));
 
-            return _repo.UpsertPingAsync(antennaId, deviceHash, ipHash, macHash, source, signalStrength, band, additionalJson, ct);
+            return _repo.UpsertPingAsync(
+                antennaId,
+                eventId,
+                deviceHash,
+                ipHash,
+                macHash,
+                source,
+                signalStrength,
+                band,
+                additionalJson,
+                ct);
         }
     }
 }

@@ -1,18 +1,22 @@
-﻿SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
+﻿USE [CitizenHackathon2025Db];
 GO
 
-CREATE OR ALTER PROCEDURE dbo.sp_ArchivePastCrowdInfo
+DROP PROCEDURE IF EXISTS dbo.sp_ArchivePastCrowdInfo;
+GO
+
+CREATE PROCEDURE dbo.sp_ArchivePastCrowdInfo
+    @MaxAgeMinutes INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE [dbo].[CrowdInfo]
-    SET [Active] = 0
-    WHERE [Active] = 1
-      AND [Timestamp] < DATEADD(DAY, -1, SYSUTCDATETIME());
-END
+    UPDATE dbo.CrowdInfo
+    SET Active = 0
+    WHERE Active = 1
+      AND [Timestamp] < DATEADD(MINUTE, -@MaxAgeMinutes, SYSUTCDATETIME());
+
+    SELECT @@ROWCOUNT AS ArchivedCount;
+END;
 GO
 
 

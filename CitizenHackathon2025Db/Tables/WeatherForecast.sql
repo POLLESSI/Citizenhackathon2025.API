@@ -23,8 +23,10 @@
 
 GO
 
-CREATE INDEX IX_WeatherForecast_Active_DateWeather
-ON dbo.WeatherForecast (Active, DateWeather DESC);
+CREATE INDEX IX_WeatherForecast_Active_DateWeather_Filtered
+ON dbo.WeatherForecast (DateWeather)
+WHERE Active = 1;
+
 GO
 
 CREATE TRIGGER [dbo].[OnDeleteWeatherForecast]
@@ -41,6 +43,27 @@ GO
 
 CREATE UNIQUE INDEX UX_WeatherForecast_Active_Date_Lat_Lon
 ON dbo.WeatherForecast(DateWeather, Latitude, Longitude)
+WHERE Active = 1;
+
+GO
+
+CREATE INDEX IX_WeatherForecast_Active_Future_DateWeather
+ON dbo.WeatherForecast(DateWeather)
+INCLUDE (
+    Latitude,
+    Longitude,
+    TemperatureC,
+    Summary,
+    RainfallMm,
+    Humidity,
+    WindSpeedKmh,
+    WeatherMain,
+    Description,
+    Icon,
+    IconUrl,
+    WeatherType,
+    IsSevere
+)
 WHERE Active = 1;
 
 GO

@@ -14,8 +14,9 @@
     [Rssi] SMALLINT NULL,
     [Active] BIT NOT NULL DEFAULT 1,
     [AdditionalJson] NVARCHAR(MAX) NULL,
-    DeletedUtc DATETIME2(3) NOT NULL CONSTRAINT DF_CIACD_DeletedUtc DEFAULT SYSUTCDATETIME(),
-    DeletedReason TINYINT NOT NULL CONSTRAINT DF_CIACD_DeletedReason DEFAULT 1
+    [DeletedUtc] DATETIME2(3) NOT NULL CONSTRAINT DF_CIACD_DeletedUtc DEFAULT SYSUTCDATETIME(),
+    [DeletedReason] TINYINT NOT NULL CONSTRAINT DF_CIACD_DeletedReason DEFAULT 1,
+    [EventIdKey] AS ISNULL(EventId, -1) PERSISTED
 
     --CONSTRAINT UQ_CrowdInfoAntennaConnection_Device_Antenna UNIQUE (AntennaId, DeviceHash)
 );
@@ -46,8 +47,7 @@ CREATE INDEX IX_AntennaConnection_Antenna_LastSeen
 GO
 
 CREATE UNIQUE INDEX UX_AntennaConnection_Device_Antenna_Event
-  ON dbo.CrowdInfoAntennaConnection(AntennaId, EventId, DeviceHash);
-
+ON dbo.CrowdInfoAntennaConnection(AntennaId, EventIdKey, DeviceHash);
 GO
 
 ---- Main filtering: antennaId + since (DeletedUtc)
@@ -161,4 +161,4 @@ GO
 
 
 
---// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.
+-- Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.

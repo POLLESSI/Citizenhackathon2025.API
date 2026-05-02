@@ -1,7 +1,5 @@
-﻿using CitizenHackathon2025.Application.Extensions;
-using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Infrastructure.Mappers;
 using Dapper;
 using System.Data;
 
@@ -11,7 +9,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
     {
         private readonly IDbConnection _db;
 
-        public CrowdInfoAntennaRepository(IDbConnection db) => _db = db;
+        public CrowdInfoAntennaRepository(IDbConnection db)
+        {
+            _db = db;
+        }
 
         public async Task<CrowdInfoAntenna> CreateAntennaAsync(CrowdInfoAntenna antenna, CancellationToken ct)
         {
@@ -57,6 +58,68 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return affected > 0;
         }
 
+        public async Task<IReadOnlyList<CrowdInfoAntenna>> GetActiveAsync(CancellationToken ct = default)
+        {
+            const string sql = """
+                SELECT
+                    Id,
+                    ISNULL(Name, '') AS Name,
+                    Latitude,
+                    Longitude,
+                    CAST(ISNULL(Active, 0) AS bit) AS Active,
+                    CreatedUtc,
+                    Description,
+                    MaxCapacity
+                FROM dbo.CrowdInfoAntenna
+                WHERE Active = 1
+                ORDER BY Id;
+                """;
+
+            var rows = await _db.QueryAsync<CrowdInfoAntenna>(
+                new CommandDefinition(sql, cancellationToken: ct));
+
+            return rows.AsList();
+        }
+
+        public async Task<IReadOnlyList<CrowdInfoAntenna>> GetByBoundsAsync(
+            double minLat,
+            double maxLat,
+            double minLng,
+            double maxLng,
+            CancellationToken ct = default)
+        {
+            const string sql = """
+                            SELECT
+                                Id,
+                                ISNULL(Name, '') AS Name,
+                                Latitude,
+                                Longitude,
+                                CAST(ISNULL(Active, 0) AS bit) AS Active,
+                                CreatedUtc,
+                                Description,
+                                MaxCapacity
+                            FROM dbo.CrowdInfoAntenna
+                            WHERE Active = 1
+                              AND Latitude BETWEEN @MinLat AND @MaxLat
+                              AND Longitude BETWEEN @MinLng AND @MaxLng
+                            ORDER BY Id;
+                            """;
+
+            var rows = await _db.QueryAsync<CrowdInfoAntenna>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        MinLat = minLat,
+                        MaxLat = maxLat,
+                        MinLng = minLng,
+                        MaxLng = maxLng
+                    },
+                    cancellationToken: ct));
+
+            return rows.AsList();
+        }
+
         public async Task<IReadOnlyList<CrowdInfoAntenna>> GetAllAsync(CancellationToken ct)
         {
             const string sql = @"
@@ -84,48 +147,206 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         }
 
         public async Task<(CrowdInfoAntenna Antenna, double DistanceMeters)?> GetNearestAsync(
-            double lat, double lng, double maxRadiusMeters, CancellationToken ct)
+            double lat,
+            double lng,
+            double maxRadiusMeters,
+            CancellationToken ct)
         {
             const string sql = @"
                             DECLARE @p geography = geography::Point(@Lat, @Lng, 4326);
 
                             SELECT TOP(1)
-                                a.Id, a.Name, a.Latitude, a.Longitude, a.Active, a.CreatedUtc, a.Description, a.MaxCapacity,
+                                a.Id,
+                                a.Name,
+                                a.Latitude,
+                                a.Longitude,
+                                a.Active,
+                                a.CreatedUtc,
+                                a.Description,
+                                a.MaxCapacity,
                                 @p.STDistance(a.GeoLocation) AS DistanceMeters
                             FROM dbo.CrowdInfoAntenna a
                             WHERE a.Active = 1
                               AND a.GeoLocation.STDistance(@p) <= @MaxRadiusMeters
                             ORDER BY a.GeoLocation.STDistance(@p) ASC;";
-            DynamicParameters parameters = new DynamicParameters();
+
+            var parameters = new DynamicParameters();
             parameters.Add("Lat", lat);
             parameters.Add("Lng", lng);
             parameters.Add("MaxRadiusMeters", maxRadiusMeters);
 
-            var row = await _db.QueryFirstOrDefaultAsync<CrowdInfoAntennaNearestRow>(new CommandDefinition(sql, parameters, cancellationToken: ct));
+            var row = await _db.QueryFirstOrDefaultAsync<CrowdInfoAntennaNearestRow>(
+                new CommandDefinition(sql, parameters, cancellationToken: ct));
 
-            if (row is null) return null;
+            if (row is null)
+                return null;
 
-            var antenna = row.ToEntity();
+            var antenna = ToEntity(row);
 
             return (antenna, row.DistanceMeters);
         }
-    }
-    internal sealed class CrowdInfoAntennaNearestRow
-    {
-        public int Id { get; set; }
-        public string? Name { get; set; }
+        private static CrowdInfoAntenna ToEntity(CrowdInfoAntennaNearestRow row)
+            => new()
+            {
+                Id = row.Id,
+                Name = row.Name ?? string.Empty,
+                Latitude = (double)row.Latitude,
+                Longitude = (double)row.Longitude,
+                Active = row.Active,
+                CreatedUtc = row.CreatedUtc,
+                Description = row.Description,
+                MaxCapacity = row.MaxCapacity
+            };
 
-        public decimal Latitude { get; set; }
-        public decimal Longitude { get; set; }
+        public async Task<CrowdInfoAntenna> UpsertFromCadastreAsync(CrowdInfoAntenna antenna, CancellationToken ct)
+        {
+            const string sql = "dbo.sp_CrowdInfoAntenna_UpsertFromCadastre";
 
-        public bool Active { get; set; }
-        public DateTime CreatedUtc { get; set; }
-        public string? Description { get; set; }
-        public int? MaxCapacity { get; set; }
+            var parameters = new DynamicParameters();
+            parameters.Add("@ExternalSource", antenna.ExternalSource);
+            parameters.Add("@ExternalId", antenna.ExternalId);
+            parameters.Add("@Name", antenna.Name);
+            parameters.Add("@Latitude", Math.Round((decimal)antenna.Latitude, 6));
+            parameters.Add("@Longitude", Math.Round((decimal)antenna.Longitude, 6));
+            parameters.Add("@Description", antenna.Description);
+            parameters.Add("@MaxCapacity", antenna.MaxCapacity);
+            parameters.Add("@Active", antenna.Active);
 
-        public double DistanceMeters { get; set; }
+            return await _db.QuerySingleAsync<CrowdInfoAntenna>(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: ct));
+        }
+
+        internal sealed class CrowdInfoAntennaNearestRow
+        {
+            public int Id { get; set; }
+            public string? Name { get; set; }
+
+            public decimal Latitude { get; set; }
+            public decimal Longitude { get; set; }
+
+            public bool Active { get; set; }
+            public DateTime CreatedUtc { get; set; }
+            public string? Description { get; set; }
+            public int? MaxCapacity { get; set; }
+
+            public double DistanceMeters { get; set; }
+        }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

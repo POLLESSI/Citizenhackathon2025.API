@@ -46,6 +46,19 @@ namespace CitizenHackathon2025.API.Controllers
             return dto is null ? NotFound() : Ok(dto);
         }
 
+        [HttpGet("bounds")]
+        public async Task<IActionResult> GetByBounds([FromQuery] double minLat, [FromQuery] double maxLat, [FromQuery] double minLng, [FromQuery] double maxLng, CancellationToken ct = default)
+        {
+            if (minLat < -90 || maxLat > 90 || minLat > maxLat)
+                return BadRequest("Invalid latitude bounds.");
+
+            if (minLng < -180 || maxLng > 180 || minLng > maxLng)
+                return BadRequest("Invalid longitude bounds.");
+
+            var result = await _svc.GetByBoundsAsync(minLat, maxLat, minLng, maxLng, ct);
+            return Ok(result);
+        }
+
         // POST api/crowdinfoantenna
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateCrowdInfoAntennaDTO dto, CancellationToken ct)

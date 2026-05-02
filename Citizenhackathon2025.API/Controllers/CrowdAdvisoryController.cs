@@ -87,7 +87,21 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPut("calendar/{id:int}")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] CrowdCalendarEntry e)
         {
-            if (e is null || id != e.Id) return BadRequest("Id mismatch.");
+            if (e is null)
+                return BadRequest("Body is required.");
+
+            if (id <= 0)
+                return BadRequest("Invalid route id.");
+
+            if (e.Id <= 0)
+                return BadRequest("Body Id is required.");
+
+            if (id != e.Id)
+                return BadRequest($"Id mismatch. Route id = {id}, body id = {e.Id}.");
+
+            e.DateUtc = e.DateUtc.Date;
+            e.ExpectedLevel = (CrowdLevelEnum)Math.Clamp((int)e.ExpectedLevel, 1, 4);
+
             var n = await _repo.UpdateAsync(e);
             return n > 0 ? NoContent() : NotFound();
         }

@@ -35,6 +35,7 @@
   <ItemGroup>
     <Folder Include="Dapper\TypeHandlers\" />
     <Folder Include="ExternalAPIs\WallonieEnPoche\" />
+    <Folder Include="Mappers\" />
   </ItemGroup>
 
 </Project>

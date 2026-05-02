@@ -31,17 +31,26 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Provider, ExternalId, Fingerprint, LastSeenAt, Title, Road, Severity, GeomWkt, Active
                             FROM dbo.TrafficCondition
                             WHERE Active = 1
-                            ORDER BY DateCondition DESC;";
-            var cmd = new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct);
-            return _connection.QueryAsync<TrafficCondition>(cmd);
+                              AND LastSeenAt >= DATEADD(MINUTE, -@MaxAgeMinutes, SYSUTCDATETIME())
+                            ORDER BY LastSeenAt DESC;";
+
+            return _connection.QueryAsync<TrafficCondition>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Limit = limit,
+                        MaxAgeMinutes = 30
+                    },
+                    cancellationToken: ct));
         }
         public async Task<TrafficCondition?> GetByIdAsync(int id)
         {
             try
             {
                 const string sql = @"SELECT Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active
-                             FROM dbo.TrafficCondition
-                             WHERE Id = @Id AND Active = 1";
+                                FROM dbo.TrafficCondition
+                                WHERE Id = @Id AND Active = 1";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", id, DbType.Int64);
 
@@ -60,12 +69,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             try
             {
                 const string sql = @"
-                            INSERT INTO dbo.TrafficCondition
-                             (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType)   -- pas Active
-                            OUTPUT INSERTED.Id, INSERTED.Latitude, INSERTED.Longitude,
-                                   INSERTED.DateCondition, INSERTED.CongestionLevel,
-                                   INSERTED.IncidentType, INSERTED.Active
-                            VALUES (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType);";
+                                INSERT INTO dbo.TrafficCondition
+                                 (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType)   -- pas Active
+                                OUTPUT INSERTED.Id, INSERTED.Latitude, INSERTED.Longitude,
+                                       INSERTED.DateCondition, INSERTED.CongestionLevel,
+                                       INSERTED.IncidentType, INSERTED.Active
+                                VALUES (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType);";
 
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Latitude", trafficCondition.Latitude);
@@ -116,24 +125,23 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
             return null;
         }
-        public async Task<int> ArchivePastTrafficConditionsAsync()
+        public async Task<int> ArchivePastTrafficConditionsAsync(CancellationToken ct = default)
         {
-            const string sql = @"
-                            UPDATE [TrafficCondition]
-                            SET [Active] = 0
-                            WHERE [Active] = 1
-                              AND [DateCondition] < DATEADD(DAY, -1, CAST(GETDATE() AS DATETIME2(0)));";
-
             try
             {
-                var affectedRows = await _connection.ExecuteAsync(sql);
-                _logger.LogInformation("{Count} Traffic Condition(s) archived.", affectedRows);
-                return affectedRows;
+                var archived = await _connection.ExecuteScalarAsync<int>(
+                    new CommandDefinition(
+                        "dbo.sp_ArchivePastTrafficCondition",
+                        new { MaxAgeMinutes = 30 },
+                        commandType: CommandType.StoredProcedure,
+                        cancellationToken: ct));
+
+                _logger.LogInformation("{Count} TrafficCondition archived.", archived);
+                return archived;
             }
             catch (Exception ex)
             {
-
-                _logger.LogError(ex, "Error archiving past Traffic Conditions.");
+                _logger.LogError(ex, "Error archiving expired TrafficCondition.");
                 return 0;
             }
         }

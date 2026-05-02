@@ -3,11 +3,14 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE [dbo].[WeatherForecast]
-    SET [Active] = 0
-    WHERE [Active] = 1
-      AND [DateWeather] < DATEADD(DAY, -1, SYSUTCDATETIME());
-END
+    UPDATE dbo.WeatherForecast
+    SET Active = 0
+    WHERE Active = 1
+      AND DateWeather < SYSUTCDATETIME();
+
+    SELECT @@ROWCOUNT AS ArchivedCount;
+END;
+GO
 
 
 

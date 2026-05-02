@@ -45,9 +45,12 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatestTrafficCondition(CancellationToken ct)
         {
-            var trafficConditions = await _trafficConditionRepository.GetLatestTrafficConditionAsync(limit: 10, ct: ct);
-            var dtos = trafficConditions.Select(tc => tc?.MapToTrafficConditionDTO()).ToList();
-            return Ok(dtos);
+            await _trafficConditionRepository.ArchivePastTrafficConditionsAsync(ct);
+
+            var trafficConditions = await _trafficConditionRepository
+                .GetLatestTrafficConditionAsync(limit: 10, ct: ct);
+
+            return Ok(trafficConditions.Select(tc => tc.MapToTrafficConditionDTO()).ToList());
         }
         // 2) Endpoint for live fetch from Odwb
         [HttpGet("current")]
@@ -221,9 +224,9 @@ namespace CitizenHackathon2025.API.Controllers
 
         [HttpPost("archive-expired")]
         [Authorize(Policy = Policies.AdminPolicy)]
-        public async Task<IActionResult> ArchiveExpiredTrafficConditions()
+        public async Task<IActionResult> ArchiveExpiredTrafficConditions(CancellationToken ct)
         {
-            var archived = await _trafficConditionRepository.ArchivePastTrafficConditionsAsync();
+            var archived = await _trafficConditionRepository.ArchivePastTrafficConditionsAsync(ct);
             return Ok(new { ArchivedCount = archived });
         }
         [HttpPut("{id:int}")]

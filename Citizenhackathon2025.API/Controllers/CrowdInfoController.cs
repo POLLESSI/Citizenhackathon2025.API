@@ -29,12 +29,13 @@ namespace CitizenHackathon2025.API.Controllers
             _hubContext = hubContext;
         }
         [HttpGet("all")]
-        public async Task<IActionResult> GetAllCrowdInfo()
+        public async Task<IActionResult> GetAllCrowdInfo(CancellationToken ct = default)
         {
-            var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync();
+            await _crowdInfoRepository.ArchivePastCrowdInfosAsync(ct);
 
-            var result = crowdInfos.Select(c => c.MapToCrowdInfoDTO()).ToList();
-            return Ok(result);
+            var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync(ct: ct);
+
+            return Ok(crowdInfos.Select(c => c.MapToCrowdInfoDTO()).ToList());
         }
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetCrowdInfoById(int id)
@@ -58,11 +59,13 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(filtered.Select(c => c.MapToCrowdInfoDTO()));
         }
         [HttpGet("latest")]
-        public async Task<IActionResult> GetLatest()
+        public async Task<IActionResult> GetLatest(CancellationToken ct = default)
         {
-            var all = await _crowdInfoRepository.GetAllCrowdInfoAsync();
-            var latest = all.OrderByDescending(c => c.Timestamp).Take(50);
-            return Ok(latest.Select(c => c.MapToCrowdInfoDTO()));
+            await _crowdInfoRepository.ArchivePastCrowdInfosAsync(ct);
+
+            var all = await _crowdInfoRepository.GetAllCrowdInfoAsync(limit: 50, ct);
+
+            return Ok(all.Select(c => c.MapToCrowdInfoDTO()));
         }
         [HttpPost]
         public async Task<IActionResult> SaveCrowdInfo([FromBody] CrowdInfoDTO dto)
@@ -96,9 +99,9 @@ namespace CitizenHackathon2025.API.Controllers
 
         [HttpPost("archive-expired")]
         [Authorize(Policy = Policies.AdminPolicy)]
-        public async Task<IActionResult> ArchiveExpiredCrowdInfos()
+        public async Task<IActionResult> ArchiveExpiredCrowdInfos(CancellationToken ct = default)
         {
-            var archived = await _crowdInfoRepository.ArchivePastCrowdInfosAsync();
+            var archived = await _crowdInfoRepository.ArchivePastCrowdInfosAsync(ct);
             return Ok(new { ArchivedCount = archived });
         }
 

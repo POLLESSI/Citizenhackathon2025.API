@@ -25,9 +25,14 @@ CREATE TRIGGER [dbo].[OnDeleteCrowdInfo]
 
 GO
 
-CREATE INDEX IX_CrowdInfo_Active_Timestamp
-ON dbo.CrowdInfo (Active, [Timestamp] DESC);
-
+CREATE INDEX IX_CrowdInfo_Active_Timestamp_Include
+ON dbo.CrowdInfo(Active, [Timestamp] DESC)
+INCLUDE (
+    LocationName,
+    Latitude,
+    Longitude,
+    CrowdLevel
+);
 GO
 
 CREATE UNIQUE INDEX UX_CrowdInfo_Active_Pos

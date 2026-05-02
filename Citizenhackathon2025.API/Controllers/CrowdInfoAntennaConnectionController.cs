@@ -28,7 +28,7 @@ namespace CitizenHackathon2025.API.Controllers
             var ipHash = string.IsNullOrWhiteSpace(req.IpHashBase64) ? null : FromB64(req.IpHashBase64);
             var macHash = string.IsNullOrWhiteSpace(req.MacHashBase64) ? null : FromB64(req.MacHashBase64);
 
-            await _svc.PingAsync(req.AntennaId, deviceHash, ipHash, macHash, req.Source, req.SignalStrength, req.Band, req.AdditionalJson, ct);
+            await _svc.PingAsync(req.AntennaId, req.EventId, deviceHash, ipHash, macHash, req.Source, req.SignalStrength, req.Band, req.AdditionalJson, ct);
             return Ok();
         }
         // GET api/crowdinfoantennaconnection/deleted?antennaId=1&since=2026-02-01T00:00:00Z&take=100&cursorDeletedId=12345

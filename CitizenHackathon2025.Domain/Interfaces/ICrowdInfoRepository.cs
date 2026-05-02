@@ -10,7 +10,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<IEnumerable<CrowdInfo>> GetNearbyCrowdInfoAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default);
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id);
         Task<bool> DeleteCrowdInfoAsync(int id);
-        Task<int> ArchivePastCrowdInfosAsync();
+        Task<int> ArchivePastCrowdInfosAsync(CancellationToken ct = default);
         CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo);
     }
 }

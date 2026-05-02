@@ -91,6 +91,22 @@ namespace CitizenHackathon2025.Infrastructure.Services
             };
         }
 
+        public async Task<IReadOnlyList<CrowdInfoAntennaDTO>> GetByBoundsAsync(double minLat, double maxLat, double minLng, double maxLng, CancellationToken ct = default)
+        {
+            var rows = await _antRepo.GetByBoundsAsync(minLat, maxLat, minLng, maxLng, ct);
+
+            return rows.Select(a => new CrowdInfoAntennaDTO
+            {
+                Id = a.Id,
+                Name = a.Name,
+                Latitude = a.Latitude,
+                Longitude = a.Longitude,
+                CreatedUtc = a.CreatedUtc,
+                Description = a.Description,
+                MaxCapacity = a.MaxCapacity
+            }).ToList();
+        }
+
         public async Task<EventAntennaCrowdDTO?> GetEventCrowdAsync(int eventId, int windowMinutes, double maxRadiusMeters, CancellationToken ct)
         {
             var ev = await _eventRead.GetEventGeoAsync(eventId, ct);
