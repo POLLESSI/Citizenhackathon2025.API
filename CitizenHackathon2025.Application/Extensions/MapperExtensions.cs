@@ -510,7 +510,8 @@ namespace CitizenHackathon2025.Application.Extensions
                 Longitude = entity.Longitude,
                 CreatedUtc = entity.CreatedUtc,
                 Description = entity.Description,
-                MaxCapacity = entity.MaxCapacity
+                MaxCapacity = entity.MaxCapacity,
+                Active = entity.Active,
             };
         }
 

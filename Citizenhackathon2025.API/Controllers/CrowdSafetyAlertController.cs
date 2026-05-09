@@ -45,7 +45,6 @@ namespace CitizenHackathon2025.API.Controllers
             });
 
             var alerts = await _repo.GetLatestAsync(limit, ct);
-            return Ok(alerts);
 
             return Ok(dtos);
         }

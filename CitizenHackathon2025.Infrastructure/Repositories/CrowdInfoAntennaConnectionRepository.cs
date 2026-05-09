@@ -21,63 +21,66 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             string? band,
             string? additionalJson,
             CancellationToken ct)
-                {
-                    const string sql = @"
-                                    DECLARE @NowUtc DATETIME2(3) = SYSUTCDATETIME();
+        {
+            const string sql = @"
+                            DECLARE @NowUtc DATETIME2(3) = SYSUTCDATETIME();
 
-                                    MERGE dbo.CrowdInfoAntennaConnection AS T
-                                    USING (
-                                        SELECT
-                                            @AntennaId AS AntennaId,
-                                            @EventId AS EventId,
-                                            @DeviceHash AS DeviceHash
-                                    ) AS S
-                                    ON (
-                                        T.AntennaId = S.AntennaId
-                                        AND ISNULL(T.EventId, -1) = ISNULL(S.EventId, -1)
-                                        AND T.DeviceHash = S.DeviceHash
-                                    )
-                                    WHEN MATCHED THEN
-                                        UPDATE SET
-                                            T.LastSeenUtc = @NowUtc,
-                                            T.Active = 1,
-                                            T.IpHash = COALESCE(@IpHash, T.IpHash),
-                                            T.MacHash = COALESCE(@MacHash, T.MacHash),
-                                            T.Source = @Source,
-                                            T.SignalStrength = @SignalStrength,
-                                            T.Band = @Band,
-                                            T.AdditionalJson = @AdditionalJson
-                                    WHEN NOT MATCHED THEN
-                                        INSERT
-                                        (
-                                            AntennaId,
-                                            EventId,
-                                            DeviceHash,
-                                            IpHash,
-                                            MacHash,
-                                            Source,
-                                            SignalStrength,
-                                            Band,
-                                            FirstSeenUtc,
-                                            LastSeenUtc,
-                                            Active,
-                                            AdditionalJson
-                                        )
-                                        VALUES
-                                        (
-                                            @AntennaId,
-                                            @EventId,
-                                            @DeviceHash,
-                                            @IpHash,
-                                            @MacHash,
-                                            @Source,
-                                            @SignalStrength,
-                                            @Band,
-                                            @NowUtc,
-                                            @NowUtc,
-                                            1,
-                                            @AdditionalJson
-                                        );";
+                            UPDATE dbo.CrowdInfoAntennaConnection
+                            SET
+                                LastSeenUtc = @NowUtc,
+                                Active = 1,
+                                IpHash = COALESCE(@IpHash, IpHash),
+                                MacHash = COALESCE(@MacHash, MacHash),
+                                Source = @Source,
+                                SignalStrength = @SignalStrength,
+                                Band = @Band,
+                                AdditionalJson = @AdditionalJson,
+                                DeletedUtc = NULL,
+                                DeletedReason = NULL
+                            WHERE AntennaId = @AntennaId
+                              AND EventIdKey = ISNULL(@EventId, -1)
+                              AND DeviceHash = @DeviceHash;
+
+                            IF @@ROWCOUNT = 0
+                            BEGIN
+                                INSERT INTO dbo.CrowdInfoAntennaConnection
+                                (
+                                    AntennaId,
+                                    EventId,
+                                    DeviceHash,
+                                    IpHash,
+                                    MacHash,
+                                    Source,
+                                    SignalStrength,
+                                    Band,
+                                    FirstSeenUtc,
+                                    LastSeenUtc,
+                                    Rssi,
+                                    Active,
+                                    AdditionalJson,
+                                    DeletedUtc,
+                                    DeletedReason
+                                )
+                                VALUES
+                                (
+                                    @AntennaId,
+                                    @EventId,
+                                    @DeviceHash,
+                                    @IpHash,
+                                    @MacHash,
+                                    @Source,
+                                    @SignalStrength,
+                                    @Band,
+                                    @NowUtc,
+                                    @NowUtc,
+                                    NULL,
+                                    1,
+                                    @AdditionalJson,
+                                    NULL,
+                                    NULL
+                                );
+                            END;
+                            ";
 
             var parameters = new DynamicParameters();
             parameters.Add("@AntennaId", antennaId, DbType.Int32);
@@ -87,29 +90,42 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@MacHash", macHash, DbType.Binary, size: 32);
             parameters.Add("@Source", source, DbType.Byte);
             parameters.Add("@SignalStrength", signalStrength, DbType.Int16);
-            parameters.Add("@Band", band, DbType.String);
+            parameters.Add("@Band", band, DbType.String, size: 16);
             parameters.Add("@AdditionalJson", additionalJson, DbType.String);
 
             await _db.ExecuteAsync(new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<(int activeConnections, int uniqueDevices)> GetCountsAsync(
-            int antennaId, DateTime windowStartUtc, DateTime windowEndUtc, CancellationToken ct)
+        public async Task<(int activeConnections, int uniqueDevices)> GetCountsAsync(int antennaId, DateTime windowStartUtc, DateTime windowEndUtc, CancellationToken ct)
         {
             const string sql = @"
                             SELECT
-                                COUNT_BIG(*) AS ActiveConnections,
-                                COUNT_BIG(DISTINCT DeviceHash) AS UniqueDevices
+                                CAST(COUNT_BIG(*) AS int) AS ActiveConnections,
+                                CAST(COUNT_BIG(DISTINCT DeviceHash) AS int) AS UniqueDevices
                             FROM dbo.CrowdInfoAntennaConnection
                             WHERE Active = 1
                               AND AntennaId = @AntennaId
                               AND LastSeenUtc >= @WindowStartUtc
                               AND LastSeenUtc <  @WindowEndUtc;";
 
-            var row = await _db.QuerySingleAsync<dynamic>(
-                new CommandDefinition(sql, new { AntennaId = antennaId, WindowStartUtc = windowStartUtc, WindowEndUtc = windowEndUtc }, cancellationToken: ct));
+            var row = await _db.QuerySingleAsync<AntennaCountRow>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        AntennaId = antennaId,
+                        WindowStartUtc = windowStartUtc,
+                        WindowEndUtc = windowEndUtc
+                    },
+                    cancellationToken: ct));
 
-            return ((int)row.ActiveConnections, (int)row.UniqueDevices);
+            return (row.ActiveConnections, row.UniqueDevices);
+        }
+
+        private sealed class AntennaCountRow
+        {
+            public int ActiveConnections { get; set; }
+            public int UniqueDevices { get; set; }
         }
 
         public async Task<long> CreateAsync(
@@ -124,22 +140,22 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             string? band,
             string? additionalJson,
             CancellationToken ct)
-                {
-                    const string sql = @"
-                                    DECLARE @NowUtc DATETIME2(3) = SYSUTCDATETIME();
+        {
+            const string sql = @"
+                            DECLARE @NowUtc DATETIME2(3) = SYSUTCDATETIME();
 
-                                    INSERT INTO dbo.CrowdInfoAntennaConnection
-                                    (
-                                        AntennaId, EventId, DeviceHash, IpHash, MacHash,
-                                        Source, SignalStrength, Band, FirstSeenUtc, LastSeenUtc, Rssi, Active, AdditionalJson
-                                    )
-                                    VALUES
-                                    (
-                                        @AntennaId, @EventId, @DeviceHash, @IpHash, @MacHash,
-                                        @Source, @SignalStrength, @Band, @NowUtc, @NowUtc, @Rssi, 1, @AdditionalJson
-                                    );
+                            INSERT INTO dbo.CrowdInfoAntennaConnection
+                            (
+                                AntennaId, EventId, DeviceHash, IpHash, MacHash,
+                                Source, SignalStrength, Band, FirstSeenUtc, LastSeenUtc, Rssi, Active, AdditionalJson
+                            )
+                            VALUES
+                            (
+                                @AntennaId, @EventId, @DeviceHash, @IpHash, @MacHash,
+                                @Source, @SignalStrength, @Band, @NowUtc, @NowUtc, @Rssi, 1, @AdditionalJson
+                            );
 
-                                    SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
+                            SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
 
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("@AntennaId", antennaId, DbType.Int32);
@@ -162,7 +178,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public async Task<int> ArchiveAndDeleteExpiredAsync(int timeoutSeconds, int batchSize, CancellationToken ct)
         {
             const string sql = "EXEC dbo.ArchiveAndDeleteExpiredAntennaConnections @TimeoutSeconds, @BatchSize;";
-            return await _db.ExecuteAsync(new CommandDefinition(sql, new { TimeoutSeconds = timeoutSeconds, BatchSize = batchSize }, cancellationToken: ct));
+
+            var rows = await _db.QueryAsync<dynamic>(
+                new CommandDefinition(sql, new { TimeoutSeconds = timeoutSeconds, BatchSize = batchSize }, cancellationToken: ct));
+
+            return rows.Count();
         }
 
         //public async Task<IReadOnlyList<DeletedAntennaConnectionDTO>> GetDeletedAsync(

@@ -3,6 +3,7 @@
     public sealed class AntennaCountsUpdateDTO
     {
         public int AntennaId { get; init; }
+        public AntennaCountsDTO Counts { get; set; } = new();
         public DateTime WindowStartUtc { get; init; }
         public short WindowSeconds { get; init; }
 

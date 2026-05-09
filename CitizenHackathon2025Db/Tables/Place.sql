@@ -11,7 +11,7 @@
 	[ExternalSource] NVARCHAR(32) NULL,
 	[ExternalId] NVARCHAR(128) NULL,
 	[SourceUpdatedAtUtc] DATETIME2(3) NULL,
-	[Active] BIT DEFAULT 1
+	[Active] BIT DEFAULT 1,
 
 	CONSTRAINT [PK_Place] PRIMARY KEY ([Id]),
 	--CONSTRAINT [UQ_Place_Name] UNIQUE ([Name])

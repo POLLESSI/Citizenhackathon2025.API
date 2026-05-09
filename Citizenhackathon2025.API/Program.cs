@@ -696,6 +696,7 @@ internal class Program
 
         services.AddScoped<IAIService, AIService>();
         services.AddScoped<IAggregateSuggestionService, AstroIAService>();
+        services.AddScoped<IAntennaSimulationService, AntennaSimulationService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
         services.AddScoped<CrowdInfoService>();
         services.AddScoped<ICrowdAdvisoryService, CrowdAdvisoryService>();
@@ -778,9 +779,14 @@ internal class Program
 
     private static void ConfigureMediatR(IServiceCollection services)
     {
-        services.AddMediatR(typeof(GetLatestForecastQuery).Assembly);
-        services.AddMediatR(typeof(GetSuggestionsByUserQuery).Assembly);
-        services.AddMediatR(typeof(CitizenHackathon2025.Application.CQRS.Queries.Handlers.GetLatestTrafficConditionQueryHandler).Assembly);
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssemblies(
+                typeof(GetLatestForecastQuery).Assembly,
+                typeof(GetSuggestionsByUserQuery).Assembly,
+                typeof(CitizenHackathon2025.Application.CQRS.Queries.Handlers.GetLatestTrafficConditionQueryHandler).Assembly
+            );
+        });
 
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ResilienceBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));

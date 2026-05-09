@@ -16,12 +16,15 @@
     <ModelCollation>1033, CI</ModelCollation>
     <DefaultFileStructure>BySchemaAndSchemaType</DefaultFileStructure>
     <DeployToDatabase>True</DeployToDatabase>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <!--<TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>-->
     <TargetLanguage>CS</TargetLanguage>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <SqlServerVerification>False</SqlServerVerification>
     <IncludeCompositeObjects>True</IncludeCompositeObjects>
     <TargetDatabaseSet>True</TargetDatabaseSet>
+    <!--<TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>-->
+    <TargetFrameworkProfile />
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <OutputPath>bin\Release\</OutputPath>
@@ -66,7 +69,6 @@
     <Folder Include="Programmability\Views" />
     <Folder Include="sql" />
     <Folder Include="Types" />
-    <Folder Include="Scripts\Post-Deployement" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="Tables\CrowdInfo.sql" />
@@ -120,27 +122,29 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
-    <None Include="CitizenHackathon2025Db.publish.xml" />
-    <None Include="Scripts\MigrationScript.sql" />
-    <None Include="Scripts\Suggestion.Indexes.sql" />
-    <None Include="Scripts\Script.PreDeployment.sql" />
-    <None Include="Scripts\Script.PostDeployment.sql" />
-    <None Include="Scripts\MergeGptInteractions.sql" />
-    <None Include="Scripts\DeleteLogs.sql" />
-    <None Include="Scripts\DevScript.sql" />
-    <None Include="Scripts\sp_ArchivePastCrowdInfo.sql" />
-    <None Include="Scripts\sp_ArchivePastGptInteraction.sql" />
-    <None Include="Scripts\sp_ArchivePastTrafficCondition.sql" />
-    <None Include="Scripts\sp_ArchivePastWeatherForecast.sql" />
-    <None Include="sql\01_fix_gpt_indexes.sql" />
-    <None Include="sql\99_post_deploy.sql" />
-    <None Include="Scripts\EvolutionScript.sql" />
-    <None Include="Scripts\Post-Deployement\Script.PostDeployment.sql" />
-    <None Include="Scripts\CrowdAntennaSeedCheckScript.sql" />
-    <None Include="Scripts\ProfanityWordSeedScript.sql" />
-    <None Include="Scripts\ProfanityWordSeedScript_1.sql" />
+	<None Include="CitizenHackathon2025Db.publish.xml" />
+	<None Include="Scripts\MigrationScript.sql" />
+	<None Include="Scripts\Suggestion.Indexes.sql" />
+	<None Include="Scripts\Script.PreDeployment.sql" />
+	<None Include="Scripts\MergeGptInteractions.sql" />
+	<None Include="Scripts\DeleteLogs.sql" />
+	<None Include="Scripts\DevScript.sql" />
+	<None Include="Scripts\sp_ArchivePastCrowdInfo.sql" />
+	<None Include="Scripts\sp_ArchivePastGptInteraction.sql" />
+	<None Include="Scripts\sp_ArchivePastTrafficCondition.sql" />
+	<None Include="Scripts\sp_ArchivePastWeatherForecast.sql" />
+	<None Include="sql\01_fix_gpt_indexes.sql" />
+	<None Include="sql\99_post_deploy.sql" />
+	<None Include="Scripts\EvolutionScript.sql" />
+	<None Include="Scripts\CrowdAntennaSeedCheckScript.sql" />
+	<None Include="Scripts\ProfanityWordSeedScript.sql" />
+	<None Include="Scripts\ProfanityWordSeedScript_1.sql" />
+	<None Include="Scripts\AlterCrowdInfoAntennaConnectionScript.sql" />
+	<None Include="Scripts\Script.PostDeployment.sql" />
+	<None Include="Scripts\CrowdAntennaSeedScript.sql" />
   </ItemGroup>
+
   <ItemGroup>
-    <PreDeploy Include="Scripts\CrowdAntennaSeedScript.sql" />
+	<PostDeploy Include="Scripts\PostDeploy.Master.sql" />
   </ItemGroup>
 </Project>
