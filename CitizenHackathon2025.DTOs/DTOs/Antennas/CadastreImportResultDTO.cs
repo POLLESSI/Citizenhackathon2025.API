@@ -1,13 +1,12 @@
-﻿namespace CitizenHackathon2025.API.Models
+﻿namespace CitizenHackathon2025.DTOs.DTOs.Antennas
 {
-    public class SuggestAIRequest
+    public sealed class CadastreImportResultDTO
     {
-        public string Prompt { get; set; } = string.Empty;
-        public string? LanguageCode { get; set; } = "fr-FR";
+        public int Processed { get; set; }
+
+        public DateTime SyncedAtUtc { get; set; }
     }
 }
-
-
 
 
 

@@ -1,47 +1,14 @@
-﻿using CitizenHackathon2025.DTOs.DTOs.Antennas;
+﻿using CitizenHackathon2025.Domain.Language;
 
 namespace CitizenHackathon2025.Application.Interfaces
 {
-    public interface IAntennaSimulationService
+    public interface IWalloonNormalizer
     {
-        Task SimulateAsync(
-            SimulateAntennaConnectionsRequest request,
-            CancellationToken ct = default);
+        string Normalize(string input);
+
+        LanguageConfidenceResult EstimateConfidence(string input);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

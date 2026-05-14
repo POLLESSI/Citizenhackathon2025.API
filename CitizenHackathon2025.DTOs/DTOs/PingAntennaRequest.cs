@@ -1,19 +1,30 @@
-﻿namespace CitizenHackathon2025.DTOs.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace CitizenHackathon2025.DTOs.DTOs
 {
     public sealed class PingAntennaRequest
     {
+        [Range(1, int.MaxValue)]
         public int AntennaId { get; set; }
+
         public int? EventId { get; set; }
 
-        // In APIs, the hash is often transmitted in base64.
-        public string DeviceHashBase64 { get; set; } = "";
+        [Required]
+        public string DeviceHashBase64 { get; set; } = default!;
 
         public string? IpHashBase64 { get; set; }
+
         public string? MacHashBase64 { get; set; }
 
-        public byte Source { get; set; } = 0;
+        [Range(0, 255)]
+        public byte Source { get; set; }
+
+        [Range(-150, 0)]
         public short? SignalStrength { get; set; }
+
+        [MaxLength(16)]
         public string? Band { get; set; }
+
         public string? AdditionalJson { get; set; }
     }
 }

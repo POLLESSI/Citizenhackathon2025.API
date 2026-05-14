@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.API.Models;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Hubs.Hubs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -12,36 +13,128 @@ namespace CitizenHackathon2025.API.Controllers
     [Route("api/[controller]")]
     public class TestAIController : ControllerBase
     {
-        private readonly IAIService _aiService;
+        private readonly IMistralAIService _mistralAIService;
+        private readonly IOpenWeatherService _weatherService;
+        private readonly ILocalAiContextService _localAiContextService;
         private readonly IHubContext<AISuggestionHub> _hubContext;
 
-        public TestAIController(IAIService aiService, IHubContext<AISuggestionHub> hubContext)
+        public TestAIController(
+            IMistralAIService mistralAIService,
+            IOpenWeatherService weatherService,
+            ILocalAiContextService localAiContextService,
+            IHubContext<AISuggestionHub> hubContext)
         {
-            _aiService = aiService;
+            _mistralAIService = mistralAIService;
+            _weatherService = weatherService;
+            _localAiContextService = localAiContextService;
             _hubContext = hubContext;
         }
 
         [HttpGet("ping")]
         public IActionResult Ping()
         {
-            return Ok("AIService is injected correctly.");
+            return Ok("MistralAIService + LocalAiContextService injected correctly.");
         }
+
         [HttpPost("suggest")]
-        public async Task<IActionResult> SuggestAI([FromBody] SuggestAIRequest request)
+        public async Task<IActionResult> SuggestAI([FromBody] SuggestAIRequest request, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(request.Prompt))
+            if (request is null || string.IsNullOrWhiteSpace(request.Prompt))
                 return BadRequest("Missing prompt.");
 
-            var suggestion = await _aiService.SuggestAlternativeWithWeatherAsync(request.Prompt);
+            var location = ExtractLocationFromPrompt(request.Prompt);
 
-            // Envoie la suggestion via SignalR à tous les clients
+            var coordinates = await _weatherService.GetCoordinatesAsync(location, ct);
+
+            if (coordinates is null)
+            {
+                return BadRequest(new
+                {
+                    error = "Unable to geocode location.",
+                    location,
+                    originalPrompt = request.Prompt
+                });
+            }
+
+            var localContext = await _localAiContextService.BuildContextAsync(
+                request.Prompt,
+                coordinates.Value.lat,
+                coordinates.Value.lon,
+                ct);
+
+            var groundedPrompt = _localAiContextService.BuildPrompt(localContext);
+
+            var suggestion = await _mistralAIService.GenerateFromPromptAsync(groundedPrompt: groundedPrompt, ct: ct);
+
             await _hubContext.Clients.All.SendAsync("ReceiveAISuggestion", new
             {
-                location = request.Prompt,
+                provider = "Ollama/Mistral local",
+                location,
+                latitude = coordinates.Value.lat,
+                longitude = coordinates.Value.lon,
+                originalPrompt = request.Prompt,
+                suggestion
+            }, ct);
+
+            return Ok(new
+            {
+                provider = "Ollama/Mistral local",
+                grounding = "LocalAiContextService",
+                location,
+                latitude = coordinates.Value.lat,
+                longitude = coordinates.Value.lon,
+                contextStats = new
+                {
+                    places = localContext.Places?.Count ?? 0,
+                    events = localContext.Events?.Count ?? 0,
+                    crowdCalendar = localContext.CrowdCalendar?.Count ?? 0,
+                    crowdInfo = localContext.CrowdInfo?.Count ?? 0,
+                    traffic = localContext.Traffic?.Count ?? 0,
+                    weather = localContext.Weather?.Count ?? 0
+                },
+                originalPrompt = request.Prompt,
                 suggestion
             });
+        }
 
-            return Ok(new { location = request.Prompt, suggestion });
+        private static string ExtractLocationFromPrompt(string prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+                return "Brussels,BE";
+
+            var normalized = prompt.Trim();
+
+            var markers = new[]
+            {
+                "autour de",
+                "près de",
+                "proche de",
+                "aux alentours de",
+                "à "
+            };
+
+            foreach (var marker in markers)
+            {
+                var index = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+
+                if (index >= 0)
+                {
+                    var value = normalized[(index + marker.Length)..]
+                        .Replace("?", "")
+                        .Replace("!", "")
+                        .Trim();
+
+                    value = value
+                        .Replace(" en Belgique", "", StringComparison.OrdinalIgnoreCase)
+                        .Replace(" Belgique", "", StringComparison.OrdinalIgnoreCase)
+                        .Trim();
+
+                    if (!string.IsNullOrWhiteSpace(value))
+                        return $"{value},BE";
+                }
+            }
+
+            return $"{normalized},BE";
         }
     }
 }

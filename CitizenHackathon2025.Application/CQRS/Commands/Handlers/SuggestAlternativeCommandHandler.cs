@@ -83,7 +83,7 @@ namespace CitizenHackathon2025.Application.CQRS.Commands.Handlers
                 var reason = $"{weatherSummary}, {trafficDescription}, {crowdLabel}";
                 var prompt = _texts.BuildAlternativePrompt(lang, request.Destination, reason);
 
-                var alt = await _mistral.GenerateFromPromptAsync(prompt, ct);
+                var alt = await _mistral.GenerateFromPromptAsync(prompt, lang, ct);
 
                 return new SuggestionUIResponseDTO
                 {

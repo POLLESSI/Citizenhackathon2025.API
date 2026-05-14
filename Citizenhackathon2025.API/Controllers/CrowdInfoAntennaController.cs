@@ -1,6 +1,10 @@
-﻿using CitizenHackathon2025.DTOs.DTOs;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.DTOs.DTOs.Antennas;
 using CitizenHackathon2025.Hubs.Services;
+using Dapper;
 using Microsoft.AspNetCore.Mvc;
+using System.Data;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -9,8 +13,13 @@ namespace CitizenHackathon2025.API.Controllers
     public sealed class CrowdInfoAntennaController : ControllerBase
     {
         private readonly ICrowdInfoAntennaService _svc;
+        private readonly IAntennaCadastreImportService _cadastreImportService;
 
-        public CrowdInfoAntennaController(ICrowdInfoAntennaService svc) => _svc = svc;
+        public CrowdInfoAntennaController(ICrowdInfoAntennaService svc, IAntennaCadastreImportService cadastreImportService)
+        {
+            _svc = svc;
+            _cadastreImportService = cadastreImportService;
+        }
 
         // GET api/crowdinfoantenna
         [HttpGet]
@@ -59,6 +68,26 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet("debug-sql")]
+        public async Task<IActionResult> DebugSql([FromServices] IDbConnection db, CancellationToken ct)
+        {
+            const string sql = """
+                SELECT
+                    @@SERVERNAME AS ServerName,
+                    DB_NAME() AS CurrentDatabase,
+                    SUSER_SNAME() AS LoginName,
+                    (
+                        SELECT COUNT(*)
+                        FROM dbo.CrowdInfoAntenna
+                    ) AS AntennaCount;
+                """;
+
+            var result = await db.QuerySingleAsync(
+                new CommandDefinition(sql, cancellationToken: ct));
+
+            return Ok(result);
+        }
+
         // POST api/crowdinfoantenna
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateCrowdInfoAntennaDTO dto, CancellationToken ct)
@@ -69,6 +98,17 @@ namespace CitizenHackathon2025.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
+        [HttpPost("import-cadastre")]
+        public async Task<IActionResult> ImportCadastre(CancellationToken ct)
+        {
+            var processed = await _cadastreImportService.ImportAsync(ct);
+
+            return Ok(new CadastreImportResultDTO
+            {
+                Processed = processed,
+                SyncedAtUtc = DateTime.UtcNow
+            });
+        }
         // DELETE api/crowdinfoantenna/5
         //[HttpDelete("{id:int}")]
         //public async Task<IActionResult> Delete(int id, CancellationToken ct)

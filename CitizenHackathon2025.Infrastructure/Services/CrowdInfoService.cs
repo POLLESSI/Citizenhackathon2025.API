@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -72,6 +73,18 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 await _crowdHubContext.BroadcastCrowdRefreshRequested("sync"); 
             }
             return saved!;
+        }
+
+        public async Task<CrowdInfoDTO> CreateManualCriticalAlertAsync(Contracts.DTOs.ManualCrowdCriticalAlertRequest request, CancellationToken ct = default)
+        {
+            if (request.PlaceId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(request.PlaceId));
+
+            return await _crowdInfoRepository.CreateManualCriticalAlertAsync(
+                request.PlaceId,
+                request.Reason,
+                request.Source ?? "ManualButton",
+                ct);
         }
 
         public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)

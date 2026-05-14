@@ -22,67 +22,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             string? additionalJson,
             CancellationToken ct)
         {
-            const string sql = @"
-                            DECLARE @NowUtc DATETIME2(3) = SYSUTCDATETIME();
-
-                            UPDATE dbo.CrowdInfoAntennaConnection
-                            SET
-                                LastSeenUtc = @NowUtc,
-                                Active = 1,
-                                IpHash = COALESCE(@IpHash, IpHash),
-                                MacHash = COALESCE(@MacHash, MacHash),
-                                Source = @Source,
-                                SignalStrength = @SignalStrength,
-                                Band = @Band,
-                                AdditionalJson = @AdditionalJson,
-                                DeletedUtc = NULL,
-                                DeletedReason = NULL
-                            WHERE AntennaId = @AntennaId
-                              AND EventIdKey = ISNULL(@EventId, -1)
-                              AND DeviceHash = @DeviceHash;
-
-                            IF @@ROWCOUNT = 0
-                            BEGIN
-                                INSERT INTO dbo.CrowdInfoAntennaConnection
-                                (
-                                    AntennaId,
-                                    EventId,
-                                    DeviceHash,
-                                    IpHash,
-                                    MacHash,
-                                    Source,
-                                    SignalStrength,
-                                    Band,
-                                    FirstSeenUtc,
-                                    LastSeenUtc,
-                                    Rssi,
-                                    Active,
-                                    AdditionalJson,
-                                    DeletedUtc,
-                                    DeletedReason
-                                )
-                                VALUES
-                                (
-                                    @AntennaId,
-                                    @EventId,
-                                    @DeviceHash,
-                                    @IpHash,
-                                    @MacHash,
-                                    @Source,
-                                    @SignalStrength,
-                                    @Band,
-                                    @NowUtc,
-                                    @NowUtc,
-                                    NULL,
-                                    1,
-                                    @AdditionalJson,
-                                    NULL,
-                                    NULL
-                                );
-                            END;
-                            ";
-
             var parameters = new DynamicParameters();
+
             parameters.Add("@AntennaId", antennaId, DbType.Int32);
             parameters.Add("@EventId", eventId, DbType.Int32);
             parameters.Add("@DeviceHash", deviceHash, DbType.Binary, size: 32);
@@ -93,7 +34,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@Band", band, DbType.String, size: 16);
             parameters.Add("@AdditionalJson", additionalJson, DbType.String);
 
-            await _db.ExecuteAsync(new CommandDefinition(sql, parameters, cancellationToken: ct));
+            await _db.ExecuteAsync(new CommandDefinition(
+                commandText: "dbo.sp_AntennaConnection_Ping",
+                parameters: parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: ct));
         }
 
         public async Task<(int activeConnections, int uniqueDevices)> GetCountsAsync(int antennaId, DateTime windowStartUtc, DateTime windowEndUtc, CancellationToken ct)
@@ -247,6 +192,18 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 new CommandDefinition(sql, new { RetentionDays = retentionDays, BatchSize = batchSize }, cancellationToken: ct));
 
             return deleted;
+        }
+
+        public async Task<object> DebugDbAsync()
+        {
+            const string sql = """
+        SELECT 
+            @@SERVERNAME AS ServerName,
+            DB_NAME() AS CurrentDatabase,
+            SUSER_SNAME() AS LoginName;
+        """;
+
+            return await _db.QuerySingleAsync(sql);
         }
     }
 }

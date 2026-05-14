@@ -1,12 +1,17 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 
 namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface ICrowdInfoService
     {
+        Task<CrowdInfoDTO?> GetByIdAsync(int id);
+        Task<CrowdInfoDTO?> SaveAsync(CrowdInfoDTO dto);
+        Task<bool> ArchiveAsync(int id);
         Task<CrowdInfo?> UpsertCrowdInfoAsync(CrowdInfo input, CancellationToken ct = default);
         Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo, CancellationToken ct = default);
+        Task<CrowdInfoDTO> CreateManualCriticalAlertAsync(Contracts.DTOs.ManualCrowdCriticalAlertRequest request, CancellationToken ct = default);
         Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default);
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id, CancellationToken ct = default);
         Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default);

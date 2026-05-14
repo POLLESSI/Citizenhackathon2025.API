@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Contracts.DTOs;
 
 namespace CitizenHackathon2025.Domain.Interfaces
 {
@@ -6,6 +7,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     {
         Task<CrowdInfo?> UpsertCrowdInfoAsync(CrowdInfo input, CancellationToken ct = default);
         Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo);
+        Task<CrowdInfoDTO> CreateManualCriticalAlertAsync(int placeId, string? reason, string? source, CancellationToken ct = default);
         Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default);
         Task<IEnumerable<CrowdInfo>> GetNearbyCrowdInfoAsync(double? latitude, double? longitude, int radiusKm, CancellationToken ct = default);
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id);

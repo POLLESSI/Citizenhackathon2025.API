@@ -1208,6 +1208,80 @@ BEGIN CATCH
 END CATCH;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_CrowdInfo_ManualCriticalAlert
+    @PlaceId INT,
+    @Reason NVARCHAR(256) = NULL,
+    @Source NVARCHAR(32) = N'ManualButton'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE
+        @PlaceName NVARCHAR(64),
+        @Latitude DECIMAL(9,6),
+        @Longitude DECIMAL(9,6),
+        @NowUtc DATETIME2(0) = SYSUTCDATETIME();
+
+    SELECT
+        @PlaceName = Name,
+        @Latitude = Latitude,
+        @Longitude = Longitude
+    FROM dbo.Place WITH (UPDLOCK, HOLDLOCK)
+    WHERE Id = @PlaceId
+      AND Active = 1;
+
+    IF @PlaceName IS NULL
+        THROW 50001, 'Place not found or inactive.', 1;
+
+    BEGIN TRANSACTION;
+
+    UPDATE dbo.CrowdInfo
+    SET Active = 0
+    WHERE Active = 1
+      AND LocationName = @PlaceName
+      AND Latitude = @Latitude
+      AND Longitude = @Longitude;
+
+    INSERT INTO dbo.CrowdInfo
+    (
+        LocationName,
+        Latitude,
+        Longitude,
+        CrowdLevel,
+        [Timestamp],
+        Active
+    )
+    VALUES
+    (
+        @PlaceName,
+        @Latitude,
+        @Longitude,
+        4,
+        @NowUtc,
+        1
+    );
+
+    DECLARE @NewId INT = SCOPE_IDENTITY();
+
+    COMMIT TRANSACTION;
+
+    SELECT
+        ci.Id,
+        ci.LocationName,
+        ci.Latitude,
+        ci.Longitude,
+        ci.CrowdLevel,
+        ci.[Timestamp],
+        ci.Active,
+        @PlaceId AS PlaceId,
+        @Reason AS Reason,
+        @Source AS Source
+    FROM dbo.CrowdInfo ci
+    WHERE ci.Id = @NewId;
+END;
+GO
+
 
 
 

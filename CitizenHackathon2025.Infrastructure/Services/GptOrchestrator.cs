@@ -374,6 +374,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 groundedPrompt.Length,
                 groundedPrompt[..Math.Min(300, groundedPrompt.Length)]);
 
+            var responseLanguage = string.IsNullOrWhiteSpace(request.LanguageCode) ? "fr-FR" : request.LanguageCode.Trim();
+
             string finalResponse;
 
             if (pushChunksToHub)
@@ -388,14 +390,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         chunkCount++;
                         streamedChars += chunkText?.Length ?? 0;
 
-                        _logger.LogInformation(
-                            "[GPT-PIPELINE] Chunk received. InteractionId={InteractionId}, RequestId={RequestId}, ChunkIndex={ChunkIndex}, ChunkLength={ChunkLength}, TotalChars={TotalChars}",
-                            interactionId,
-                            requestId,
-                            chunkCount,
-                            chunkText?.Length ?? 0,
-                            streamedChars);
-
                         await _hubContext.SendChunk(
                             new GptResponseChunkDto
                             {
@@ -405,13 +399,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 IsFinal = false
                             });
                     },
-                    ct).ConfigureAwait(false);
+                    responseLanguage: responseLanguage,
+                    ct: ct).ConfigureAwait(false);
             }
             else
             {
                 finalResponse = await mistralAiService.GenerateFromPromptAsync(
-                    groundedPrompt,
-                    ct).ConfigureAwait(false);
+                    groundedPrompt: groundedPrompt,
+                    responseLanguage: responseLanguage,
+                    ct: ct).ConfigureAwait(false);
             }
 
             if (string.IsNullOrWhiteSpace(finalResponse))

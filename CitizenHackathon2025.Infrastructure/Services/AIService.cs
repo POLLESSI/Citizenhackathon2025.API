@@ -101,9 +101,32 @@ public class AIService : IAIService
 
     public async Task<string> SuggestAlternativeWithWeatherAsync(string location)
     {
+        if (string.IsNullOrWhiteSpace(location))
+            location = "Belgique";
+
         var weatherInfo = await _weather.GetWeatherSummaryAsync(location);
-        var prompt = $"Offer an activity to do in {location} given this weather: {weatherInfo}";
-        return await SendChatRequestAsync("You are a smart tour assistant.", prompt);
+
+        if (string.IsNullOrWhiteSpace(weatherInfo) ||
+            weatherInfo.StartsWith("Unable to retrieve weather", StringComparison.OrdinalIgnoreCase))
+        {
+            weatherInfo = "Weather unavailable. Please provide a general tourist recommendation tailored to the region.";
+        }
+
+        var prompt = $"""
+            You are a local tourist assistant for OutZen.
+
+            Location requested:
+            {location}
+
+            Weather context:
+            {weatherInfo}
+
+            Respond in French.
+            Propose 3 activities or interesting places.
+            Be concrete, local, useful, and avoid inventing overly specific information if it is not known.
+            """;
+
+        return await SendChatRequestAsync("You are a reliable local tourist assistant for OutZen.", prompt, 0.3);
     }
 
     public async Task<GPTInteraction?> GetChatGptByIdAsync(int id)

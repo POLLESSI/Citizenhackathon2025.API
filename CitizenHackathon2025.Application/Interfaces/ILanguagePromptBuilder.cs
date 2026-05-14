@@ -1,12 +1,10 @@
-﻿namespace CitizenHackathon2025.API.Models
+﻿namespace CitizenHackathon2025.Application.Interfaces
 {
-    public class SuggestAIRequest
+    public interface ILanguagePromptBuilder
     {
-        public string Prompt { get; set; } = string.Empty;
-        public string? LanguageCode { get; set; } = "fr-FR";
+        string BuildLanguageInstruction(string responseLanguage);
     }
 }
-
 
 
 

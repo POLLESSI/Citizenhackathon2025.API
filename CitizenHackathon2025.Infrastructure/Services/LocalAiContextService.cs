@@ -1,9 +1,9 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.DTOs;
-using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Models;
 using Microsoft.Extensions.Logging;
+using System.Linq;
 using System.Text;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -14,18 +14,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private const double DefaultLongitude = 4.4445;
 
         private readonly ILocalAiDataRepository _localAiRepo;
-        private readonly IPlaceRepository _placeRepository;
         private readonly ILogger<LocalAiContextService> _logger;
 
         private static readonly LocalAiContextLimits Limits = new();
 
         public LocalAiContextService(
             ILocalAiDataRepository localAiRepo,
-            IPlaceRepository placeRepository,
             ILogger<LocalAiContextService> logger)
         {
             _localAiRepo = localAiRepo ?? throw new ArgumentNullException(nameof(localAiRepo));
-            _placeRepository = placeRepository ?? throw new ArgumentNullException(nameof(placeRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -51,9 +48,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 targetDate,
                 intent);
 
-            Task<IEnumerable<Place>> placesTask = intent.NeedPlaces
-                ? _placeRepository.GetNearbyPlacesAsync(lat, lng, radiusKm, ct)
-                : Task.FromResult(Enumerable.Empty<Place>());
+            Task<IEnumerable<LocalAiPlaceContextDTO>> placesTask = intent.NeedPlaces
+                ? _localAiRepo.GetNearbyPlacesAsync(lat, lng, radiusKm, ct)
+                : Task.FromResult(Enumerable.Empty<LocalAiPlaceContextDTO>());
 
             Task<IEnumerable<LocalAiEventContextDTO>> eventsTask = intent.NeedEvents
                 ? _localAiRepo.GetNearbyEventsAsync(lat, lng, targetDate, radiusKm, ct)
@@ -85,7 +82,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var places = (await placesTask.ConfigureAwait(false))
                 .Where(IsPlaceRelevant)
-                .Select(MapPlaceToLocalAiPlaceContext)
                 .OrderBy(x => x.DistanceKm ?? double.MaxValue)
                 .ThenByDescending(x => x.Capacity ?? int.MinValue)
                 .ThenBy(x => x.Name ?? string.Empty)
@@ -162,7 +158,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("You are OutZen local assistant.");
             sb.AppendLine("Answer only with facts present in the provided context.");
             sb.AppendLine("Do not invent places, visits, events, traffic, weather, or crowd data.");
-            sb.AppendLine("Answer in French.");
+            sb.AppendLine("Do not choose the response language here.");
+            sb.AppendLine("The response language is controlled by the system message.");
             sb.AppendLine("Be concise, concrete, and useful.");
             sb.AppendLine();
 
@@ -206,6 +203,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("- no invention");
             sb.AppendLine("- no weather-as-attraction");
 
+            sb.AppendLine("Distance rules:");
+            sb.AppendLine("- Use only the distances explicitly written in the context.");
+            sb.AppendLine("- Never estimate, infer, recalculate, or invent distances.");
+            sb.AppendLine("- Copy distances exactly as written.");
+            sb.AppendLine("- If distance is missing, write 'distance non disponible'.");
+            sb.AppendLine();
+
             return sb.ToString();
         }
 
@@ -218,27 +222,27 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private static double NormalizeRadiusKm(double radiusKm)
             => radiusKm > 0d ? radiusKm : 25d;
 
-        private static LocalAiPlaceContextDTO MapPlaceToLocalAiPlaceContext(Place p)
-        {
-            return new LocalAiPlaceContextDTO
-            {
-                Id = p.Id,
-                Name = p.Name?.Trim() ?? string.Empty,
-                Type = p.Type,
-                Indoor = p.Indoor,
-                Latitude = (double?)p.Latitude,
-                Longitude = (double?)p.Longitude,
-                Capacity = p.Capacity,
-                Tag = p.Tag,
-                ExternalSource = p.ExternalSource,
-                ExternalId = p.ExternalId,
-                SourceUpdatedAtUtc = p.SourceUpdatedAtUtc,
-                Active = true,
-                DistanceKm = null
-            };
-        }
+        //private static LocalAiPlaceContextDTO MapPlaceToLocalAiPlaceContext(Place p)
+        //{
+        //    return new LocalAiPlaceContextDTO
+        //    {
+        //        Id = p.Id,
+        //        Name = p.Name?.Trim() ?? string.Empty,
+        //        Type = p.Type,
+        //        Indoor = p.Indoor,
+        //        Latitude = (double?)p.Latitude,
+        //        Longitude = (double?)p.Longitude,
+        //        Capacity = p.Capacity,
+        //        Tag = p.Tag,
+        //        ExternalSource = p.ExternalSource,
+        //        ExternalId = p.ExternalId,
+        //        SourceUpdatedAtUtc = p.SourceUpdatedAtUtc,
+        //        Active = true,
+        //        DistanceKm = null
+        //    };
+        //}
 
-        private static bool IsPlaceRelevant(Place p)
+        private static bool IsPlaceRelevant(LocalAiPlaceContextDTO p)
         {
             if (p is null) return false;
             if (string.IsNullOrWhiteSpace(p.Name)) return false;
@@ -317,6 +321,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 sb.AppendLine(
                     $"- {p.Name}, " +
+                    $"distance {FmtDistance(p.DistanceKm)}, " +
                     $"type {p.Type ?? "—"}, " +
                     $"indoor {(p.Indoor.HasValue ? (p.Indoor.Value ? "yes" : "no") : "—")}, " +
                     $"capacity {(p.Capacity?.ToString() ?? "—")}, " +

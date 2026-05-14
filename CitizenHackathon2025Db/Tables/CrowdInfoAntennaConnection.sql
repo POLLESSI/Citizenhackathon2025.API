@@ -14,8 +14,6 @@
     [Rssi] SMALLINT NULL,
     [Active] BIT NOT NULL DEFAULT 1,
     [AdditionalJson] NVARCHAR(MAX) NULL,
-    [DeletedUtc] DATETIME2(3) NULL CONSTRAINT DF_CIACD_DeletedUtc DEFAULT SYSUTCDATETIME(),
-    [DeletedReason] TINYINT NULL CONSTRAINT DF_CIACD_DeletedReason DEFAULT 1,
     [EventIdKey] AS ISNULL(EventId, -1) PERSISTED
 
     --CONSTRAINT UQ_CrowdInfoAntennaConnection_Device_Antenna UNIQUE (AntennaId, DeviceHash)
@@ -48,6 +46,11 @@ GO
 
 CREATE UNIQUE INDEX UX_AntennaConnection_Device_Antenna_Event
 ON dbo.CrowdInfoAntennaConnection(AntennaId, EventIdKey, DeviceHash);
+GO
+
+CREATE INDEX IX_AntennaConnection_LastSeenUtc
+ON dbo.CrowdInfoAntennaConnection(LastSeenUtc)
+INCLUDE (AntennaId, EventId, Active);
 GO
 
 

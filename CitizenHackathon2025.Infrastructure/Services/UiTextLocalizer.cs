@@ -4,17 +4,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
 {
     public sealed class UiTextLocalizer : IUiTextLocalizer
     {
+    #nullable disable
         public string NormalizeLanguage(string? languageCode)
         {
             var lang = (languageCode ?? "fr").Trim().ToLowerInvariant();
 
             return lang switch
             {
-                "fr" => "fr",
-                "en" => "en",
+                "wa-BE" => "wa-central",
+                "fr" => "fr-FR",
+                "en" => "en-US",
+                "ja" => "ja-JP",
+                "zh" => "zh-CN",
                 "nl" => "nl",
                 "de" => "de",
-                _ => "fr"
+                _ => languageCode
             };
         }
 

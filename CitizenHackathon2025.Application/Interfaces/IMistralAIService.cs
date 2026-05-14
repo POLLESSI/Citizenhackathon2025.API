@@ -10,9 +10,9 @@ namespace CitizenHackathon2025.Application.Interfaces
 
         Task<int> ArchivePastGptInteractionsAsync();
 
-        Task<string> GenerateFromPromptAsync(string groundedPrompt, CancellationToken ct = default);
+        Task<string> GenerateFromPromptAsync(string groundedPrompt, string responseLanguage = "fr-FR", CancellationToken ct = default);
 
-        Task<string> StreamFromPromptAsync(string groundedPrompt, Func<string, Task> onChunk, CancellationToken ct = default);
+        Task<string> StreamFromPromptAsync(string groundedPrompt, Func<string, Task> onChunk, string responseLanguage = "fr-FR", CancellationToken ct = default);
     }
 }
 

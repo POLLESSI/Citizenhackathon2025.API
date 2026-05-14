@@ -1,18 +1,9 @@
-﻿namespace CitizenHackathon2025.API.Models
+﻿namespace CitizenHackathon2025.Domain.Language
 {
-    public class SuggestAIRequest
+    public class WalloonVariant
     {
-        public string Prompt { get; set; } = string.Empty;
-        public string? LanguageCode { get; set; } = "fr-FR";
     }
 }
-
-
-
-
-
-
-
 
 
 

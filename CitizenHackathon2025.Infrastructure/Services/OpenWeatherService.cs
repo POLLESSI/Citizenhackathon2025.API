@@ -134,48 +134,72 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<WeatherForecastDTO?> GetCurrentWeatherAsync(string city, CancellationToken ct = default)
         {
-            if (string.IsNullOrWhiteSpace(_opt.ApiKey))
-                throw new InvalidOperationException("OpenWeather ApiKey is missing.");
-
-            var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
-
-            var url = QueryHelpers.AddQueryString(
-                $"{baseUrl}{CurrentWeatherPath}",
-                new Dictionary<string, string?>
+            try
+            {
+                if (string.IsNullOrWhiteSpace(_opt.ApiKey))
                 {
-                    ["q"] = city,
-                    ["appid"] = _opt.ApiKey,
-                    ["units"] = "metric",
-                    ["lang"] = "fr"
-                });
+                    _logger.LogError("OpenWeather ApiKey is missing.");
+                    return null;
+                }
 
-            _logger.LogInformation(
-                "OpenWeather current request for city {City} using {Url}",
-                city,
-                url.Replace(_opt.ApiKey, "***"));
+                if (string.IsNullOrWhiteSpace(city))
+                {
+                    _logger.LogWarning("OpenWeather city is empty.");
+                    return null;
+                }
 
-            using var resp = await _http.GetAsync(url, ct);
-            var json = await resp.Content.ReadAsStringAsync(ct);
+                var baseUrl = (_opt.BaseUrl ?? "https://api.openweathermap.org").TrimEnd('/');
 
-            _logger.LogInformation(
-                "OpenWeather raw response for {City}. Status={Status}. Body={Body}",
-                city,
-                (int)resp.StatusCode,
-                json);
+                var url = QueryHelpers.AddQueryString(
+                    $"{baseUrl}{CurrentWeatherPath}",
+                    new Dictionary<string, string?>
+                    {
+                        ["q"] = city.Trim(),
+                        ["appid"] = _opt.ApiKey,
+                        ["units"] = "metric",
+                        ["lang"] = "fr"
+                    });
 
-            resp.EnsureSuccessStatusCode();
+                _logger.LogInformation(
+                    "OpenWeather current request for city {City} using {Url}",
+                    city,
+                    url.Replace(_opt.ApiKey, "***"));
 
-            using var doc = JsonDocument.Parse(json);
+                using var resp = await _http.GetAsync(url, ct);
+                var json = await resp.Content.ReadAsStringAsync(ct);
 
-            var dto = ParseWeatherDto(doc.RootElement);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Current weather call failed for {City}. Status={Status}. Body={Body}",
+                        city,
+                        (int)resp.StatusCode,
+                        json);
 
-            _logger.LogInformation(
-                "Parsed current weather successfully for {City}: Temp={Temp}, Summary={Summary}",
-                city,
-                dto.TemperatureC,
-                dto.Summary);
+                    return null;
+                }
 
-            return dto;
+                using var doc = JsonDocument.Parse(json);
+                var dto = ParseWeatherDto(doc.RootElement);
+
+                _logger.LogInformation(
+                    "Parsed current weather successfully for {City}: Temp={Temp}, Summary={Summary}",
+                    city,
+                    dto.TemperatureC,
+                    dto.Summary);
+
+                return dto;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "JSON parsing error in GetCurrentWeatherAsync for city {City}", city);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in GetCurrentWeatherAsync for city {City}", city);
+                return null;
+            }
         }
 
         public async Task<WeatherForecastDTO?> GetForecastAsync(string city, CancellationToken ct = default)

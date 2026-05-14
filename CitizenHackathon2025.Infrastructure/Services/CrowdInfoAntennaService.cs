@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Services;
@@ -23,18 +24,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _eventRead = eventRead;
         }
 
+       
+
         public async Task<IReadOnlyList<CrowdInfoAntennaDTO>> GetAllAsync(CancellationToken ct)
         {
             var all = await _antRepo.GetAllAsync(ct);
-            return all.Select(a => new CrowdInfoAntennaDTO
-            {
-                Id = a.Id,
-                Name = a.Name,
-                Latitude = a.Latitude,
-                Longitude = a.Longitude,
-                CreatedUtc = a.CreatedUtc,
-                Description = a.Description
-            }).ToList();
+            return all.Select(x => x.MapToCrowdInfoAntennaDTO()).ToList();
         }
 
         public async Task<CrowdInfoAntennaDTO?> GetByIdAsync(int id, CancellationToken ct)
@@ -49,7 +44,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Latitude = a.Latitude,
                 Longitude = a.Longitude,
                 CreatedUtc = a.CreatedUtc,
-                Description = a.Description
+                Description = a.Description,
+                MaxCapacity = a.MaxCapacity,
+                Active = a.Active
             };
         }
 
@@ -68,7 +65,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     Latitude = a.Latitude,
                     Longitude = a.Longitude,
                     CreatedUtc = a.CreatedUtc,
-                    Description = a.Description
+                    Description = a.Description,
+                    MaxCapacity = a.MaxCapacity,
+                    Active = a.Active
                 },
                 DistanceMeters = dist
             };
@@ -103,7 +102,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Longitude = a.Longitude,
                 CreatedUtc = a.CreatedUtc,
                 Description = a.Description,
-                MaxCapacity = a.MaxCapacity
+                MaxCapacity = a.MaxCapacity,
+                Active = a.Active
             }).ToList();
         }
 
@@ -153,7 +153,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Longitude = created.Longitude,
                 CreatedUtc = created.CreatedUtc,
                 Description = created.Description,
-                MaxCapacity = created.MaxCapacity
+                MaxCapacity = created.MaxCapacity,
+                Active = created.Active
             };
         }
 

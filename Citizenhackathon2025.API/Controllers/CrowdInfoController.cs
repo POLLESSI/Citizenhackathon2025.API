@@ -1,7 +1,8 @@
-﻿using CitizenHackathon2025.Contracts.Hubs;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
@@ -21,13 +22,16 @@ namespace CitizenHackathon2025.API.Controllers
     {
     #nullable disable
         private readonly ICrowdInfoRepository _crowdInfoRepository;
+        private readonly ICrowdInfoService _svc;
         private readonly IHubContext<CrowdHub> _hubContext;
 
-        public CrowdInfoController(ICrowdInfoRepository crowdInfoRepository, IHubContext<CrowdHub> hubContext)
+        public CrowdInfoController(ICrowdInfoRepository crowdInfoRepository, ICrowdInfoService svc, IHubContext<CrowdHub> hubContext)
         {
             _crowdInfoRepository = crowdInfoRepository;
+            _svc = svc;
             _hubContext = hubContext;
         }
+
         [HttpGet("all")]
         public async Task<IActionResult> GetAllCrowdInfo(CancellationToken ct = default)
         {
@@ -79,6 +83,31 @@ namespace CitizenHackathon2025.API.Controllers
 
             await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.ReceiveCrowdUpdate, saved.MapToCrowdInfoDTO());
             return Ok(saved.MapToCrowdInfoDTO());
+        }
+
+        //[Authorize(Policy = Policies.AdminPolicy)]
+        [AllowAnonymous]
+        [HttpPost("manual-critical-alert")]
+        public async Task<IActionResult> ManualCriticalAlert([FromBody] ManualCrowdCriticalAlertRequest request, CancellationToken ct)
+        {
+            if (request is null)
+                return BadRequest("Request body is required.");
+
+            if (request.PlaceId <= 0)
+                return BadRequest("PlaceId must be > 0.");
+
+            var created = await _svc.CreateManualCriticalAlertAsync(request, ct);
+
+            await _hubContext.Clients.All.SendAsync(
+                HubEvents.ToClient.ReceiveCrowdUpdate,
+                created,
+                ct);
+
+            return Ok(new
+            {
+                Status = "Critical crowd alert created",
+                CrowdInfo = created
+            });
         }
         [HttpDelete("archive/{id:int}")]
         public async Task<IActionResult> ArchiveCrowdInfo(int id)

@@ -5,20 +5,11 @@ namespace CitizenHackathon2025.Domain.Interfaces
 {
     public interface IWallonieEnPocheSyncRepository
     {
-        Task<UpsertPlaceResult> UpsertPlaceAsync(
-            WepPlaceImportDTO dto,
-            string externalSource,
-            CancellationToken ct = default);
+        Task<UpsertPlaceResult> UpsertPlaceAsync(WepPlaceImportDTO dto, string externalSource, CancellationToken ct = default);
 
-        Task<UpsertEventResult> UpsertEventAsync(
-            WepEventImportDTO dto,
-            string externalSource,
-            CancellationToken ct = default);
+        Task<UpsertEventResult> UpsertEventAsync(WepEventImportDTO dto, string externalSource, CancellationToken ct = default);
 
-        Task<int?> ResolvePlaceIdByExternalAsync(
-            string externalSource,
-            string externalId,
-            CancellationToken ct = default);
+        Task<int?> ResolvePlaceIdByExternalAsync(string externalSource, string externalId, CancellationToken ct = default);
     }
 
     public sealed class UpsertPlaceResult

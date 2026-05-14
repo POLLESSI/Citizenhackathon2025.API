@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using Dapper;
 using Microsoft.Extensions.Logging;
@@ -109,6 +110,23 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var id = await _connection.QuerySingleAsync<int>(sql, parameters);
             crowdInfo.Id = id;
             return crowdInfo;
+        }
+
+        public async Task<CrowdInfoDTO> CreateManualCriticalAlertAsync(int placeId, string? reason, string? source, CancellationToken ct = default)
+        {
+            const string sql = "dbo.sp_CrowdInfo_ManualCriticalAlert";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PlaceId", placeId, DbType.Int32);
+            parameters.Add("@Reason", reason, DbType.String, size: 256);
+            parameters.Add("@Source", source ?? "ManualButton", DbType.String, size: 32);
+
+            return await _connection.QuerySingleAsync<CrowdInfoDTO>(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: ct));
         }
 
         public CrowdInfo? UpdateCrowdInfo(CrowdInfo crowdInfo)

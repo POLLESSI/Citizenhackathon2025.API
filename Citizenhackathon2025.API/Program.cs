@@ -110,7 +110,7 @@ internal class Program
         ConfigureHttpClients(services, configuration);
         ConfigureRepositories(services);
         ConfigureApplicationServices(services);
-        ConfigureHostedServices(services);
+        ConfigureHostedServices(services, configuration, env); 
         ConfigureMediatR(services);
 
 #if DEBUG
@@ -228,6 +228,7 @@ internal class Program
         services.Configure<TrafficApiOptions>(configuration.GetSection("TrafficApi"));
         services.Configure<CitizenHackathon2025.API.Options.AntennaCleanupOptions>(configuration.GetSection("AntennaCleanup"));
         services.Configure<AntennaArchiveRetentionOptions>(configuration.GetSection("AntennaArchiveRetention"));
+        services.Configure<AntennaCadastreOptions>(configuration.GetSection("AntennaCadastre"));
         services.Configure<TrafficHmacOptions>(configuration.GetSection("Security"));
         services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(configuration.GetSection("CrowdAdvisory"));
         services.Configure<DeviceHasherOptions>(configuration.GetSection("DeviceHasher"));
@@ -547,6 +548,8 @@ internal class Program
     {
         services.AddSingleton<ResiliencePipelines>(sp => ResiliencePipelinesFactory.Create(sp));
 
+        services.AddHttpClient<IAntennaCadastreImportService, AntennaCadastreImportService>();
+
         services.AddHttpClient<IGenerativeAiService, OllamaGenerativeAiService>((sp, client) =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
@@ -651,6 +654,9 @@ internal class Program
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
             return new ResilienceHandler(pipelines.Ollama);
         });
+
+        services.AddHttpClient<IOpenWeatherService, OpenWeatherService>();
+
         services.AddHttpClient<WallonieAntennaCadastreClient>(client =>
         {
             client.BaseAddress = new Uri(
@@ -696,6 +702,7 @@ internal class Program
 
         services.AddScoped<IAIService, AIService>();
         services.AddScoped<IAggregateSuggestionService, AstroIAService>();
+        services.AddScoped<IAntennaCadastreImportService, AntennaCadastreImportService>();
         services.AddScoped<IAntennaSimulationService, AntennaSimulationService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
         services.AddScoped<CrowdInfoService>();
@@ -708,6 +715,7 @@ internal class Program
         services.AddScoped<IEventReadService, EventReadService>();
         services.AddScoped<IGeoService, GeoService>();
         services.AddScoped<IGptOrchestrator, GptOrchestrator>();
+        services.AddScoped<ILanguagePromptBuilder, LanguagePromptBuilder>();
         services.AddScoped<ILocalAiContextService, LocalAiContextService>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
         services.AddScoped<INotificationService, NotificationService>();
@@ -725,6 +733,7 @@ internal class Program
         services.AddScoped<IWallonieEnPocheSourceClient, FakeWallonieEnPocheSourceClient>();
         services.AddScoped<IWallonieEnPocheSyncRepository, WallonieEnPocheSyncRepository>();
         services.AddScoped<IWallonieEnPocheSyncService, WallonieEnPocheSyncService>();
+        services.AddScoped<IWalloonNormalizer, WalloonNormalizer>();
         services.AddScoped<IWeatherAlertsIngestionService, WeatherAlertsIngestionService>();
         services.AddScoped<IWeatherForecastAppService, WeatherForecastAppService>();
         services.AddScoped<IWeatherForecastBroadcaster, WeatherForecastBroadcaster>();
@@ -753,15 +762,24 @@ internal class Program
         services.AddScoped<IOpenWeatherIngestionService, OpenWeatherIngestionService>();
     }
 
-    private static void ConfigureHostedServices(IServiceCollection services)
+    private static void ConfigureHostedServices(IServiceCollection services, IConfiguration configuration, IWebHostEnvironment env)
     {
-        services.AddHostedService<CrowdInfoArchiverService>();
         services.AddHostedService<CrowdSafetyAlertDetectorHostedService>();
-        services.AddHostedService<AntennaConnectionCleanupWorker>();
-        services.AddHostedService<GptInteractionArchiverService>();
-        services.AddHostedService<TrafficConditionArchiverService>();
-        services.AddHostedService<WeatherForecastArchiverService>();
-        services.AddHostedService<AntennaArchivePurgeWorker>();
+
+        if (!env.IsDevelopment())
+        {
+            services.AddHostedService<CrowdInfoArchiverService>();
+            services.AddHostedService<AntennaConnectionCleanupWorker>();
+            services.AddHostedService<AntennaArchivePurgeWorker>();
+            services.AddHostedService<GptInteractionArchiverService>();
+            services.AddHostedService<TrafficConditionArchiverService>();
+            services.AddHostedService<WeatherForecastArchiverService>();
+            services.AddHostedService<ExpiredDataArchiverHostedService>();
+            services.AddHostedService<CrowdInfoAntennaCollectorHostedService>();
+            services.AddHostedService<WallonieAntennaCadastreSyncHostedService>();
+            services.AddHostedService<WallonieEnPocheSyncHostedService>();
+        }
+
         services.AddHostedService<MorningCrowdAdvisoryHostedService>();
         services.AddHostedService<EventArchiverService>();
         services.AddHostedService<OdwbTrafficCollector>();
@@ -771,10 +789,6 @@ internal class Program
         services.AddHostedService<WeatherForecastCleanupHostedService>();
         services.AddHostedService<WeatherForecastCollectorHostedService>();
         services.AddHostedService<TrafficConditionCollectorHostedService>();
-        services.AddHostedService<CrowdInfoAntennaCollectorHostedService>();
-        services.AddHostedService<WallonieAntennaCadastreSyncHostedService>();
-        services.AddHostedService<WallonieEnPocheSyncHostedService>();
-        services.AddHostedService<ExpiredDataArchiverHostedService>();
     }
 
     private static void ConfigureMediatR(IServiceCollection services)

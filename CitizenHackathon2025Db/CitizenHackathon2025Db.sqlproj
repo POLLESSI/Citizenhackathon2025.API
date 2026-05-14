@@ -119,32 +119,34 @@
     <Build Include="Programmability\Procedures\sp_CrowdInfoAntenna_UpsertFromCadastre.sql" />
     <Build Include="Tables\CrowdSafetyAlert.sql" />
     <Build Include="Programmability\Procedures\CrowdSafetyAlert_GetPendingReminders.sql" />
+    <Build Include="Programmability\Procedures\sp_AntennaConnection_Ping.sql" />
+    <Build Include="Programmability\Procedures\sp_AntennaConnection_Ping.sql" />
+    <Build Include="Programmability\Procedures\sp_CrowdInfo_ManualCriticalAlert.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />
-	<None Include="CitizenHackathon2025Db.publish.xml" />
-	<None Include="Scripts\MigrationScript.sql" />
-	<None Include="Scripts\Suggestion.Indexes.sql" />
-	<None Include="Scripts\Script.PreDeployment.sql" />
-	<None Include="Scripts\MergeGptInteractions.sql" />
-	<None Include="Scripts\DeleteLogs.sql" />
-	<None Include="Scripts\DevScript.sql" />
-	<None Include="Scripts\sp_ArchivePastCrowdInfo.sql" />
-	<None Include="Scripts\sp_ArchivePastGptInteraction.sql" />
-	<None Include="Scripts\sp_ArchivePastTrafficCondition.sql" />
-	<None Include="Scripts\sp_ArchivePastWeatherForecast.sql" />
-	<None Include="sql\01_fix_gpt_indexes.sql" />
-	<None Include="sql\99_post_deploy.sql" />
-	<None Include="Scripts\EvolutionScript.sql" />
-	<None Include="Scripts\CrowdAntennaSeedCheckScript.sql" />
-	<None Include="Scripts\ProfanityWordSeedScript.sql" />
-	<None Include="Scripts\ProfanityWordSeedScript_1.sql" />
-	<None Include="Scripts\AlterCrowdInfoAntennaConnectionScript.sql" />
-	<None Include="Scripts\Script.PostDeployment.sql" />
-	<None Include="Scripts\CrowdAntennaSeedScript.sql" />
+    <None Include="CitizenHackathon2025Db.publish.xml" />
+    <None Include="Scripts\MigrationScript.sql" />
+    <None Include="Scripts\Suggestion.Indexes.sql" />
+    <None Include="Scripts\Script.PreDeployment.sql" />
+    <None Include="Scripts\MergeGptInteractions.sql" />
+    <None Include="Scripts\DeleteLogs.sql" />
+    <None Include="Scripts\DevScript.sql" />
+    <None Include="Scripts\sp_ArchivePastCrowdInfo.sql" />
+    <None Include="Scripts\sp_ArchivePastGptInteraction.sql" />
+    <None Include="Scripts\sp_ArchivePastTrafficCondition.sql" />
+    <None Include="Scripts\sp_ArchivePastWeatherForecast.sql" />
+    <None Include="sql\01_fix_gpt_indexes.sql" />
+    <None Include="sql\99_post_deploy.sql" />
+    <None Include="Scripts\EvolutionScript.sql" />
+    <None Include="Scripts\CrowdAntennaSeedCheckScript.sql" />
+    <None Include="Scripts\ProfanityWordSeedScript.sql" />
+    <None Include="Scripts\ProfanityWordSeedScript_1.sql" />
+    <None Include="Scripts\AlterCrowdInfoAntennaConnectionScript.sql" />
+    <None Include="Scripts\Script.PostDeployment.sql" />
+    <None Include="Scripts\CrowdAntennaSeedScript.sql" />
   </ItemGroup>
-
   <ItemGroup>
-	<PostDeploy Include="Scripts\PostDeploy.Master.sql" />
+    <PostDeploy Include="Scripts\PostDeploy.Master.sql" />
   </ItemGroup>
 </Project>

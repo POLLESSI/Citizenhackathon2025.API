@@ -1,4 +1,6 @@
-﻿namespace CitizenHackathon2025.DTOs.DTOs
+﻿using CitizenHackathon2025.Contracts.DTOs;
+
+namespace CitizenHackathon2025.DTOs.DTOs
 {
     public class CrowdInfoUIDTO
     {

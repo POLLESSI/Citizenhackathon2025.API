@@ -1,6 +1,7 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Contracts.DTOs;
 
 namespace CitizenHackathon2025.Application.Mappings
 {

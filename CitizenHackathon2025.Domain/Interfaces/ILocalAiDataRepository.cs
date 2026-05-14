@@ -9,16 +9,21 @@ namespace CitizenHackathon2025.Domain.Interfaces
     /// </summary>
     public interface ILocalAiDataRepository
     {
+        Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(
+            double latitude,
+            double longitude,
+            double radiusKm,
+            CancellationToken ct = default);
         /// <summary>
         /// Returns nearby events relevant to the requested date and radius.
         /// Results should already be filtered geographically and temporally.
         /// </summary>
         Task<IEnumerable<LocalAiEventContextDTO>> GetNearbyEventsAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default);
+           double latitude,
+           double longitude,
+           DateTime targetDate,
+           double radiusKm,
+           CancellationToken ct = default);
 
         /// <summary>
         /// Returns nearby crowd calendar items relevant to the requested date and radius.

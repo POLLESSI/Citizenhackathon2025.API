@@ -60,7 +60,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return cachedResponse;
             }
 
-            var generatedText = await _mistralService.GenerateFromPromptAsync(prompt, ct);
+            var generatedText = await _mistralService.GenerateFromPromptAsync(groundedPrompt: prompt, responseLanguage: "fr-FR", ct: ct);
 
             var response = new List<Suggestion>
             {
@@ -109,7 +109,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 $"Generate one useful suggestion for the following context: {context}. " +
                 $"Respect GDPR and do not store or infer personal data.";
 
-            var generatedText = await _mistralService.GenerateFromPromptAsync(prompt, ct);
+            var generatedText = await _mistralService.GenerateFromPromptAsync(groundedPrompt: prompt, responseLanguage: "fr-FR", ct: ct);
 
             return new List<Suggestion>
             {
@@ -153,7 +153,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     $"Generate one useful local suggestion in French for the following context: {context}. " +
                     $"Respect GDPR and do not expose personal data.";
 
-                var suggestionText = await _mistralService.GenerateFromPromptAsync(prompt, ct);
+                var suggestionText = await _mistralService.GenerateFromPromptAsync(groundedPrompt: prompt, responseLanguage: "fr-FR", ct: ct);
 
                 var suggestion = new Suggestion
                 {

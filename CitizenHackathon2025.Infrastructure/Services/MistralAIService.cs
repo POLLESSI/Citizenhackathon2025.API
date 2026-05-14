@@ -13,26 +13,23 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public sealed class MistralAIService : IMistralAIService
     {
         private const string OllamaChatEndpoint = "api/chat";
-        private const string SystemPrompt =
-            "You are a reliable local OutZen assistant. You never invent information outside the provided context.";
-
+        
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<MistralAIService> _logger;
+        private readonly ILanguagePromptBuilder _languagePromptBuilder;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true
         };
 
-        public MistralAIService(
-            HttpClient httpClient,
-            IConfiguration config,
-            ILogger<MistralAIService> logger)
+        public MistralAIService(HttpClient httpClient, IConfiguration config, ILogger<MistralAIService> logger, ILanguagePromptBuilder languagePromptBuilder)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _languagePromptBuilder = languagePromptBuilder;
         }
 
         private Uri BuildChatUri()
@@ -45,7 +42,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return new Uri(new Uri(baseUrl), OllamaChatEndpoint);
         }
 
-        public async Task<string> GenerateFromPromptAsync(string groundedPrompt, CancellationToken ct = default)
+        public async Task<string> GenerateFromPromptAsync(string groundedPrompt, string responseLanguage = "fr-FR", CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(groundedPrompt))
                 throw new ArgumentException("Grounded prompt cannot be null or empty.", nameof(groundedPrompt));
@@ -59,7 +56,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 groundedPrompt: groundedPrompt,
                 model: model,
                 temperature: temperature,
-                stream: false);
+                stream: false,
+                responseLanguage: responseLanguage,
+                languagePromptBuilder: _languagePromptBuilder);
 
             _logger.LogInformation(
                 "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, ChatUri={ChatUri}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
@@ -121,10 +120,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return finalText;
         }
 
-        public async Task<string> StreamFromPromptAsync(
-            string groundedPrompt,
-            Func<string, Task> onChunk,
-            CancellationToken ct = default)
+        public async Task<string> StreamFromPromptAsync(string groundedPrompt, Func<string, Task> onChunk, string responseLanguage = "fr-FR", CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(onChunk);
 
@@ -140,7 +136,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 groundedPrompt: groundedPrompt,
                 model: model,
                 temperature: temperature,
-                stream: true);
+                stream: true,
+                responseLanguage: responseLanguage,
+                languagePromptBuilder: _languagePromptBuilder);
 
             _logger.LogInformation(
                 "[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, ChatUri={ChatUri}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
@@ -272,12 +270,35 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private float GetTemperature()
             => _config.GetValue<float?>("MistralAI:Temperature") ?? 0.3f;
 
-        private static object BuildChatRequest(
-            string groundedPrompt,
-            string model,
-            float temperature,
-            bool stream)
+        private static object BuildChatRequest(string groundedPrompt, string model, float temperature, bool stream, string responseLanguage, ILanguagePromptBuilder languagePromptBuilder)
         {
+            var languageInstruction =
+                languagePromptBuilder.BuildLanguageInstruction(responseLanguage);
+
+            var systemPrompt = $"""
+                    You are OutZen, Belgian intelligent local assistant.
+                    You are reliable, cautious, factual, and you never invent information that is not part of the provided context.
+
+                    {languageInstruction}
+
+                    You help users with:
+                    - weather
+                    - traffic
+                    - events
+                    - safety
+                    - crowding
+                    - local suggestions
+
+                    If the context does not contain enough information, state it clearly.
+                    The final response language must follow the final output language instruction.
+                    """;
+            var finalUserPrompt = $"""
+                {groundedPrompt}
+
+                Final output language instruction:
+                {languageInstruction}
+                """;
+
             return new
             {
                 model,
@@ -286,12 +307,17 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     new
                     {
                         role = "system",
-                        content = SystemPrompt
+                        content = systemPrompt
                     },
                     new
                     {
                         role = "user",
-                        content = groundedPrompt
+                        content = $"""
+                        {groundedPrompt}
+
+                        Final output language instruction:
+                        {languageInstruction}
+                        """
                     }
                 },
                 stream,
@@ -320,6 +346,34 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
