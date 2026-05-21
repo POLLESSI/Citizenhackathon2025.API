@@ -149,6 +149,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 groundedPrompt.Length);
 
             var accumulated = new StringBuilder(4096);
+            var streamBuffer = new StringBuilder(256);
+
             var chunkCount = 0;
             var lineCount = 0;
 
@@ -215,9 +217,28 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 if (!string.IsNullOrWhiteSpace(chunkText))
                 {
                     chunkCount++;
+
                     accumulated.Append(chunkText);
 
-                    await onChunk(chunkText);
+                    // Streaming buffering
+                    streamBuffer.Append(chunkText);
+
+                    // Smart Flush
+                    var shouldFlush =
+                        streamBuffer.Length >= 32 ||
+                        chunkText.Contains('.') ||
+                        chunkText.Contains('!') ||
+                        chunkText.Contains('?') ||
+                        chunkText.Contains('\n');
+
+                    if (shouldFlush)
+                    {
+                        var bufferedChunk = streamBuffer.ToString();
+
+                        await onChunk(bufferedChunk);
+
+                        streamBuffer.Clear();
+                    }
                 }
 
                 if (envelope.Done)
@@ -230,6 +251,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         stopwatch.ElapsedMilliseconds);
                     break;
                 }
+            }
+
+            if (streamBuffer.Length > 0)
+            {
+                await onChunk(streamBuffer.ToString());
+
+                streamBuffer.Clear();
             }
 
             var finalText = accumulated.ToString().Trim();

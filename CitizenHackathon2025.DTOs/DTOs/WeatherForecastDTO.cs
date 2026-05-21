@@ -44,6 +44,7 @@ namespace CitizenHackathon2025.DTOs.DTOs
         [DisplayName("Icon : ")]
         public string? Icon { get; set; }
         public string? IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
+        public WeatherProvider Provider { get; set; }
         public bool IsSevere { get; set; } = false;
         public WeatherType WeatherType { get; set; }
 

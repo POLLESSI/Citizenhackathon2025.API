@@ -1,11 +1,12 @@
-﻿using System.Security.Claims;
-using CitizenHackathon2025.API.Tools; 
+﻿using CitizenHackathon2025.API.Tools; 
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -58,9 +59,16 @@ namespace CitizenHackathon2025.API.Controllers
                 _logger.LogError(ex, "Session tracking failed at login for {Email}", user.Email);
                 // The login does not fail.
             }
-
+            Response.Cookies.Append(Cookies.JwtTokenName, accessToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+                Expires = DateTimeOffset.UtcNow.AddMinutes(30),
+                Path = "/"
+            });
             _logger.LogInformation("User {Email} logged in successfully", user.Email);
-            return Ok(new { AccessToken = accessToken, RefreshToken = refreshToken });
+            return Ok(new{AccessToken = accessToken, RefreshToken = refreshToken.Token});
         }
 
         // -----------------------------
@@ -87,9 +95,28 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
         {
-            var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, dto.Role);
+            var existing = await _userService.GetUserByEmailAsync(dto.Email.Trim());
+
+            if (existing is not null)
+            {
+                return Conflict(new
+                {
+                    Message = "A user with this email already exists.",
+                    Email = dto.Email
+                });
+            }
+
+            var userDto = await _userService.RegisterUserAsync(
+                dto.Email.Trim(),
+                dto.Password,
+                dto.Role);
+
             _logger.LogInformation("New registered user : {Email}", dto.Email);
-            return Ok(userDto);
+
+            return CreatedAtAction(
+                nameof(Register),
+                new { email = userDto.Email },
+                userDto);
         }
 
         // -----------------------------
@@ -120,7 +147,7 @@ namespace CitizenHackathon2025.API.Controllers
                 _logger.LogError(ex, "Session tracking failed at refresh for {Email}", user.Email);
             }
 
-            return Ok(new { AccessToken = newAccess, RefreshToken = newRefresh });
+            return Ok(new{ AccessToken = newAccess, RefreshToken = newRefresh.Token});
         }
     }
 }

@@ -91,7 +91,7 @@ BEGIN
     WHERE i.object_id = OBJECT_ID(N'dbo.GptInteractions')
       AND i.is_unique = 1
       AND i.has_filter = 0
-      AND c.name = N'PromptHash';
+      AND c.[name] = N'PromptHash';
 
     IF @uniq IS NOT NULL AND @uniq <> N'UX_GptInteractions_Active_PromptHash'
         EXEC(N'DROP INDEX [' + @uniq + N'] ON dbo.GptInteractions;');
@@ -100,7 +100,7 @@ BEGIN
         SELECT 1
         FROM sys.indexes
         WHERE object_id = OBJECT_ID(N'dbo.GptInteractions')
-          AND name = N'IX_GptInteractions_Active'
+          AND [name] = N'IX_GptInteractions_Active'
     )
         CREATE INDEX IX_GptInteractions_Active
             ON dbo.GptInteractions(Active);
@@ -109,11 +109,11 @@ BEGIN
         SELECT 1
         FROM sys.indexes
         WHERE object_id = OBJECT_ID(N'dbo.GptInteractions')
-          AND name = N'UX_GptInteractions_Active_PromptHash'
+          AND [name] = N'UX_GptInteractions_Active_PromptHash'
     )
         CREATE UNIQUE INDEX UX_GptInteractions_Active_PromptHash
             ON dbo.GptInteractions(PromptHash)
-            WHERE Active = 1;
+            WHERE [Active] = 1;
 END;
 GO
 
@@ -439,32 +439,32 @@ BEGIN
 
     MERGE dbo.TrafficCondition AS T
     USING (
-        SELECT @Provider AS Provider, @ExternalId AS ExternalId
+        SELECT @Provider AS [Provider], @ExternalId AS [ExternalId]
     ) AS S
-    ON T.Provider = S.Provider
-       AND T.ExternalId = S.ExternalId
-       AND T.Active = 1
+    ON T.[Provider] = S.[Provider]
+       AND T.[ExternalId] = S.[ExternalId]
+       AND T.[Active] = 1
     WHEN MATCHED THEN
         UPDATE SET
-            Latitude        = @Latitude,
-            Longitude       = @Longitude,
-            DateCondition   = @DateCondition,
-            CongestionLevel = @CongestionLevel,
-            IncidentType    = @IncidentType,
-            Fingerprint     = @Fingerprint,
-            LastSeenAt      = @LastSeenAt,
-            Title           = @Title,
-            Road            = @Road,
-            Severity        = @Severity,
-            GeomWkt         = @GeomWkt,
-            Active          = 1
+            [Latitude]        = @Latitude,
+            [Longitude]       = @Longitude,
+            [DateCondition]   = @DateCondition,
+            [CongestionLevel] = @CongestionLevel,
+            [IncidentType]    = @IncidentType,
+            [Fingerprint]     = @Fingerprint,
+            [LastSeenAt]      = @LastSeenAt,
+            [Title]           = @Title,
+            [Road]            = @Road,
+            [Severity]        = @Severity,
+            [GeomWkt]         = @GeomWkt,
+            [Active]          = 1
     WHEN NOT MATCHED THEN
-        INSERT (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Provider, ExternalId, Fingerprint, LastSeenAt, Title, Road, Severity, GeomWkt, Active)
+        INSERT ([Latitude], [Longitude], [DateCondition], [CongestionLevel], [IncidentType], [Provider], [ExternalId], [Fingerprint], [LastSeenAt], [Title], [Road], [Severity], [GeomWkt], [Active])
         VALUES (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType, @Provider, @ExternalId, @Fingerprint, @LastSeenAt, @Title, @Road, @Severity, @GeomWkt, 1);
 
     SELECT TOP (1) *
     FROM dbo.TrafficCondition
-    WHERE Provider = @Provider
+    WHERE [Provider] = @Provider
       AND ExternalId = @ExternalId
     ORDER BY Id DESC;
 END;
@@ -493,32 +493,32 @@ IF OBJECT_ID(N'dbo.WeatherForecast', N'U') IS NOT NULL
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM sys.indexes
-        WHERE name = N'IX_WeatherForecast_DateWeather'
-          AND object_id = OBJECT_ID(N'dbo.WeatherForecast')
+        WHERE [name] = N'IX_WeatherForecast_DateWeather'
+          AND [object_id] = OBJECT_ID(N'dbo.WeatherForecast')
     )
         CREATE NONCLUSTERED INDEX IX_WeatherForecast_DateWeather
             ON dbo.WeatherForecast(DateWeather);
 
     IF NOT EXISTS (
         SELECT 1 FROM sys.indexes
-        WHERE name = N'IX_WeatherForecast_TemperatureC'
-          AND object_id = OBJECT_ID(N'dbo.WeatherForecast')
+        WHERE [name] = N'IX_WeatherForecast_TemperatureC'
+          AND [object_id] = OBJECT_ID(N'dbo.WeatherForecast')
     )
         CREATE NONCLUSTERED INDEX IX_WeatherForecast_TemperatureC
             ON dbo.WeatherForecast(TemperatureC);
 
     IF NOT EXISTS (
         SELECT 1 FROM sys.indexes
-        WHERE name = N'IX_WeatherForecast_TemperatureF'
-          AND object_id = OBJECT_ID(N'dbo.WeatherForecast')
+        WHERE [name] = N'IX_WeatherForecast_TemperatureF'
+          AND [object_id] = OBJECT_ID(N'dbo.WeatherForecast')
     )
         CREATE NONCLUSTERED INDEX IX_WeatherForecast_TemperatureF
             ON dbo.WeatherForecast(TemperatureF);
 
     IF NOT EXISTS (
         SELECT 1 FROM sys.indexes
-        WHERE name = N'IX_WeatherForecast_Summary'
-          AND object_id = OBJECT_ID(N'dbo.WeatherForecast')
+        WHERE [name] = N'IX_WeatherForecast_Summary'
+          AND [object_id] = OBJECT_ID(N'dbo.WeatherForecast')
     )
         CREATE NONCLUSTERED INDEX IX_WeatherForecast_Summary
             ON dbo.WeatherForecast(Summary);
@@ -542,77 +542,6 @@ BEGIN
                 INNER JOIN deleted d ON d.Id = WF.Id;
             END
         ');
-END;
-GO
-
-IF OBJECT_ID(N'dbo.sp_WeatherForecast_Upsert', N'P') IS NULL
-    EXEC(N'CREATE PROCEDURE dbo.sp_WeatherForecast_Upsert AS BEGIN SET NOCOUNT ON; END');
-GO
-
-ALTER PROCEDURE dbo.sp_WeatherForecast_Upsert
-    @DateWeather     DATETIME2,
-    @Latitude        DECIMAL(9,6) = NULL,
-    @Longitude       DECIMAL(9,6) = NULL,
-    @TemperatureC    INT,
-    @Summary         NVARCHAR(256),
-    @RainfallMm      FLOAT = NULL,
-    @Humidity        INT = NULL,
-    @WindSpeedKmh    FLOAT = NULL,
-    @WeatherMain     NVARCHAR(64) = NULL,
-    @Description     NVARCHAR(256) = NULL,
-    @Icon            NVARCHAR(16) = NULL,
-    @IconUrl         NVARCHAR(256) = NULL,
-    @WeatherType     INT = 0,
-    @IsSevere        BIT = 0
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DECLARE @ExistingId INT;
-
-    SELECT TOP (1) @ExistingId = Id
-    FROM dbo.WeatherForecast
-    WHERE Active = 1
-      AND DateWeather = @DateWeather
-      AND ISNULL(Latitude, 0) = ISNULL(@Latitude, 0)
-      AND ISNULL(Longitude, 0) = ISNULL(@Longitude, 0)
-    ORDER BY Id DESC;
-
-    IF @ExistingId IS NOT NULL
-    BEGIN
-        UPDATE WF
-        SET TemperatureC = @TemperatureC,
-            Summary = @Summary,
-            RainfallMm = @RainfallMm,
-            Humidity = @Humidity,
-            WindSpeedKmh = @WindSpeedKmh,
-            WeatherMain = @WeatherMain,
-            Description = @Description,
-            Icon = @Icon,
-            IconUrl = @IconUrl,
-            WeatherType = @WeatherType,
-            IsSevere = @IsSevere,
-            Active = 1
-        OUTPUT INSERTED.*
-        FROM dbo.WeatherForecast WF
-        WHERE WF.Id = @ExistingId;
-    END
-    ELSE
-    BEGIN
-        INSERT INTO dbo.WeatherForecast
-        (
-            DateWeather, Latitude, Longitude, TemperatureC, Summary,
-            RainfallMm, Humidity, WindSpeedKmh,
-            WeatherMain, Description, Icon, IconUrl, WeatherType, IsSevere, Active
-        )
-        OUTPUT INSERTED.*
-        VALUES
-        (
-            @DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary,
-            @RainfallMm, @Humidity, @WindSpeedKmh,
-            @WeatherMain, @Description, @Icon, @IconUrl, @WeatherType, @IsSevere, 1
-        );
-    END
 END;
 GO
 

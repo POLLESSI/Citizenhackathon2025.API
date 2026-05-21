@@ -35,6 +35,7 @@ using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Services;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Wallonie.Antennas;
+using CitizenHackathon2025.Infrastructure.ExternalProviders.Common;
 using CitizenHackathon2025.Infrastructure.Init;
 using CitizenHackathon2025.Infrastructure.Options;
 using CitizenHackathon2025.Infrastructure.Persistence;
@@ -69,12 +70,14 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly;
+using Polly.Extensions.Http;
 using Prometheus;
 using Serilog;
 using Serilog.Formatting.Compact;
 using System.Data;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 
 internal class Program
@@ -160,26 +163,57 @@ internal class Program
               .Enrich.WithProperty("App", "CitizenHackathon2025.API");
 
             var cs = ctx.Configuration["EventHubs:ConnectionString"];
-            if (!string.IsNullOrWhiteSpace(cs))
+
+            if (IsUsableEventHubConnectionString(cs))
             {
                 var opt = new AzureEventHubOptions
                 {
-                    ConnectionString = cs,
+                    ConnectionString = cs!,
                     EventHubName = ctx.Configuration["EventHubs:EventHubName"],
                     BatchSizeLimit = ctx.Configuration.GetValue("EventHubs:BatchSizeLimit", 100),
                     Period = TimeSpan.FromSeconds(ctx.Configuration.GetValue("EventHubs:PeriodSeconds", 2)),
                     PartitionKeyResolver = e =>
-                        (e.Properties.TryGetValue("CorrelationId", out var cid)
+                        e.Properties.TryGetValue("CorrelationId", out var cid)
                             ? $"{e.Level}-{cid}"
-                            : e.Level.ToString())
+                            : e.Level.ToString()
                 };
 
                 lc.WriteTo.AzureEventHub(opt, new CompactJsonFormatter());
+            }
+            else
+            {
+                Console.WriteLine("Azure EventHub logging disabled: missing or invalid EventHubs:ConnectionString.");
             }
         });
 
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole();
+    }
+
+    private static bool IsUsableEventHubConnectionString(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        if (value.Contains("NOUVELLE_CONNECTION_STRING", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (value.Contains("your-namespace", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (value.Contains("xxxxxxxx", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!value.Contains("Endpoint=sb://", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!value.Contains("SharedAccessKeyName=", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!value.Contains("SharedAccessKey=", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return true;
     }
 
     private static void ConfigureMapster()
@@ -225,7 +259,7 @@ internal class Program
         services.Configure<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.Configure<SessionJanitorOptions>(configuration.GetSection("Sessions:Janitor"));
-        services.Configure<TrafficApiOptions>(configuration.GetSection("TrafficApi"));
+        services.Configure<TrafficApiOptions>(configuration.GetSection("ExternalProviders:ODWB"));
         services.Configure<CitizenHackathon2025.API.Options.AntennaCleanupOptions>(configuration.GetSection("AntennaCleanup"));
         services.Configure<AntennaArchiveRetentionOptions>(configuration.GetSection("AntennaArchiveRetention"));
         services.Configure<AntennaCadastreOptions>(configuration.GetSection("AntennaCadastre"));
@@ -233,6 +267,12 @@ internal class Program
         services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(configuration.GetSection("CrowdAdvisory"));
         services.Configure<DeviceHasherOptions>(configuration.GetSection("DeviceHasher"));
         services.Configure<PipelineOptions>(configuration.GetSection("Pipelines"));
+
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.Converters.Add(
+                new JsonStringEnumConverter());
+        });
 
         services.AddOptions<CitizenHackathon2025.Shared.Options.SecurityOptions>()
             .Bind(configuration.GetSection("Security"))
@@ -258,10 +298,23 @@ internal class Program
 
         services.AddSingleton(sp =>
         {
+            var env = sp.GetRequiredService<IWebHostEnvironment>();
             var opt = sp.GetRequiredService<IOptions<TrafficHmacOptions>>().Value;
 
             if (string.IsNullOrWhiteSpace(opt.TrafficHmacKeyBase64))
+            {
+                if (env.IsDevelopment())
+                {
+                    var devKey = Convert.ToBase64String(
+                        System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+                    Console.WriteLine("DEV WARNING: Security:TrafficHmacKeyBase64 missing. Temporary in-memory key generated.");
+
+                    return Convert.FromBase64String(devKey);
+                }
+
                 throw new InvalidOperationException("Missing Security:TrafficHmacKeyBase64");
+            }
 
             try
             {
@@ -269,6 +322,16 @@ internal class Program
             }
             catch (FormatException ex)
             {
+                if (env.IsDevelopment())
+                {
+                    var devKey = Convert.ToBase64String(
+                        System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+                    Console.WriteLine("DEV WARNING: Invalid Security:TrafficHmacKeyBase64. Temporary in-memory key generated.");
+
+                    return Convert.FromBase64String(devKey);
+                }
+
                 throw new InvalidOperationException(
                     "Invalid Base64 in Security:TrafficHmacKeyBase64.",
                     ex);
@@ -419,14 +482,17 @@ internal class Program
 
     private static void ConfigureRateLimiting(IServiceCollection services)
     {
-        services.AddRateLimiter(_ => _
-            .AddPolicy("per-user", http =>
-            {
-                var userId = http.User?.Identity?.Name
-                             ?? http.Connection.RemoteIpAddress?.ToString()
-                             ?? "anon";
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-                return RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
+            options.AddPolicy("per-user", http =>
+            {
+                var key = http.User?.Identity?.Name
+                          ?? http.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon";
+
+                return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
                 {
                     TokenLimit = 100,
                     TokensPerPeriod = 100,
@@ -435,7 +501,76 @@ internal class Program
                     QueueLimit = 0,
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst
                 });
-            }));
+            });
+
+            options.AddPolicy("global", http =>
+            {
+                var key = http.User?.Identity?.Name
+                          ?? http.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon";
+
+                return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 100,
+                    TokensPerPeriod = 100,
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                    AutoReplenishment = true,
+                    QueueLimit = 0
+                });
+            });
+
+            options.AddPolicy("login", http =>
+            {
+                var key = http.Connection.RemoteIpAddress?.ToString() ?? "anon";
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                });
+            });
+
+            options.AddPolicy("gpt", http =>
+            {
+                var key = http.User?.Identity?.Name
+                          ?? http.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon";
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                });
+            });
+
+            options.AddPolicy("external-provider", http =>
+            {
+                var key = http.User?.Identity?.Name
+                          ?? http.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon";
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                });
+            });
+
+            options.AddPolicy("signalr", http =>
+            {
+                var key = http.Connection.RemoteIpAddress?.ToString() ?? "anon";
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 20,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                });
+            });
+        });
     }
 
     private static void ConfigureCors(IServiceCollection services)
@@ -571,7 +706,7 @@ internal class Program
             client.BaseAddress = new Uri(baseUrl);
 
             // Optional but recommended to avoid infinite pending requests.
-            client.Timeout = TimeSpan.FromMinutes(10);
+            client.Timeout = TimeSpan.FromSeconds(30);
         })
         .AddHttpMessageHandler(sp =>
         {
@@ -592,18 +727,11 @@ internal class Program
 
         services.AddHttpClient<IOdwbTrafficApiService, OdwbTrafficApiService>((sp, client) =>
         {
-            var cfg = sp.GetRequiredService<IConfiguration>();
-            var endpoint = cfg["ODWB:Endpoint"];
+            var opt = sp.GetRequiredService<IOptions<TrafficApiOptions>>().Value;
 
-            if (!string.IsNullOrWhiteSpace(endpoint))
-                client.BaseAddress = new Uri(endpoint, UriKind.Absolute);
-
-            client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
-        })
-        .AddHttpMessageHandler(sp =>
-        {
-            var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            return new ResilienceHandler(pipelines.Ollama);
+            client.BaseAddress = new Uri(opt.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(opt.TimeoutSeconds <= 0 ? 8 : opt.TimeoutSeconds);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
         });
 
         services.AddHttpClient("OpenWeatherRaw", (sp, client) =>
@@ -657,11 +785,59 @@ internal class Program
 
         services.AddHttpClient<IOpenWeatherService, OpenWeatherService>();
 
+        var owKey = configuration["OpenWeather:ApiKey"];
+
+        if (string.IsNullOrWhiteSpace(owKey))
+        {
+            Console.WriteLine("⚠️ OpenWeather:ApiKey is missing.");
+        }
+        else if (owKey.Contains("NOUVELLE", StringComparison.OrdinalIgnoreCase) ||
+                 owKey.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("⚠️ OpenWeather:ApiKey is a placeholder.");
+        }
+        else
+        {
+            Console.WriteLine($"✅ OpenWeather:ApiKey loaded. Length={owKey.Length}");
+        }
+
         services.AddHttpClient<WallonieAntennaCadastreClient>(client =>
         {
             client.BaseAddress = new Uri(
                 "https://geoservices.wallonie.be/arcgis/rest/services/INDUSTRIES_SERVICES/ANTENNES/MapServer/0/");
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
+        });
+    }
+
+    private static IHttpClientBuilder AddProtectedHttpClient<TClient, TImplementation>(
+    IServiceCollection services,
+    IConfiguration configuration,
+    string providerName)
+    where TClient : class
+    where TImplementation : class, TClient
+    {
+        var section = configuration.GetSection($"ExternalProviders:{providerName}");
+        var options = section.Get<ExternalProviderOptions>()
+            ?? throw new InvalidOperationException($"Missing ExternalProviders:{providerName}");
+
+        services.Configure<ExternalProviderOptions>(section);
+
+        return services.AddHttpClient<TClient, TImplementation>((sp, client) =>
+        {
+            client.BaseAddress = new Uri(options.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            client.MaxResponseContentBufferSize = options.MaxPayloadBytes;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            return new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                MaxConnectionsPerServer = 20,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
+            };
         });
     }
 
@@ -730,6 +906,7 @@ internal class Program
         services.AddScoped<ITrafficOdwbIngestionService, TrafficOdwbIngestionService>();
         services.AddScoped<IUiTextLocalizer, UiTextLocalizer>();
         services.AddScoped<IUserMessageService, UserMessageService>();
+        services.AddScoped<IUserSessionService, CitizenHackathon2025.Infrastructure.Services.UserSessionService>();
         services.AddScoped<IWallonieEnPocheSourceClient, FakeWallonieEnPocheSourceClient>();
         services.AddScoped<IWallonieEnPocheSyncRepository, WallonieEnPocheSyncRepository>();
         services.AddScoped<IWallonieEnPocheSyncService, WallonieEnPocheSyncService>();
@@ -944,8 +1121,8 @@ internal class Program
             await next();
         });
 
-        app.UseSessionHeartbeat();
         app.UseAuthentication();
+        app.UseSessionHeartbeat();
         app.UseAuthorization();
 
         if (!env.IsDevelopment() && app.Configuration.GetValue("OutZen:RequireEventId", true))
@@ -990,7 +1167,9 @@ internal class Program
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath, options =>
         {
             options.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents;
-        }).RequireAuthorization();
+        })
+        .RequireAuthorization()
+        .RequireRateLimiting("signalr");
         hubs.MapHub<MessageHub>(MessageHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<ModerationHub>(ModerationHubMethods.HubPath).RequireAuthorization(Policies.ModoPolicy);
         hubs.MapHub<PlaceHub>(PlaceHubMethods.HubPath).RequireAuthorization();

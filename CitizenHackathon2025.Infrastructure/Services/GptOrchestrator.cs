@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -315,14 +317,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return created;
         }
 
-        private async Task<GptInteractionDTO> ExecutePipelineInternalAsync(
-            GptPromptRequest request,
-            string prompt,
-            int interactionId,
-            string requestId,
-            CancellationToken ct,
-            bool pushChunksToHub,
-            bool emitStartedEvent)
+        private async Task<GptInteractionDTO> ExecutePipelineInternalAsync(GptPromptRequest request, string prompt, int interactionId, string requestId, CancellationToken ct, bool pushChunksToHub, bool emitStartedEvent)
         {
             var sw = Stopwatch.StartNew();
 
@@ -345,11 +340,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var swContext = Stopwatch.StartNew();
 
-            var localContext = await localAiContextService.BuildContextAsync(
-                prompt,
-                request.Latitude,
-                request.Longitude,
-                ct).ConfigureAwait(false);
+            var effectiveLatitude = request.Latitude;
+            var effectiveLongitude = request.Longitude;
+
+            if ((!effectiveLatitude.HasValue || !effectiveLongitude.HasValue) &&
+                TryExtractCoordinatesFromPrompt(prompt, out var parsedLat, out var parsedLng))
+            {
+                effectiveLatitude = parsedLat;
+                effectiveLongitude = parsedLng;
+                _logger.LogInformation(
+                    "[GPT-PIPELINE] Effective coordinates resolved. Lat={Lat}, Lng={Lng}",
+                    effectiveLatitude,
+                    effectiveLongitude);
+            }
+
+            var localContext = await localAiContextService.BuildContextAsync(prompt, effectiveLatitude, effectiveLongitude, ct).ConfigureAwait(false);
 
             swContext.Stop();
 
@@ -450,6 +455,50 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return finalDto;
         }
 
+        private static bool TryExtractCoordinatesFromPrompt(string? prompt, out double latitude, out double longitude)
+        {
+            latitude = default;
+            longitude = default;
+
+            if (string.IsNullOrWhiteSpace(prompt))
+                return false;
+
+            // Match:
+            // 50.434780,5.876832
+            // (50.434780,5.876832)
+            // 50,434780 ; 5,876832
+            var match = Regex.Match(
+                prompt,
+                @"(?<lat>[+-]?\d{1,2}\.\d+)\s*[,;]\s*(?<lng>[+-]?\d{1,3}\.\d+)",
+                RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+            if (!match.Success)
+                return false;
+
+            var latText = match.Groups["lat"].Value.Replace(',', '.');
+            var lngText = match.Groups["lng"].Value.Replace(',', '.');
+
+            if (!double.TryParse(
+                    latText,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out latitude))
+            {
+                return false;
+            }
+
+            if (!double.TryParse(
+                    lngText,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out longitude))
+            {
+                return false;
+            }
+
+            return latitude is >= -90 and <= 90
+                   && longitude is >= -180 and <= 180;
+        }
         private async Task MarkFailedSafeAsync(int interactionId, string? errorMessage)
         {
             try
@@ -467,7 +516,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     interactionId);
             }
         }
-
+ 
         private static GptInteractionCompletedDto ToCompletedDto(GptInteractionDTO dto)
         {
             if (dto is null)

@@ -18,6 +18,7 @@
         public string? Icon { get; set; }
         public string? IconUrl { get; set; }
         public int WeatherType { get; set; }     // or WeatherType enum if you prefer
+        public int Provider { get; set; }
         public bool IsSevere { get; set; }
     }
 }

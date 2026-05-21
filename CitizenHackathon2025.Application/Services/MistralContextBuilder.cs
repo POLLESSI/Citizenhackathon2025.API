@@ -12,11 +12,7 @@ namespace CitizenHackathon2025.Application.Services
                 ?? throw new ArgumentNullException(nameof(localAiContextService));
         }
 
-        public async Task<string> BuildContextAsync(
-            string userPrompt,
-            double? latitude = null,
-            double? longitude = null,
-            CancellationToken ct = default)
+        public async Task<string> BuildContextAsync(string userPrompt, double? latitude = null, double? longitude = null, CancellationToken ct = default)
         {
             var context = await _localAiContextService.BuildContextAsync(
                 userPrompt,

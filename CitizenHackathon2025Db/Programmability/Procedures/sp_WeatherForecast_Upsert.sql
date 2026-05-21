@@ -12,6 +12,7 @@
     @Icon            NVARCHAR(16) = NULL,
     @IconUrl         NVARCHAR(256) = NULL,
     @WeatherType     INT = 0,
+    @Provider        INT = 0,
     @IsSevere        BIT = 0
 AS
 BEGIN
@@ -29,18 +30,19 @@ BEGIN
     IF @ExistingId IS NOT NULL
     BEGIN
         UPDATE WF
-        SET TemperatureC = @TemperatureC,
-            Summary = @Summary,
-            RainfallMm = @RainfallMm,
-            Humidity = @Humidity,
-            WindSpeedKmh = @WindSpeedKmh,
-            WeatherMain = @WeatherMain,
-            Description = @Description,
-            Icon = @Icon,
-            IconUrl = @IconUrl,
-            WeatherType = @WeatherType,
-            IsSevere = @IsSevere,
-            Active = 1
+        SET [TemperatureC] = @TemperatureC,
+            [Summary] = @Summary,
+            [RainfallMm] = @RainfallMm,
+            [Humidity] = @Humidity,
+            [WindSpeedKmh] = @WindSpeedKmh,
+            [WeatherMain] = @WeatherMain,
+            [Description] = @Description,
+            [Icon] = @Icon,
+            [IconUrl] = @IconUrl,
+            [WeatherType] = @WeatherType,
+            [Provider] = @Provider,
+            [IsSevere] = @IsSevere,
+            [Active] = 1
         OUTPUT INSERTED.*
         FROM dbo.WeatherForecast WF
         WHERE WF.Id = @ExistingId;
@@ -49,21 +51,22 @@ BEGIN
     BEGIN
         INSERT INTO dbo.WeatherForecast
         (
-            DateWeather,
-            Latitude,
-            Longitude,
-            TemperatureC,
-            Summary,
-            RainfallMm,
-            Humidity,
-            WindSpeedKmh,
-            WeatherMain,
-            Description,
-            Icon,
-            IconUrl,
-            WeatherType,
-            IsSevere,
-            Active
+            [DateWeather],
+            [Latitude],
+            [Longitude],
+            [TemperatureC],
+            [Summary],
+            [RainfallMm],
+            [Humidity],
+            [WindSpeedKmh],
+            [WeatherMain],
+            [Description],
+            [Icon],
+            [IconUrl],
+            [WeatherType],
+            [Provider],
+            [IsSevere],
+            [Active]
         )
         OUTPUT INSERTED.*
         VALUES
@@ -81,6 +84,7 @@ BEGIN
             @Icon,
             @IconUrl,
             @WeatherType,
+            @Provider,
             @IsSevere,
             1
         );

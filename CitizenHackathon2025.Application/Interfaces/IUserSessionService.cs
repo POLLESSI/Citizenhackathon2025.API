@@ -6,6 +6,7 @@ namespace CitizenHackathon2025.Application.Interfaces
     public interface IUserSessionService
     {
         Task TrackAccessTokenAsync(string accessToken, string email, SessionSource source, HttpContext http);
+        Task TrackLoginAsync(string email, string jti, DateTime issuedAtUtc, DateTime expiresAtUtc, string? ip, string? userAgent, CancellationToken ct = default);
     }
 }
 

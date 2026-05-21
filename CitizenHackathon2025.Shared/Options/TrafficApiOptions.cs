@@ -2,8 +2,9 @@
 
 public sealed class TrafficApiOptions
 {
-    public string BaseUrl { get; set; } = "https://www.odwb.be/api/explore/v2.1";
-    public int DefaultLimit { get; set; } = 50;
+    public string BaseUrl { get; set; } = "https://www.odwb.be/api/explore/v2.1/catalog/datasets/217400/records";
+    public int TimeoutSeconds { get; set; } = 8;
+    public int DefaultLimit { get; set; } = 20;
 }
 
 

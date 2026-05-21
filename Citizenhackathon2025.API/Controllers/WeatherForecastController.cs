@@ -35,14 +35,39 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(await _app.ManualAsync(dto, ct));
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpPost("pull")]
-        public async Task<IActionResult> Pull([FromQuery] decimal lat, [FromQuery] decimal lon, CancellationToken ct = default)
+        public async Task<IActionResult> Pull([FromQuery] decimal lat, [FromQuery] decimal lon, CancellationToken ct)
         {
-            if (lat is < -90 or > 90) return BadRequest("Invalid lat.");
-            if (lon is < -180 or > 180) return BadRequest("Invalid lon.");
+            var (alertsUpserted, forecastSaved) = await _app.PullAsync(lat, lon, ct);
+
+            return Ok(new
+            {
+                Success = true,
+                Source = "OpenWeather",
+                Latitude = lat,
+                Longitude = lon,
+                Forecast = forecastSaved,
+                AlertsUpserted = alertsUpserted
+            });
+        }
+
+        [Authorize(Policy = Policies.UserPolicy)]
+        [HttpPost("pull-current-location")]
+        public async Task<IActionResult> PullCurrentLocation([FromQuery] decimal lat, [FromQuery] decimal lon, CancellationToken ct)
+        {
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180)
+                return BadRequest("Invalid coordinates.");
 
             var (alertsUpserted, forecastSaved) = await _app.PullAsync(lat, lon, ct);
-            return Ok(new { alertsUpserted, forecastSaved });
+
+            return Ok(new
+            {
+                Success = true,
+                Source = "OpenWeather",
+                Forecast = forecastSaved,
+                AlertsUpserted = alertsUpserted
+            });
         }
 
         [HttpPost("generate")]
@@ -78,6 +103,32 @@ namespace CitizenHackathon2025.API.Controllers
 
             var dto = await _app.GetByIdAsync(id, ct);
             return dto is null ? NotFound() : Ok(dto);
+        }
+
+        [HttpGet("debug-db-weather")]
+        public async Task<IActionResult> DebugDbWeather([FromServices] IDbConnection cn)
+        {
+            const string sql = @"
+                            SELECT @@SERVERNAME AS ServerName, DB_NAME() AS DbName;
+
+                            SELECT COUNT(*) AS WeatherRows FROM dbo.WeatherForecast;
+
+                            SELECT 
+                                p.parameter_id,
+                                p.name,
+                                TYPE_NAME(p.user_type_id) AS TypeName
+                            FROM sys.parameters p
+                            WHERE p.object_id = OBJECT_ID('dbo.sp_WeatherForecast_Upsert')
+                            ORDER BY p.parameter_id;";
+
+            using var multi = await cn.QueryMultipleAsync(sql);
+
+            return Ok(new
+            {
+                Db = await multi.ReadFirstAsync(),
+                Count = await multi.ReadFirstAsync(),
+                Parameters = await multi.ReadAsync()
+            });
         }
 
         //[Authorize(Policy = Policies.AdminPolicy)]

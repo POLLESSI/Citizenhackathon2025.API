@@ -19,7 +19,13 @@ namespace CitizenHackathon2025.API.Tools
         public TokenGenerator(IConfiguration configuration)
         {
             _configuration = configuration;
-            _secretKey = _configuration["Jwt:Secret"];
+            _secretKey = _configuration["Jwt:Secret"] ?? throw new InvalidOperationException("Jwt:Secret is missing.");
+
+            var keyBytes = Encoding.UTF8.GetBytes(_secretKey);
+
+            if (keyBytes.Length < 64)
+                throw new InvalidOperationException($"Jwt:Secret is too short for HS512. Minimum: 64 bytes. Current: {keyBytes.Length} bytes.");
+
             _tokenDuration = int.TryParse(_configuration["Jwt:TokenDurationMinutes"], out int minutes) ? minutes : 30;
             _issuer = _configuration["Jwt:Issuer"] ?? "CitizenHackathon2025API";
             _audience = _configuration["Jwt:Audience"]; 

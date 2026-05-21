@@ -66,7 +66,7 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Services
                 }
 
                 var wf = OpenWeatherMappers.MapCurrentToForecast(resp, lat, lon);
-                var savedWf = await _forecastRepo.SaveOrUpdateAsync(wf);
+                var savedWf = await _forecastRepo.SaveOrUpdateAsync(wf, ct);
                 var dto = savedWf.MapToWeatherForecastDTO();
                 await _weatherHub.BroadcastWeatherAsync(dto, ct);
 
@@ -80,7 +80,7 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Services
                 var cur = await _current.GetCurrentAsync(lat, lon, ct);
                 var wf = OpenWeatherMappers.MapCurrent25ToForecast(cur); // méthode à créer (voir section 2)
 
-                var savedWf = await _forecastRepo.SaveOrUpdateAsync(wf);
+                var savedWf = await _forecastRepo.SaveOrUpdateAsync(wf, ct);
                 var dto = savedWf.MapToWeatherForecastDTO();
                 await _weatherHub.BroadcastWeatherAsync(dto, ct);
 

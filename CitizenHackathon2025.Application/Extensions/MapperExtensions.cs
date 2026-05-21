@@ -43,6 +43,7 @@ namespace CitizenHackathon2025.Application.Extensions
                 Description = dto.Description,
                 Icon = dto.Icon,
                 IconUrl = dto.IconUrl,
+                Provider = dto.Provider == WeatherProvider.Unknown ? WeatherProvider.Manual : dto.Provider,
                 IsSevere = dto.IsSevere,
                 WeatherType = dto.WeatherType
             };
@@ -84,6 +85,7 @@ namespace CitizenHackathon2025.Application.Extensions
                 IconUrl = entity.IconUrl ?? string.Empty,
 
                 IsSevere = entity.IsSevere,
+                Provider = entity.Provider,
                 WeatherType = entity.WeatherType
             };
         }

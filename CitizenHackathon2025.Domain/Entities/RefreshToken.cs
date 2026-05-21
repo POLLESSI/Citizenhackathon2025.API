@@ -4,7 +4,7 @@ namespace CitizenHackathon2025.Domain.Entities
 {
     public class RefreshToken
     {
-#nullable disable
+    #nullable disable
         public int Id { get; set; }
         public string Token { get; set; } = string.Empty; // returned to the client, but no longer stored in DB (optional)
         public string Email { get; set; } = string.Empty;

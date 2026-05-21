@@ -23,18 +23,31 @@ namespace CitizenHackathon2025.API.Hubs.Serilog.Sinks
         private readonly Func<LogEvent, string?>? _partitionKeyResolver;
 
         public AzureEventHubSink(AzureEventHubOptions options, ITextFormatter? formatter = null)
-            // NOTE: If you are using PeriodicBatching v3.x, use the ctor with PeriodicBatchingSinkOptions*
-            : base(Math.Max(1, options.BatchSizeLimit), options.Period)
+    : base(Math.Max(1, options.BatchSizeLimit), options.Period)
         {
             if (string.IsNullOrWhiteSpace(options.ConnectionString))
                 throw new ArgumentException("AzureEventHub: Missing ConnectionString.", nameof(options.ConnectionString));
 
-            // Basic local validation (without ctx)
-            var parsed = EventHubsConnectionStringProperties.Parse(options.ConnectionString);
+            EventHubsConnectionStringProperties parsed;
+
+            try
+            {
+                parsed = EventHubsConnectionStringProperties.Parse(options.ConnectionString);
+            }
+            catch (FormatException ex)
+            {
+                throw new ArgumentException(
+                    "AzureEventHub: invalid ConnectionString. Disable EventHub logging in development or provide a real Azure Event Hub connection string.",
+                    nameof(options.ConnectionString),
+                    ex);
+            }
+
             if (parsed.Endpoint == null || string.IsNullOrWhiteSpace(parsed.Endpoint.Host))
                 throw new ArgumentException("AzureEventHub: Endpoint host missing in ConnectionString.");
+
             if (parsed.Endpoint.Host.Contains('<') || parsed.Endpoint.Host.Contains('>'))
                 throw new ArgumentException("AzureEventHub: ConnectionString contains placeholders (<...>). Replace them.");
+
             if (string.IsNullOrWhiteSpace(parsed.EventHubName) && string.IsNullOrWhiteSpace(options.EventHubName))
                 throw new ArgumentException("AzureEventHub: specify EntityPath in ConnectionString OR set EventHubName.");
 

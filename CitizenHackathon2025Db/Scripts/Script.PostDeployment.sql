@@ -463,105 +463,6 @@ BEGIN
 END;
 GO
 
-/* ==========================================================
-   TrafficCondition : upsert
-   ========================================================== */
-IF OBJECT_ID(N'dbo.sp_TrafficCondition_Upsert', N'P') IS NULL
-    EXEC(N'CREATE PROCEDURE dbo.sp_TrafficCondition_Upsert AS BEGIN SET NOCOUNT ON; END');
-GO
-
-ALTER PROCEDURE dbo.sp_TrafficCondition_Upsert
-    @Latitude        DECIMAL(9,2),
-    @Longitude       DECIMAL(9,3),
-    @DateCondition   DATETIME2(0),
-    @CongestionLevel NVARCHAR(16),
-    @IncidentType    NVARCHAR(64)
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    UPDATE dbo.TrafficCondition
-    SET Active = 0
-    WHERE Active = 1
-      AND Latitude = @Latitude
-      AND Longitude = @Longitude;
-
-    INSERT INTO dbo.TrafficCondition
-    (
-        Latitude,
-        Longitude,
-        DateCondition,
-        CongestionLevel,
-        IncidentType,
-        Active
-    )
-    OUTPUT INSERTED.*
-    VALUES
-    (
-        @Latitude,
-        @Longitude,
-        @DateCondition,
-        @CongestionLevel,
-        @IncidentType,
-        1
-    );
-END;
-GO
-
-/* ==========================================================
-   WeatherForecast : upsert
-   ========================================================== */
-IF OBJECT_ID(N'dbo.sp_WeatherForecast_Upsert', N'P') IS NULL
-    EXEC(N'CREATE PROCEDURE dbo.sp_WeatherForecast_Upsert AS BEGIN SET NOCOUNT ON; END');
-GO
-
-ALTER PROCEDURE dbo.sp_WeatherForecast_Upsert
-    @DateWeather   DATETIME2,
-    @Latitude      DECIMAL(9,6),
-    @Longitude     DECIMAL(9,6),
-    @TemperatureC  INT,
-    @Summary       NVARCHAR(256),
-    @RainfallMm    FLOAT = NULL,
-    @Humidity      INT   = NULL,
-    @WindSpeedKmh  FLOAT = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    UPDATE dbo.WeatherForecast
-    SET Active = 0
-    WHERE Active = 1
-      AND DateWeather = @DateWeather
-      AND Latitude = @Latitude
-      AND Longitude = @Longitude;
-
-    INSERT INTO dbo.WeatherForecast
-    (
-        DateWeather,
-        Latitude,
-        Longitude,
-        TemperatureC,
-        Summary,
-        RainfallMm,
-        Humidity,
-        WindSpeedKmh,
-        Active
-    )
-    OUTPUT INSERTED.*
-    VALUES
-    (
-        @DateWeather,
-        @Latitude,
-        @Longitude,
-        @TemperatureC,
-        @Summary,
-        @RainfallMm,
-        @Humidity,
-        @WindSpeedKmh,
-        1
-    );
-END;
-GO
 
 /* ==========================================================
    Archiving procedures
@@ -576,8 +477,8 @@ BEGIN
     SET NOCOUNT ON;
 
     UPDATE dbo.CrowdInfo
-    SET Active = 0
-    WHERE Active = 1
+    SET [Active] = 0
+    WHERE [Active] = 1
       AND [Timestamp] < DATEADD(DAY, -1, SYSUTCDATETIME());
 END;
 GO
@@ -895,18 +796,18 @@ BEGIN TRY
 			
         ) AS V
         (
-            Id,
-            Name,
-            Type,
-            Indoor,
-            Latitude,
-            Longitude,
-            Capacity,
-            Tag,
-            ExternalSource,
-            ExternalId,
-            SourceUpdatedAtUtc,
-            Active
+            [Id],
+            [Name],
+            [Type],
+            [Indoor],
+            [Latitude],
+            [Longitude],
+            [Capacity],
+            [Tag],
+            [ExternalSource],
+            [ExternalId],
+            [SourceUpdatedAtUtc],
+            [Active]
         )
     )
     MERGE dbo.Place AS T 
@@ -914,47 +815,47 @@ BEGIN TRY
         ON T.Id = S.Id
     WHEN MATCHED THEN
         UPDATE SET
-            T.Name = S.Name,
-            T.Type = S.Type,
-            T.Indoor = S.Indoor,
-            T.Latitude = S.Latitude,
-            T.Longitude = S.Longitude,
-            T.Capacity = S.Capacity,
-            T.Tag = S.Tag,
-            T.ExternalSource = S.ExternalSource,
-            T.ExternalId = S.ExternalId,
-            T.SourceUpdatedAtUtc = S.SourceUpdatedAtUtc,
-            T.Active = S.Active
+            T.[Name] = S.[Name],
+            T.[Type] = S.[Type],
+            T.[Indoor] = S.[Indoor],
+            T.[Latitude] = S.[Latitude],
+            T.[Longitude] = S.[Longitude],
+            T.[Capacity] = S.[Capacity],
+            T.[Tag] = S.[Tag],
+            T.[ExternalSource] = S.[ExternalSource],
+            T.[ExternalId] = S.[ExternalId],
+            T.[SourceUpdatedAtUtc] = S.[SourceUpdatedAtUtc],
+            T.[Active] = S.[Active] 
     WHEN NOT MATCHED BY TARGET THEN
         INSERT
         (
-            Id,
-            Name,
-            Type,
-            Indoor,
-            Latitude,
-            Longitude,
-            Capacity,
-            Tag,
-            ExternalSource,
-            ExternalId,
-            SourceUpdatedAtUtc,
-            Active
+            [Id],
+            [Name],
+            [Type],
+            [Indoor],
+            [Latitude],
+            [Longitude],
+            [Capacity],
+            [Tag],
+            [ExternalSource],
+            [ExternalId],
+            [SourceUpdatedAtUtc],
+            [Active]
         )
         VALUES
         (
-            S.Id,
-            S.Name,
-            S.Type,
-            S.Indoor,
-            S.Latitude,
-            S.Longitude,
-            S.Capacity,
-            S.Tag,
-            S.ExternalSource,
-            S.ExternalId,
-            S.SourceUpdatedAtUtc,
-            S.Active
+            S.[Id],
+            S.[Name],
+            S.[Type],
+            S.[Indoor],
+            S.[Latitude],
+            S.[Longitude],
+            S.[Capacity],
+            S.[Tag],
+            S.[ExternalSource],
+            S.[ExternalId],
+            S.[SourceUpdatedAtUtc],
+            S.[Active]
         );
 
     PRINT 'POSTDEPLOY SEED: Place MERGE done';
@@ -1095,22 +996,22 @@ BEGIN TRY
 			(125, CONVERT(date, '2026-05-25', 23), N'Forchies-la-Marche', 108, N'Marche de la Vierge', 4, 100, CAST(50.433431 AS decimal(9,6)), CAST(4.278237 AS decimal(9,6)), CONVERT(time(0), '08:30:00', 108), CONVERT(time(0), '23:59:59', 108), 24, N'Evitez Forchies-la-Marche en empruntant les itinéraires de contournements prévus ou vous êtes les bienvenus pour assister aux célébrations', N'M de la Vierge', CAST(1 AS bit), CONVERT(datetime2, '2026-05-08 10:52:19.000', 121))
         ) AS V
         (
-            Id,
-            DateUtc,
-            RegionCode,
-            PlaceId,
-            EventName,
-            ExpectedLevel,
-            Confidence,
-            Latitude,
-            Longitude,
-            StartLocalTime,
-            EndLocalTime,
-            LeadHours,
-            MessageTemplate,
-            Tags,
-            Active,
-            CreatedAt
+            [Id],
+            [DateUtc],
+            [RegionCode],
+            [PlaceId],
+            [EventName],
+            [ExpectedLevel],
+            [Confidence],
+            [Latitude],
+            [Longitude],
+            [StartLocalTime],
+            [EndLocalTime],
+            [LeadHours],
+            [MessageTemplate],
+            [Tags],
+            [Active],
+            [CreatedAt]
         )
     )
     MERGE dbo.CrowdCalendar AS T
@@ -1135,41 +1036,41 @@ BEGIN TRY
     WHEN NOT MATCHED BY TARGET THEN
         INSERT
         (
-            Id,
-            DateUtc,
-            RegionCode,
-            PlaceId,
-            EventName,
-            ExpectedLevel,
-            Confidence,
-            Latitude,
-            Longitude,
-            StartLocalTime,
-            EndLocalTime,
-            LeadHours,
-            MessageTemplate,
-            Tags,
-            Active,
-            CreatedAt
+            [Id],
+            [DateUtc],
+            [RegionCode],
+            [PlaceId],
+            [EventName],
+            [ExpectedLevel],
+            [Confidence],
+            [Latitude],
+            [Longitude],
+            [StartLocalTime],
+            [EndLocalTime],
+            [LeadHours],
+            [MessageTemplate],
+            [Tags],
+            [Active],
+            [CreatedAt]
         )
         VALUES
         (
-            S.Id,
-            S.DateUtc,
-            S.RegionCode,
-            S.PlaceId,
-            S.EventName,
-            S.ExpectedLevel,
-            S.Confidence,
-            S.Latitude,
-            S.Longitude,
-            S.StartLocalTime,
-            S.EndLocalTime,
-            S.LeadHours,
-            S.MessageTemplate,
-            S.Tags,
-            S.Active,
-            S.CreatedAt
+            S.[Id],
+            S.[DateUtc],
+            S.[RegionCode],
+            S.[PlaceId],
+            S.[EventName],
+            S.[ExpectedLevel],
+            S.[Confidence],
+            S.[Latitude],
+            S.[Longitude],
+            S.[StartLocalTime],
+            S.[EndLocalTime],
+            S.[LeadHours],
+            S.[MessageTemplate],
+            S.[Tags],
+            S.[Active],
+            S.[CreatedAt]
         );
 
     PRINT 'POSTDEPLOY SEED: CrowdCalendar MERGE done';
@@ -1224,9 +1125,9 @@ BEGIN
         @NowUtc DATETIME2(0) = SYSUTCDATETIME();
 
     SELECT
-        @PlaceName = Name,
-        @Latitude = Latitude,
-        @Longitude = Longitude
+        @PlaceName = [Name],
+        @Latitude = [Latitude],
+        @Longitude = [Longitude]
     FROM dbo.Place WITH (UPDLOCK, HOLDLOCK)
     WHERE Id = @PlaceId
       AND Active = 1;
@@ -1245,12 +1146,12 @@ BEGIN
 
     INSERT INTO dbo.CrowdInfo
     (
-        LocationName,
-        Latitude,
-        Longitude,
-        CrowdLevel,
+        [LocationName],
+        [Latitude],
+        [Longitude],
+        [CrowdLevel],
         [Timestamp],
-        Active
+        [Active]
     )
     VALUES
     (
@@ -1267,18 +1168,18 @@ BEGIN
     COMMIT TRANSACTION;
 
     SELECT
-        ci.Id,
-        ci.LocationName,
-        ci.Latitude,
-        ci.Longitude,
-        ci.CrowdLevel,
+        ci.[Id],
+        ci.[LocationName],
+        ci.[Latitude],
+        ci.[Longitude],
+        ci.[CrowdLevel],
         ci.[Timestamp],
-        ci.Active,
-        @PlaceId AS PlaceId,
-        @Reason AS Reason,
-        @Source AS Source
+        ci.[Active],
+        @PlaceId AS [PlaceId],
+        @Reason AS [Reason],
+        @Source AS [Source]
     FROM dbo.CrowdInfo ci
-    WHERE ci.Id = @NewId;
+    WHERE ci.[Id] = @NewId;
 END;
 GO
 

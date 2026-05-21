@@ -23,7 +23,7 @@ namespace CitizenHackathon2025.Infrastructure.Init
                 cmd.ExecuteNonQuery();
             }
 
-            if (!HasRun(conn, "PostDeploy_GPT"))
+            if (!HasRun(conn, "PostDeploy_WeatherProvider_20260520"))
             {
                 var fixPath = ResolveSqlPath(contentRoot, "sql/01_fix_gpt_indexes.sql");
                 var postDeployPath = ResolveSqlPath(contentRoot, "sql/99_post_deploy.sql");
@@ -34,7 +34,7 @@ namespace CitizenHackathon2025.Infrastructure.Init
                 log.LogInformation("Executing SQL init file: {File}", postDeployPath);
                 ExecuteSqlBatches(conn, await File.ReadAllTextAsync(postDeployPath));
 
-                MarkRan(conn, "PostDeploy_GPT");
+                MarkRan(conn, "PostDeploy_WeatherProvider_20260520");
                 log.LogInformation("PostDeploy_GPT executed.");
             }
             else

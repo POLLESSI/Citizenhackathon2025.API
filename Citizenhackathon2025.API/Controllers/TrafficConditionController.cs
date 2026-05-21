@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using Newtonsoft.Json.Linq;
 using System.Data;
 using HubEvents = CitizenHackathon2025.Contracts.Hubs.TrafficConditionHubMethods;
 
@@ -161,6 +162,23 @@ namespace CitizenHackathon2025.API.Controllers
                 DataSource = cn.ConnectionString
             });
         }
+        [HttpGet("debug-odwb-raw")]
+        public async Task<IActionResult> DebugOdwRaw([FromServices] IHttpClientFactory factory, [FromServices] IConfiguration config, [FromQuery] int limit = 5, CancellationToken ct = default)
+        {
+            var baseUrl = config["ExternalProviders:ODWB:BaseUrl"];
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                return Problem("ExternalProviders:ODWB:BaseUrl is missing.");
+
+            var url = $"{baseUrl.TrimEnd('/')}?limit={limit}";
+
+            var http = factory.CreateClient();
+
+            using var response = await http.GetAsync(url, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+
+            return Content(body, "application/json");
+        }
         [HttpPost]
         public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficConditionDTO dto, CancellationToken ct)
         {
@@ -212,14 +230,22 @@ namespace CitizenHackathon2025.API.Controllers
             if (saved is null) return Problem("UPSERT failed");
 
             var savedDto = saved.MapToTrafficConditionDTO();
+
             await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.TrafficUpdated, savedDto, ct);
+
             return Ok(savedDto);
         }
         [HttpPost("sync-odwb")]
-        public async Task<IActionResult> SyncOdwb([FromServices] ITrafficOdwbIngestionService svc, int? limit, CancellationToken ct)
+        public async Task<IActionResult> SyncOdwb([FromServices] ITrafficOdwbIngestionService svc, [FromQuery] int? limit, CancellationToken ct)
         {
-            var n = await svc.SyncAsync(limit, ct);
-            return Ok(new { Upserted = n });
+            var upserted = await svc.SyncAsync(limit, ct);
+
+            return Ok(new
+            {
+                ServiceType = svc.GetType().FullName,
+                Limit = limit,
+                Upserted = upserted
+            });
         }
 
         [HttpPost("archive-expired")]

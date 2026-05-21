@@ -59,6 +59,7 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
                     ? $"https://openweathermap.org/img/wn/{weather.Icon}@2x.png"
                     : "",
                 WeatherType = MapWeatherType(weather?.Main, weather?.Description),
+                Provider = WeatherProvider.OpenWeather,
                 IsSevere = GuessWeatherSeverity(weather?.Main, weather?.Description)
             };
         }
@@ -93,6 +94,7 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Mappers
                     ? $"https://openweathermap.org/img/wn/{icon}@2x.png"
                     : "",
                 WeatherType = MapWeatherType(main, desc),
+                Provider = WeatherProvider.OpenWeather,
                 IsSevere = GuessWeatherSeverity(main, desc)
             };
         }

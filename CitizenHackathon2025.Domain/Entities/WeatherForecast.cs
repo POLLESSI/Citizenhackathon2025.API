@@ -1,6 +1,5 @@
 ﻿using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.ValueObjects;
-using System;
 
 namespace CitizenHackathon2025.Domain.Entities
 {
@@ -21,6 +20,7 @@ namespace CitizenHackathon2025.Domain.Entities
         public SeverityLevel Severity { get; set; }
         public string? Icon { get; set; } = string.Empty; // ex: 10d
         public string? IconUrl { get; set; } = string.Empty; // ex: https://openweathermap.org/img/wn/{icon}.png
+        public WeatherProvider Provider { get; set; } = WeatherProvider.Unknown;
         public bool IsSevere { get; set; } = false;
         public WeatherType WeatherType { get; set; }
         public bool Active { get; private set; } = true;

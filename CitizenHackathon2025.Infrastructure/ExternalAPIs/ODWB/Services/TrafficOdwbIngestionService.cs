@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.ExternalProviders;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Models;
 using CitizenHackathon2025.Infrastructure.Helpers;
@@ -28,11 +29,16 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services
             var q = new OdwbQuery(
                 Select: null,
                 Where: null,
-                OrderBy: "periode desc",
+                OrderBy: null,
                 Limit: limit ?? _opt.DefaultLimit
             );
 
             var resp = await _odwb.QueryAsync(q, ct);
+            _log.LogInformation(
+                "ODWB sync fetched TotalCount={TotalCount}, Results={ResultsCount}, Limit={Limit}",
+                resp.TotalCount,
+                resp.Results.Count,
+                q.Limit);
             if (resp.Results.Count == 0)
             {
                 _log.LogWarning("ODWB sync: no results");
@@ -44,54 +50,81 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services
 
             foreach (var r in resp.Results)
             {
-                // Dataset 217400: typical fields
+                ct.ThrowIfCancellationRequested();
+
                 var entite = TryString(r, "entite") ?? "ODWB";
                 var periode = TryString(r, "periode") ?? "";
+                var ins = TryString(r, "ins") ?? entite;
+
                 var total = TryInt(r, "nombre_d_accidents_de_la_circulation_total");
 
-                // We create a proxy "TrafficCondition" (not a live incident).
-                var dtoLat = TryGeoLat(r) ?? 50.0m;
-                var dtoLon = TryGeoLon(r) ?? 4.0m;
+                var lat = TryGeoLat(r) ?? 50.0m;
+                var lon = TryGeoLon(r) ?? 4.0m;
 
-                var dateCondition = now; // annual dataset => no live timestamp
+                var severity = total switch
+                {
+                    >= 50 => (byte)4,
+                    >= 25 => (byte)3,
+                    >= 10 => (byte)2,
+                    _ => (byte)1
+                };
 
-                var provider = "odwb";
-                var incidentType = total is null
-                    ? $"ODWB accidents {entite} {periode}"
-                    : $"ODWB accidents {entite} {periode} total={total}";
+                var congestion = severity switch
+                {
+                    4 => "4",
+                    3 => "3",
+                    2 => "2",
+                    _ => "1"
+                };
 
-                var congestion = total is null ? "N/A" : (total.Value >= 20 ? "4" : total.Value >= 10 ? "3" : "2");
+                var provider = "odwb-walstat";
+                var incidentType = "AccidentRiskStatistics";
+                var title = $"Risque accidentologie {entite}";
+                var road = entite;
+
+                var dateCondition = now;
+
+                var externalIdRaw = $"odwb-walstat-217400-{TryString(r, "ins")}-{periode}";
 
                 var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
                     provider: provider,
-                    lat: dtoLat,
-                    lon: dtoLon,
+                    lat: lat,
+                    lon: lon,
                     dateUtc: dateCondition,
                     incidentType: incidentType,
                     location: entite,
                     congestionLevel: congestion,
-                    timeBucket: TimeSpan.FromHours(24) // annual dataset => bucket large
+                    timeBucket: TimeSpan.FromHours(24)
                 );
 
                 var tc = new TrafficCondition
                 {
-                    Latitude = dtoLat,
-                    Longitude = dtoLon,
+                    Latitude = lat,
+                    Longitude = lon,
                     DateCondition = dateCondition,
-                    CongestionLevel = congestion,
-                    IncidentType = incidentType,
 
-                    Provider = provider,
+                    CongestionLevel = congestion,
+                    IncidentType = "AccidentRiskStatistics",
+
+                    Provider = "odwb-walstat",
                     ExternalId = externalId,
                     Fingerprint = fingerprint,
                     LastSeenAt = now,
 
-                    Title = incidentType,
-                    Road = entite
+                    Title = $"Risque accidentologie {entite}",
+                    Road = entite,
+                    Severity = severity,
+                    Active = true
+
+                    //Provider = "perex";
+                    //IncidentType = "LiveTrafficIncident";
+                    //Title = perexEvent.Title;
+                    //Road = perexEvent.RoadName;
                 };
 
                 var saved = await _repo.UpsertTrafficConditionAsync(tc);
-                if (saved is not null) upserted++;
+                if (saved is not null)
+                    upserted++;
             }
 
             _log.LogInformation("ODWB sync done: {Count} upserted", upserted);

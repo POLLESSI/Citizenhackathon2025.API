@@ -212,70 +212,117 @@ BEGIN
 END
 GO
 
---------------------------------------------------------------
--- dbo.sp_TrafficCondition_Upsert
---------------------------------------------------------------
-IF OBJECT_ID(N'dbo.sp_TrafficCondition_Upsert', N'P') IS NULL
-    EXEC(N'CREATE PROCEDURE dbo.sp_TrafficCondition_Upsert AS SELECT 1');
+/* ==========================================================
+   WeatherForecast : Provider column
+   ========================================================== */
+IF OBJECT_ID(N'dbo.WeatherForecast', N'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH('dbo.WeatherForecast', 'Provider') IS NULL
+    BEGIN
+        ALTER TABLE dbo.WeatherForecast
+        ADD Provider INT NOT NULL
+            CONSTRAINT DF_WeatherForecast_Provider DEFAULT(0);
+    END
+END;
 GO
-ALTER PROCEDURE dbo.sp_TrafficCondition_Upsert
-    @Latitude        DECIMAL(9, 2),
-    @Longitude       DECIMAL(9, 3),
-    @DateCondition   DATETIME2(0),
-    @CongestionLevel NVARCHAR(16),
-    @IncidentType    NVARCHAR(64)
+
+/* ==========================================================
+   WeatherForecast : upsert
+   ========================================================== */
+CREATE OR ALTER PROCEDURE dbo.sp_WeatherForecast_Upsert
+    @DateWeather     DATETIME2,
+    @Latitude        DECIMAL(9,6) = NULL,
+    @Longitude       DECIMAL(9,6) = NULL,
+    @TemperatureC    INT,
+    @Summary         NVARCHAR(256),
+    @RainfallMm      FLOAT = NULL,
+    @Humidity        INT = NULL,
+    @WindSpeedKmh    FLOAT = NULL,
+    @WeatherMain     NVARCHAR(64) = NULL,
+    @Description     NVARCHAR(256) = NULL,
+    @Icon            NVARCHAR(16) = NULL,
+    @IconUrl         NVARCHAR(256) = NULL,
+    @WeatherType     INT = 0,
+    @Provider        INT = 0,
+    @IsSevere        BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.TrafficCondition
-       SET Active = 0
-     WHERE Active = 1
-       AND Latitude  = @Latitude
-       AND Longitude = @Longitude;
+    DECLARE @ExistingId INT;
 
-    INSERT INTO dbo.TrafficCondition
-        (Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active)
-    OUTPUT INSERTED.* 
-    VALUES
-        (@Latitude, @Longitude, @DateCondition, @CongestionLevel, @IncidentType, 1);
-END
+    SELECT TOP (1) @ExistingId = Id
+    FROM dbo.WeatherForecast
+    WHERE Active = 1
+      AND DateWeather = @DateWeather
+      AND ISNULL(Latitude, 0) = ISNULL(@Latitude, 0)
+      AND ISNULL(Longitude, 0) = ISNULL(@Longitude, 0)
+    ORDER BY Id DESC;
+
+    IF @ExistingId IS NOT NULL
+    BEGIN
+        UPDATE WF
+        SET [TemperatureC] = @TemperatureC,
+            [Summary] = @Summary,
+            [RainfallMm] = @RainfallMm,
+            [Humidity] = @Humidity,
+            [WindSpeedKmh] = @WindSpeedKmh,
+            [WeatherMain] = @WeatherMain,
+            [Description] = @Description,
+            [Icon] = @Icon,
+            [IconUrl] = @IconUrl,
+            [WeatherType] = @WeatherType,
+            [Provider] = @Provider,
+            [IsSevere] = @IsSevere,
+            [Active] = 1
+        OUTPUT INSERTED.*
+        FROM dbo.WeatherForecast WF
+        WHERE WF.Id = @ExistingId;
+    END
+    ELSE
+    BEGIN
+        INSERT INTO dbo.WeatherForecast
+        (
+            [DateWeather],
+            [Latitude],
+            [Longitude],
+            [TemperatureC],
+            [Summary],
+            [RainfallMm],
+            [Humidity],
+            [WindSpeedKmh],
+            [WeatherMain],
+            [Description],
+            [Icon],
+            [IconUrl],
+            [WeatherType],
+            [Provider],
+            [IsSevere],
+            [Active]
+        )
+        OUTPUT INSERTED.*
+        VALUES
+        (
+            @DateWeather,
+            @Latitude,
+            @Longitude,
+            @TemperatureC,
+            @Summary,
+            @RainfallMm,
+            @Humidity,
+            @WindSpeedKmh,
+            @WeatherMain,
+            @Description,
+            @Icon,
+            @IconUrl,
+            @WeatherType,
+            @Provider,
+            @IsSevere,
+            1
+        );
+    END
+END;
 GO
-
---------------------------------------------------------------
--- dbo.sp_WeatherForecast_Upsert
---------------------------------------------------------------
-IF OBJECT_ID(N'dbo.sp_WeatherForecast_Upsert', N'P') IS NULL
-    EXEC(N'CREATE PROCEDURE dbo.sp_WeatherForecast_Upsert AS SELECT 1');
-GO
-ALTER PROCEDURE dbo.sp_WeatherForecast_Upsert
-    @DateWeather    DATETIME2,
-    @Latitude       DECIMAL(9,6),
-    @Longitude      DECIMAL(9,6),
-    @TemperatureC   INT,
-    @Summary        NVARCHAR(256),
-    @RainfallMm     FLOAT          = NULL,
-    @Humidity       INT            = NULL,
-    @WindSpeedKmh   FLOAT          = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    UPDATE dbo.WeatherForecast
-       SET Active = 0
-     WHERE Active = 1
-       AND DateWeather = @DateWeather
-       AND Latitude    = @Latitude
-       AND Longitude   = @Longitude;
-
-    INSERT INTO dbo.WeatherForecast
-        (DateWeather, Latitude, Longitude, TemperatureC, Summary, RainfallMm, Humidity, WindSpeedKmh, Active)
-    OUTPUT INSERTED.* 
-    VALUES
-        (@DateWeather, @Latitude, @Longitude, @TemperatureC, @Summary, @RainfallMm, @Humidity, @WindSpeedKmh, 1);
-END
-GO
-
 /* ========================
    Procedures: Archiving
    ======================== */

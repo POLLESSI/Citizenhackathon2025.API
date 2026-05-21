@@ -38,11 +38,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Icon,
                                 IconUrl,
                                 WeatherType,
+                                Provider,
                                 IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
-                              AND DateWeather >= SYSUTCDATETIME()
+                              AND DateWeather >= DATEADD(HOUR, -6, SYSUTCDATETIME())
                             ORDER BY DateWeather DESC;";
 
             return await _connection.QueryFirstOrDefaultAsync<WeatherForecast>(
@@ -68,12 +69,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Icon,
                                 IconUrl,
                                 WeatherType,
+                                Provider,
                                 IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
-                              AND DateWeather >= SYSUTCDATETIME()
-                            ORDER BY DateWeather ASC;";
+                              AND DateWeather >= DATEADD(HOUR, -6, SYSUTCDATETIME())
+                            ORDER BY DateWeather DESC;";
 
             var rows = await _connection.QueryAsync<WeatherForecast>(
                 new CommandDefinition(sql, cancellationToken: ct));
@@ -99,6 +101,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Icon,
                                 IconUrl,
                                 WeatherType,
+                                Provider,
                                 IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
@@ -128,6 +131,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Icon,
                                 IconUrl,
                                 WeatherType,
+                                Provider,
                                 IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
@@ -167,6 +171,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@Icon", entity.Icon);
             parameters.Add("@IconUrl", entity.IconUrl);
             parameters.Add("@WeatherType", (int)entity.WeatherType);
+            parameters.Add("@Provider", (int)entity.Provider);
             parameters.Add("@IsSevere", entity.IsSevere);
 
             var row = await _connection.QuerySingleAsync<WeatherForecastReadRow>(
@@ -192,6 +197,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 Icon = row.Icon,
                 IconUrl = row.IconUrl,
                 WeatherType = (Contracts.Enums.WeatherType)row.WeatherType,
+                // Provider is returned by the upsert stored procedure.
+                Provider = (Contracts.Enums.WeatherProvider)row.Provider,
                 IsSevere = row.IsSevere
             };
         }
@@ -212,6 +219,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 Icon = "04d",
                 IconUrl = "https://openweathermap.org/img/wn/04d@2x.png",
                 WeatherType = Contracts.Enums.WeatherType.Cloudy,
+                Provider = Contracts.Enums.WeatherProvider.Generated,
                 IsSevere = false,
                 RainfallMm = Math.Round(_rng.NextDouble() * 20, 1),
                 Humidity = _rng.Next(30, 100),

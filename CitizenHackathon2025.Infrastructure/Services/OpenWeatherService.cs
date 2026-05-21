@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Interfaces.OpenWeather;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenWeather;
 using CitizenHackathon2025.Shared.Json;
@@ -290,14 +291,29 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var ow = await _http.GetFromJsonAsync<OpenWeatherResponse>(url, JsonDefaults.Options, ct)
                      ?? throw new InvalidOperationException("Empty OpenWeather response");
 
+            var weather = ow.weather.FirstOrDefault();
+
             return new WeatherForecastDTO
             {
                 DateWeather = DateTimeOffset.FromUnixTimeSeconds(ow.dt).UtcDateTime,
+
+                Latitude = latitude,
+                Longitude = longitude,
+
                 TemperatureC = (int)Math.Round(ow.main.temp),
-                Summary = ow.weather.FirstOrDefault()?.description,
                 Humidity = ow.main.humidity,
                 WindSpeedKmh = ow.wind.speed * 3.6,
-                RainfallMm = 0d
+                RainfallMm = 0d,
+
+                Summary = weather?.description ?? "N/A",
+                WeatherMain = weather?.main ?? string.Empty,
+                Description = weather?.description,
+                Icon = weather?.icon,
+                IconUrl = string.IsNullOrWhiteSpace(weather?.icon)
+                    ? string.Empty
+                    : $"https://openweathermap.org/img/wn/{weather.icon}@2x.png",
+
+                Provider = WeatherProvider.OpenWeather
             };
         }
 
@@ -433,7 +449,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Icon = icon,
                 IconUrl = string.IsNullOrWhiteSpace(icon)
                     ? string.Empty
-                    : $"https://openweathermap.org/img/wn/{icon}@2x.png"
+                    : $"https://openweathermap.org/img/wn/{icon}@2x.png",
+                Provider = WeatherProvider.OpenWeather
             };
         }
 

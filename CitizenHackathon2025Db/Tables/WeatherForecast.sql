@@ -15,6 +15,7 @@
     [Icon] NVARCHAR(16) NULL,
     [IconUrl] NVARCHAR(256) NULL,
     [WeatherType] INT NOT NULL DEFAULT(0),
+    [Provider] INT NOT NULL DEFAULT(0),
     [IsSevere] BIT NOT NULL DEFAULT(0),
     [Active] BIT NOT NULL CONSTRAINT DF_WeatherForecast_Active DEFAULT(1),
 
@@ -50,19 +51,20 @@ GO
 CREATE INDEX IX_WeatherForecast_Active_Future_DateWeather
 ON dbo.WeatherForecast(DateWeather)
 INCLUDE (
-    Latitude,
-    Longitude,
-    TemperatureC,
-    Summary,
-    RainfallMm,
-    Humidity,
-    WindSpeedKmh,
-    WeatherMain,
-    Description,
-    Icon,
-    IconUrl,
-    WeatherType,
-    IsSevere
+    [Latitude],
+    [Longitude],
+    [TemperatureC],
+    [Summary],
+    [RainfallMm],
+    [Humidity],
+    [WindSpeedKmh],
+    [WeatherMain],
+    [Description],
+    [Icon],
+    [IconUrl],
+    [WeatherType],
+    [Provider],
+    [IsSevere]
 )
 WHERE Active = 1;
 
