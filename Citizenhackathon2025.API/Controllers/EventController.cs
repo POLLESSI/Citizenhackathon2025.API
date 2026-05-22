@@ -55,8 +55,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(entity.MapToEventDTO());
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost("save")]
         public async Task<IActionResult> SaveEvent([FromBody] EventDTO eventDto)
         {
@@ -85,8 +84,7 @@ namespace CitizenHackathon2025.API.Controllers
             }
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost]
         [Consumes("application/json")]
         public async Task<IActionResult> CreateEvent([FromBody] EventDTO dto)
@@ -110,16 +108,14 @@ namespace CitizenHackathon2025.API.Controllers
             return CreatedAtAction(nameof(GetEventById), new { id = created.Id }, createdDto);
         }
         [HttpPost("archive-expired")]
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         public async Task<IActionResult> ArchiveExpiredEvents()
         {
             var archived = await _eventRepository.ArchivePastEventsAsync();
             return Ok(new { ArchivedCount = archived });
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPut("update")]
         public IActionResult UpdateEvent([FromBody] Event @event)
         {

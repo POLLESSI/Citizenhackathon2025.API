@@ -18,8 +18,7 @@ namespace CitizenHackathon2025.API.Controllers
         public CrowdInfoAntennaConnectionController(ICrowdInfoAntennaConnectionService svc) => _svc = svc;
 
         // POST api/crowdinfoantennaconnection/ping
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost("ping")]
         public async Task<IActionResult> Ping([FromBody] PingAntennaRequest req, CancellationToken ct)
         {
@@ -96,8 +95,7 @@ namespace CitizenHackathon2025.API.Controllers
             return true;
         }
         // GET api/crowdinfoantennaconnection/deleted?antennaId=1&since=2026-02-01T00:00:00Z&take=100&cursorDeletedId=12345
-        //[Authorize(Policy = Policies.AdminPolicy)]
-        //[Authorize(Policy = Policies.ModoPolicy)]
+        //[Authorize(Policy = "AdminOrModo")]
         //[HttpGet("deleted")]
         //public async Task<IActionResult> GetDeleted(
         //    [FromQuery] int antennaId,

@@ -21,8 +21,7 @@ namespace CitizenHackathon2025.API.Controllers
             _hasher = hasher;
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpGet("suggestion")]
         public async Task<IActionResult> GetSuggestion()
         {

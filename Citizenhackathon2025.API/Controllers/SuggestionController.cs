@@ -93,8 +93,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(result);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost]
         [AllowAnonymous] 
         [ProducesResponseType(typeof(SuggestionDTO), StatusCodes.Status201Created)]
@@ -139,8 +138,7 @@ namespace CitizenHackathon2025.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = saved.Id }, resultDto);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPut("{id:int}")]
         public IActionResult Update(int id, [FromBody] SuggestionDTO dto)
         {
@@ -161,8 +159,7 @@ namespace CitizenHackathon2025.API.Controllers
             return updated is null ? NotFound() : Ok(updated);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {

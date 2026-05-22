@@ -466,6 +466,7 @@ internal class Program
             o.AddPolicy(Policies.ModoPolicy, p => p.RequireRole(Roles.Admin, Roles.Moderator));
             o.AddPolicy(Policies.UserPolicy, p => p.RequireRole(Roles.Admin, Roles.Moderator, Roles.User));
             o.AddPolicy(Policies.GuestPolicy, p => p.RequireRole(Roles.Guest));
+            o.AddPolicy("AdminOrModo", p => p.RequireRole(Roles.Admin, Roles.Moderator));
             o.AddPolicy("CrowdSafetyPolicy", p => p.RequireRole(Roles.Admin, Roles.LawEnforcement));
         });
     }
@@ -962,7 +963,7 @@ internal class Program
         services.AddHostedService<OdwbTrafficCollector>();
         services.AddHostedService<SessionJanitor>();
         services.AddHostedService<WallonieEnPocheSyncWorker>();
-        services.AddHostedService<WeatherService>();
+        //services.AddHostedService<WeatherService>();
         services.AddHostedService<WeatherForecastCleanupHostedService>();
         services.AddHostedService<WeatherForecastCollectorHostedService>();
         services.AddHostedService<TrafficConditionCollectorHostedService>();

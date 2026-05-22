@@ -170,8 +170,7 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> ArchiveExpired(CancellationToken ct = default)
             => Ok(new { ArchivedCount = await _app.ArchiveExpiredAsync(ct) });
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
         {

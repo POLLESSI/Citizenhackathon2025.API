@@ -138,8 +138,7 @@ namespace CitizenHackathon2025.API.Controllers
             }
         }
 
-        [Authorize(Policy = Policies.UserPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {

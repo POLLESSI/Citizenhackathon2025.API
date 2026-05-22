@@ -19,7 +19,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             => _app.CreateAsync(dto, ct);
 
         public Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default)
-            => _app.GenerateAsync(ct);
+            => throw new NotSupportedException("Generated weather forecasts are disabled. Use OpenWeather pull instead.");
 
         public async Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default)
         {
@@ -41,7 +41,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         // If you keep these legacy signatures :
         public Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default)
-            => _app.GenerateAsync(ct); // or something else, depending on your needs
+            => throw new NotSupportedException("Generated weather forecasts are disabled. Use PullAsync instead.");
         public Task<List<WeatherForecastDTO>> GetAllAsync(WeatherForecast forecast, CancellationToken ct = default)
         {
             throw new NotImplementedException();

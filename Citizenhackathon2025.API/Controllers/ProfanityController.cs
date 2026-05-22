@@ -37,8 +37,7 @@ namespace CitizenHackathon2025.API.Controllers
             return item is null ? NotFound() : Ok(item);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] ProfanityWord entity, CancellationToken ct = default)
         {
@@ -46,8 +45,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(created);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update(int id, [FromBody] ProfanityWord entity, CancellationToken ct = default)
         {
@@ -56,8 +54,7 @@ namespace CitizenHackathon2025.API.Controllers
             return ok ? NoContent() : NotFound();
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id, CancellationToken ct = default)
         {
@@ -65,8 +62,7 @@ namespace CitizenHackathon2025.API.Controllers
             return ok ? NoContent() : NotFound();
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPatch("{id:int}/active")]
         public async Task<IActionResult> SetActive(int id, [FromQuery] bool active, CancellationToken ct = default)
         {

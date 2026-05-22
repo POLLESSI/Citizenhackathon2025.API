@@ -122,8 +122,7 @@ namespace CitizenHackathon2025.API.Controllers
         // -----------------------------
         // REFRESH
         // -----------------------------
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshDTO request)
         {

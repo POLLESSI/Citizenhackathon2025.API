@@ -21,13 +21,11 @@ namespace CitizenHackathon2025.API.Controllers
             _store = store;
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpGet("health")]
         public IActionResult Health() => Ok(new { status = "ok" });
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost]
         public IActionResult ReceiveCspViolation([FromBody] CspReportModel model)
         {
@@ -43,13 +41,11 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok();
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpGet("all")]
         public IActionResult GetAllReports() => Ok(_store.GetAll());
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpDelete("clear")]
         public IActionResult ClearAll()
         {

@@ -51,8 +51,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(dtos);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPost("{id:long}/validate")]
         public async Task<IActionResult> Validate(long id, CancellationToken ct = default)
         {

@@ -74,6 +74,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM dbo.WeatherForecast
                             WHERE Active = 1
+                              AND Provider <> 2
                               AND DateWeather >= DATEADD(HOUR, -6, SYSUTCDATETIME())
                             ORDER BY DateWeather DESC;";
 
@@ -105,6 +106,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 IsSevere,
                                 Active
                             FROM dbo.WeatherForecast
+                            WHERE Provider <> 2
                             ORDER BY DateWeather DESC;";
 
             var rows = await _connection.QueryAsync<WeatherForecast>(

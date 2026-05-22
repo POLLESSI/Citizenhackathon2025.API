@@ -53,8 +53,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(new { token });
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpGet("active")]
         public async Task<IActionResult> GetAllActive()
         {
@@ -62,8 +61,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(users);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpGet("getbyemail/{email}")]
         public async Task<IActionResult> GetByEmail(string email)
         {
@@ -71,8 +69,7 @@ namespace CitizenHackathon2025.API.Controllers
             return user == null ? NotFound() : Ok(user);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
@@ -80,8 +77,7 @@ namespace CitizenHackathon2025.API.Controllers
             return user == null ? NotFound() : Ok(user);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -89,8 +85,7 @@ namespace CitizenHackathon2025.API.Controllers
             return NoContent();
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [Authorize(Policy = Policies.ModoPolicy)]
+        [Authorize(Policy = "AdminOrModo")]
         [HttpPut("update")]
         public IActionResult Update([FromBody] UpdateUserDTO dto)
         {

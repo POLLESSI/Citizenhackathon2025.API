@@ -66,18 +66,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Active
                             FROM dbo.CrowdInfo
                             WHERE Active = 1
-                              AND [Timestamp] >= DATEADD(MINUTE, -@MaxAgeMinutes, SYSUTCDATETIME())
                             ORDER BY [Timestamp] DESC;";
 
             return _connection.QueryAsync<CrowdInfo>(
-                new CommandDefinition(
-                    sql,
-                    new
-                    {
-                        Limit = limit,
-                        MaxAgeMinutes = 30
-                    },
-                    cancellationToken: ct));
+                new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id)
