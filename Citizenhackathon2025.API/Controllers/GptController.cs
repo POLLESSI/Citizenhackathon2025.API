@@ -72,6 +72,7 @@ namespace CitizenHackathon2025.API.Controllers
         /// Asynchronous mode production/real customer.
         /// Returns 202 immediately, then the pipeline continues in the background.
         /// </summary>
+        [Authorize(Policy = Policies.UserPolicy)]
         [HttpPost("ask-mistral")]
         public async Task<IActionResult> AskMistral([FromBody] GptPromptRequest request, CancellationToken ct)
         {
@@ -89,6 +90,7 @@ namespace CitizenHackathon2025.API.Controllers
         /// Special synchronous Swagger/debug mode.
         /// Wait for Ollama and return the final answer directly.
         /// </summary>
+        [Authorize(Policy = Policies.UserPolicy)]
         [HttpPost("ask-mistral-sync")]
         public async Task<IActionResult> AskMistralSync( [FromBody] GptPromptRequest request, CancellationToken ct)
         {
@@ -136,6 +138,8 @@ namespace CitizenHackathon2025.API.Controllers
             }
         }
 
+        [Authorize(Policy = Policies.UserPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {

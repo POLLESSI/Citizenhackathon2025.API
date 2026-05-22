@@ -125,17 +125,23 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(trafficCondition.MapToTrafficConditionDTO());
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("test-di")]
         public IActionResult TestDi()
         {
             return Ok(_trafficApiService.GetType().Name); // Must display "TrafficApiService"
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("test-getbyid/{id}")]
         public async Task<IActionResult> TestGetById([FromServices] ITrafficConditionService service, int id)
         {
             var tc = await service.GetByIdAsync(id);
             return tc == null ? NotFound() : Ok(tc);
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("debug-proc-traffic")]
         public async Task<IActionResult> DebugProcTraffic([FromServices] IDbConnection cn)
         {
@@ -152,6 +158,8 @@ namespace CitizenHackathon2025.API.Controllers
             var rows = await cn.QueryAsync(sql);
             return Ok(rows);
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("db-info")]
         public async Task<IActionResult> DbInfo([FromServices] IDbConnection cn)
         {
@@ -162,6 +170,8 @@ namespace CitizenHackathon2025.API.Controllers
                 DataSource = cn.ConnectionString
             });
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("debug-odwb-raw")]
         public async Task<IActionResult> DebugOdwRaw([FromServices] IHttpClientFactory factory, [FromServices] IConfiguration config, [FromQuery] int limit = 5, CancellationToken ct = default)
         {
@@ -179,6 +189,9 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Content(body, "application/json");
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost]
         public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficConditionDTO dto, CancellationToken ct)
         {
@@ -235,6 +248,9 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(savedDto);
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("sync-odwb")]
         public async Task<IActionResult> SyncOdwb([FromServices] ITrafficOdwbIngestionService svc, [FromQuery] int? limit, CancellationToken ct)
         {
@@ -255,6 +271,9 @@ namespace CitizenHackathon2025.API.Controllers
             var archived = await _trafficConditionRepository.ArchivePastTrafficConditionsAsync(ct);
             return Ok(new { ArchivedCount = archived });
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("{id:int}")]
         public IActionResult UpdateTrafficCondition(int id, [FromBody] TrafficConditionUpdateDTO dto)
         {

@@ -1,5 +1,7 @@
-﻿using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Contracts.DTOs;
+﻿using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CitizenHackathon2025.API.Controllers
@@ -49,6 +51,8 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(dtos);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("{id:long}/validate")]
         public async Task<IActionResult> Validate(long id, CancellationToken ct = default)
         {

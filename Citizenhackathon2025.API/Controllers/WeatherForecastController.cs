@@ -20,6 +20,8 @@ namespace CitizenHackathon2025.API.Controllers
         public WeatherForecastController(IWeatherForecastAppService app)
             => _app = app;
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost]
         public async Task<ActionResult<WeatherForecastDTO>> Create([FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
         {
@@ -28,6 +30,8 @@ namespace CitizenHackathon2025.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("manual")]
         public async Task<ActionResult<WeatherForecastDTO>> Manual([FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
         {
@@ -36,6 +40,7 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("pull")]
         public async Task<IActionResult> Pull([FromQuery] decimal lat, [FromQuery] decimal lon, CancellationToken ct)
         {
@@ -70,9 +75,9 @@ namespace CitizenHackathon2025.API.Controllers
             });
         }
 
-        [HttpPost("generate")]
-        public async Task<ActionResult<WeatherForecastDTO>> Generate(CancellationToken ct = default)
-            => Ok(await _app.GenerateAsync(ct));
+        //[HttpPost("generate")]
+        //public async Task<ActionResult<WeatherForecastDTO>> Generate(CancellationToken ct = default)
+        //    => Ok(await _app.GenerateAsync(ct));
 
         [HttpGet("all")]
         public async Task<ActionResult<List<WeatherForecastDTO>>> GetAll(CancellationToken ct = default)
@@ -105,6 +110,7 @@ namespace CitizenHackathon2025.API.Controllers
             return dto is null ? NotFound() : Ok(dto);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("debug-db-weather")]
         public async Task<IActionResult> DebugDbWeather([FromServices] IDbConnection cn)
         {
@@ -164,6 +170,8 @@ namespace CitizenHackathon2025.API.Controllers
         public async Task<IActionResult> ArchiveExpired(CancellationToken ct = default)
             => Ok(new { ArchivedCount = await _app.ArchiveExpiredAsync(ct) });
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] WeatherForecastDTO dto, CancellationToken ct = default)
         {

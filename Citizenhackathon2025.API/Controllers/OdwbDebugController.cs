@@ -3,6 +3,8 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Models;
 using CitizenHackathon2025.Infrastructure.Helpers;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
@@ -22,6 +24,8 @@ namespace CitizenHackathon2025.API.Controllers
             ILogger<OdwbDebugController> log)
             => (_odwb, _repo, _log) = (odwb, repo, log);
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("ping")]
         public async Task<IActionResult> Ping(CancellationToken ct)
         {
@@ -29,6 +33,8 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(new { Count = res?.Results?.Count ?? 0 });
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("odwb/test")]
         public async Task<IActionResult> TestOdwb(CancellationToken ct)
         {
@@ -37,6 +43,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // ✅ NEW: ODWB -> DB (UPSERT)
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("sync")]
         public async Task<IActionResult> Sync([FromQuery] int limit = 10, CancellationToken ct = default)
         {

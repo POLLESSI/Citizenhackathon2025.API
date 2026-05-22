@@ -4,6 +4,7 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -54,6 +55,8 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(place.MapToPlaceDTO());
         }
         // C. POST /api/Place  (create)
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("save")]
         public async Task<IActionResult> SavePlace([FromBody] PlaceDTO dto)
         {
@@ -84,6 +87,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // E. PUT /api/Place/update
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("update")]
         [Consumes("application/json")]
         public async Task<IActionResult> Update([FromBody] Place dto)
@@ -98,6 +103,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // Variante REST: PUT /api/Place/{id}
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateById(int id, [FromBody] Place dto)
         {

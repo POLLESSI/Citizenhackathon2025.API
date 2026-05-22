@@ -2,7 +2,9 @@
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.DTOs.DTOs.Antennas;
 using CitizenHackathon2025.Hubs.Services;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Dapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Data;
 
@@ -55,6 +57,8 @@ namespace CitizenHackathon2025.API.Controllers
             return dto is null ? NotFound() : Ok(dto);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("bounds")]
         public async Task<IActionResult> GetByBounds([FromQuery] double minLat, [FromQuery] double maxLat, [FromQuery] double minLng, [FromQuery] double maxLng, CancellationToken ct = default)
         {
@@ -68,6 +72,8 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(result);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("debug-sql")]
         public async Task<IActionResult> DebugSql([FromServices] IDbConnection db, CancellationToken ct)
         {
@@ -89,6 +95,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // POST api/crowdinfoantenna
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateCrowdInfoAntennaDTO dto, CancellationToken ct)
         {
@@ -98,6 +106,8 @@ namespace CitizenHackathon2025.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("import-cadastre")]
         public async Task<IActionResult> ImportCadastre(CancellationToken ct)
         {
@@ -110,6 +120,8 @@ namespace CitizenHackathon2025.API.Controllers
             });
         }
         // DELETE api/crowdinfoantenna/5
+        //[Authorize(Policy = Policies.AdminPolicy)]
+        //[Authorize(Policy = Policies.ModoPolicy)]
         //[HttpDelete("{id:int}")]
         //public async Task<IActionResult> Delete(int id, CancellationToken ct)
         //{

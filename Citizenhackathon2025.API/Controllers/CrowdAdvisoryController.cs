@@ -73,6 +73,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // ---- CREATE ----
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("calendar")]
         public async Task<IActionResult> Create([FromBody] CrowdCalendarEntry e)
         {
@@ -84,6 +86,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // ---- UPDATE ----
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("calendar/{id:int}")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] CrowdCalendarEntry e)
         {
@@ -107,6 +111,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // ---- UPSERT ----
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("calendar/upsert")]
         public async Task<IActionResult> Upsert([FromBody] CrowdCalendarEntry e)
         {
@@ -116,6 +122,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // ---- SOFT DELETE ----
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpDelete("calendar/{id:int}")]
         public async Task<IActionResult> SoftDelete([FromRoute] int id)
         {
@@ -124,6 +132,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // ---- RESTORE ----
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("calendar/{id:int}/restore")]
         public async Task<IActionResult> Restore([FromRoute] int id)
         {
@@ -132,6 +142,8 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         // ---- HARD DELETE (optional) ----
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpDelete("calendar/{id:int}/hard")]
         public async Task<IActionResult> HardDelete([FromRoute] int id)
         {

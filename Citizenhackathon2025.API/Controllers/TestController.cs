@@ -1,5 +1,7 @@
 ﻿using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -19,12 +21,16 @@ namespace CitizenHackathon2025.API.Controllers
             _hasher = hasher;
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("suggestion")]
         public async Task<IActionResult> GetSuggestion()
         {
             var result = await _service.GetPersonalizedSuggestionsAsync("Brusssels", 1);
             return Ok(result);
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("test-hash")]
         public IActionResult GetHash()
         {

@@ -3,6 +3,8 @@ using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Shared.Options;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
@@ -23,6 +25,7 @@ namespace CitizenHackathon2025.API.Controllers
             _weatherRepository = weatherRepository;
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("test-weather")]
         public async Task<IActionResult> TestWeather()
         {
@@ -34,6 +37,7 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(result);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpPost("seed")]
         public async Task<IActionResult> Seed(CancellationToken ct)
         {
@@ -56,7 +60,7 @@ namespace CitizenHackathon2025.API.Controllers
         //Debug Tools for OpenWeather integration (uncomment if needed)
         //=============================================================
 
-
+        //[Authorize(Policy = Policies.AdminPolicy)]
         //[HttpGet("test-weather-impl")]
         //public IActionResult TestWeatherImpl()
         //{

@@ -8,6 +8,7 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -83,7 +84,7 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         [HttpGet("map")]
-        [AllowAnonymous] // à ajuster selon ta politique
+        [AllowAnonymous] // to be adjusted according to your policy
         [ProducesResponseType(typeof(IEnumerable<SuggestionGroupedByPlaceDTO>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetSuggestionsMap([FromQuery] int days = 7, CancellationToken ct = default)
         {
@@ -92,6 +93,8 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(result);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost]
         [AllowAnonymous] 
         [ProducesResponseType(typeof(SuggestionDTO), StatusCodes.Status201Created)]
@@ -136,6 +139,8 @@ namespace CitizenHackathon2025.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = saved.Id }, resultDto);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("{id:int}")]
         public IActionResult Update(int id, [FromBody] SuggestionDTO dto)
         {
@@ -156,6 +161,8 @@ namespace CitizenHackathon2025.API.Controllers
             return updated is null ? NotFound() : Ok(updated);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {

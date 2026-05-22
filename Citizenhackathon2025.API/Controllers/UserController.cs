@@ -1,9 +1,11 @@
 ﻿using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
@@ -51,6 +53,8 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(new { token });
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("active")]
         public async Task<IActionResult> GetAllActive()
         {
@@ -58,6 +62,8 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(users);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("getbyemail/{email}")]
         public async Task<IActionResult> GetByEmail(string email)
         {
@@ -65,6 +71,8 @@ namespace CitizenHackathon2025.API.Controllers
             return user == null ? NotFound() : Ok(user);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
@@ -72,6 +80,8 @@ namespace CitizenHackathon2025.API.Controllers
             return user == null ? NotFound() : Ok(user);
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -79,6 +89,8 @@ namespace CitizenHackathon2025.API.Controllers
             return NoContent();
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("update")]
         public IActionResult Update([FromBody] UpdateUserDTO dto)
         {
@@ -101,6 +113,7 @@ namespace CitizenHackathon2025.API.Controllers
             return updated != null ? Ok(updated) : NotFound($"User #{dto.Id} not found.");
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpPatch("role/{id}")]
         public IActionResult SetRole(int id, [FromQuery] string newRole)
         {

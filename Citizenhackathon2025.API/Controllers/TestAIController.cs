@@ -2,6 +2,8 @@
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
@@ -30,12 +32,14 @@ namespace CitizenHackathon2025.API.Controllers
             _hubContext = hubContext;
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("ping")]
         public IActionResult Ping()
         {
             return Ok("MistralAIService + LocalAiContextService injected correctly.");
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpPost("suggest")]
         public async Task<IActionResult> SuggestAI([FromBody] SuggestAIRequest request, CancellationToken ct)
         {

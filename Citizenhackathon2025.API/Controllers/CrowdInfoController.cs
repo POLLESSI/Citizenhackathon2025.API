@@ -71,6 +71,9 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(all.Select(c => c.MapToCrowdInfoDTO()));
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost]
         public async Task<IActionResult> SaveCrowdInfo([FromBody] CrowdInfoDTO dto)
         {
@@ -109,6 +112,9 @@ namespace CitizenHackathon2025.API.Controllers
                 CrowdInfo = created
             });
         }
+
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpDelete("archive/{id:int}")]
         public async Task<IActionResult> ArchiveCrowdInfo(int id)
         {
@@ -128,12 +134,15 @@ namespace CitizenHackathon2025.API.Controllers
 
         [HttpPost("archive-expired")]
         [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         public async Task<IActionResult> ArchiveExpiredCrowdInfos(CancellationToken ct = default)
         {
             var archived = await _crowdInfoRepository.ArchivePastCrowdInfosAsync(ct);
             return Ok(new { ArchivedCount = archived });
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPut("update")]
         public async Task<IActionResult> UpdateCrowdInfo([FromBody] CrowdInfoDTO dto)
         {

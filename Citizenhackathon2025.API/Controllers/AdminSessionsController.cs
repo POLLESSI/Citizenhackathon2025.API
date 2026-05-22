@@ -10,11 +10,13 @@ namespace CitizenHackathon2025.API.Controllers
     [ApiController]
     [Route("api/admin/sessions")]
     [Authorize(Policy = Policies.AdminPolicy)]
+    [Authorize(Policy = Policies.ModoPolicy)]
     public class AdminSessionsController : ControllerBase
     {
         private readonly IUserSessionRepository _repo;
         public AdminSessionsController(IUserSessionRepository repo) => _repo = repo;
 
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet]
         public async Task<IActionResult> List([FromQuery] string? email, [FromQuery] bool onlyActive = true)
         {
@@ -32,6 +34,8 @@ namespace CitizenHackathon2025.API.Controllers
             }));
         }
 
+        [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.ModoPolicy)]
         [HttpPost("{jti}/revoke")]
         public async Task<IActionResult> Revoke(string jti)
         {
