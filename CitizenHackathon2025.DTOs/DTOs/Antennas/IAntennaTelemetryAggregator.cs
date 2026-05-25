@@ -5,7 +5,7 @@
         void RecordPing(int antennaId, DateTime utcNow);
 
         /// <summary>
-        /// Récupère et “détache” les fenêtres terminées (ex: la fenêtre précédente).
+        /// Retrieves and "detaches" completed windows (e.g., the previous window).
         /// </summary>
         IReadOnlyList<AntennaSnapshotRow> DequeueCompletedWindows(DateTime utcNow);
 

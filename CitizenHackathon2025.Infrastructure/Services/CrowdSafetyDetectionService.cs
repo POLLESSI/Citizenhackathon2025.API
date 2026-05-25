@@ -1,6 +1,7 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Shared.StaticConfig.Constants;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -17,21 +18,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _alertRepo = alertRepo;
         }
 
-        public async Task EvaluateAntennaAsync(
-            int antennaId,
-            int activeConnections,
-            int uniqueDevices,
-            CancellationToken ct = default)
+        public async Task EvaluateAntennaAsync(int antennaId, int activeConnections, int uniqueDevices, CancellationToken ct = default)
         {
             var antenna = await _antennaRepo.GetByIdAsync(antennaId, ct);
             if (antenna is null) return;
 
-            var capacity = antenna.MaxCapacity ?? 0;
-            if (capacity <= 0) return;
+            var capacity = antenna.MaxCapacity;
 
-            var ratio = (double)activeConnections / capacity;
+            var isCriticalByAbsoluteThreshold = activeConnections >= CrowdSafetyThresholds.CriticalAbsoluteConnections;
 
-            var isCritical = ratio >= 0.90;
+            var isCriticalByCapacity = capacity.HasValue && capacity.Value > 0 && ((double)activeConnections / capacity.Value) >= CrowdSafetyThresholds.CriticalCapacityRatio;
+
+            var isCritical = isCriticalByAbsoluteThreshold || isCriticalByCapacity;
+
             var isUnexpected = true; // to be replaced by EventId null / no event scheduled
             var isSensitiveZone = IsSensitiveZone(antenna.Latitude, antenna.Longitude);
 
@@ -41,7 +40,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var alreadyExists = await _alertRepo.HasRecentSimilarAlertAsync(
                 antennaId,
                 minSeverity: 4,
-                cooldown: TimeSpan.FromMinutes(30),
+                cooldown: TimeSpan.FromMinutes(CrowdSafetyThresholds.AlertCooldownMinutes),
                 ct);
 
             if (alreadyExists)
@@ -51,7 +50,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 AntennaId = antennaId,
                 EventId = null,
-                Severity = 4,
+                Severity = CrowdSafetyThresholds.CriticalSeverity,
                 Status = "PendingValidation",
                 ActiveConnections = activeConnections,
                 UniqueDevices = uniqueDevices,
@@ -59,10 +58,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Longitude = (decimal)antenna.Longitude,
                 IsKnownEvent = false,
                 IsSensitiveZone = true,
-                IsRural = false,
-                IsNight = false,
-                Title = "Concentration de foule non prévue",
-                Message = $"Forte concentration détectée autour de {antenna.Name}. Validation humaine requise.",
+                IsRural = true,
+                IsNight = DateTime.UtcNow.Hour is >= 20 or < 6,
+                Title = "Concentration critique détectée",
+                Message = $"Concentration critique détectée près de {antenna.Name}. {activeConnections} connexions actives. Validation humaine requise.",
                 DetectedAtUtc = DateTime.UtcNow,
                 Active = true
             }, ct);

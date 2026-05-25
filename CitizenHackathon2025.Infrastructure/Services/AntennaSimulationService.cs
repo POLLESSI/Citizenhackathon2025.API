@@ -16,15 +16,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly ICrowdInfoAntennaConnectionRepository _connRepo;
         private readonly ICrowdInfoAntennaService _antennaSvc;
         private readonly IHubContext<CrowdInfoAntennaConnectionHub> _hub;
+        private readonly ICrowdSafetyDetectionService _safety;
 
-        public AntennaSimulationService(
-            ICrowdInfoAntennaConnectionRepository connRepo,
-            ICrowdInfoAntennaService antennaSvc,
-            IHubContext<CrowdInfoAntennaConnectionHub> hub)
+        public AntennaSimulationService(ICrowdInfoAntennaConnectionRepository connRepo, ICrowdInfoAntennaService antennaSvc, IHubContext<CrowdInfoAntennaConnectionHub> hub, ICrowdSafetyDetectionService safety)
         {
             _connRepo = connRepo;
             _antennaSvc = antennaSvc;
             _hub = hub;
+            _safety = safety;
         }
 
         public async Task SimulateAsync(
@@ -69,10 +68,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     ct: ct);
             }
 
-            var counts = await _antennaSvc.GetCountsAsync(
-                request.AntennaId,
-                windowMinutes: Math.Max(1, durationSeconds / 60),
-                ct);
+            var counts = await _antennaSvc.GetCountsAsync(request.AntennaId, windowMinutes: Math.Max(1, durationSeconds / 60), ct);
+
+            await _safety.EvaluateAntennaAsync(request.AntennaId, counts.ActiveConnections, counts.UniqueDevices, ct);
 
             await _hub.Clients
                 .Group(CrowdInfoAntennaConnectionHubMethods.AntennaGroup(request.AntennaId))

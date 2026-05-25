@@ -707,7 +707,8 @@ internal class Program
             client.BaseAddress = new Uri(baseUrl);
 
             // Optional but recommended to avoid infinite pending requests.
-            client.Timeout = TimeSpan.FromSeconds(30);
+            var timeoutSeconds = configuration.GetValue<int?>("MistralAI:TimeoutSeconds") ?? 180;
+            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
         })
         .AddHttpMessageHandler(sp =>
         {
@@ -887,6 +888,7 @@ internal class Program
         services.AddScoped<ICrowdInfoAntennaService, CrowdInfoAntennaService>();
         services.AddScoped<ICrowdInfoAntennaConnectionService, CrowdInfoAntennaConnectionService>();
         services.AddScoped<ICrowdSafetyAnalyzer, CrowdSafetyAnalyzer>();
+        services.AddScoped<ICrowdSafetyDetectionService, CrowdSafetyDetectionService>();
         services.AddScoped<CitizenSuggestionService>();
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IEventReadService, EventReadService>();
