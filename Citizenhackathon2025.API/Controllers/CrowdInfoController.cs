@@ -88,7 +88,7 @@ namespace CitizenHackathon2025.API.Controllers
         }
 
         //[Authorize(Policy = Policies.AdminPolicy)]
-        [AllowAnonymous]
+        [Authorize(Policy = Policies.UserPolicy)]
         [HttpPost("manual-critical-alert")]
         public async Task<IActionResult> ManualCriticalAlert([FromBody] ManualCrowdCriticalAlertRequest request, CancellationToken ct)
         {

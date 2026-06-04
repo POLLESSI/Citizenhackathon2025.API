@@ -69,6 +69,11 @@ namespace CitizenHackathon2025.Domain.Interfaces
             DateTime targetDate,
             double radiusKm,
             CancellationToken ct = default);
+        Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(
+            double latitude,
+            double longitude,
+            double radiusKm,
+            CancellationToken ct = default);
     }
 }
 

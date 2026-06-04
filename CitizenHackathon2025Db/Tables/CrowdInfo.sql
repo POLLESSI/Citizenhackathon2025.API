@@ -8,6 +8,13 @@
 	[Timestamp] DATETIME2(0) NOT NULL,
 	[Active] BIT DEFAULT 1,
 
+	[IsManualCriticalAlert] BIT NOT NULL 
+        CONSTRAINT [DF_CrowdInfo_IsManualCriticalAlert] DEFAULT 0,
+
+    [ExpiresAtUtc] DATETIME2(3) NULL,
+    [Source] NVARCHAR(32) NULL,
+    [Reason] NVARCHAR(256) NULL,
+
 	CONSTRAINT [PK_CrowdInfo] PRIMARY KEY ([Id]),
 	CONSTRAINT [UQ_CrowdInfo_LocationName_Timestamp] UNIQUE (LocationName, [Timestamp])
 )
@@ -31,13 +38,12 @@ INCLUDE (
     LocationName,
     Latitude,
     Longitude,
-    CrowdLevel
+    CrowdLevel,
+    IsManualCriticalAlert,
+    ExpiresAtUtc,
+    Source,
+    Reason
 );
-GO
-
-CREATE UNIQUE INDEX UX_CrowdInfo_Active_Pos
-ON dbo.CrowdInfo(LocationName, Latitude, Longitude)
-WHERE Active = 1;
 
 GO
 

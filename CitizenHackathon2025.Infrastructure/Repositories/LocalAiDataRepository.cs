@@ -158,13 +158,20 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                                     COS(RADIANS(CAST(ci.Longitude AS float)) - RADIANS(@Lng)) +
                                                     SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(ci.Latitude AS float)))
                                             END
-                                        )
+                                        ),
+                                    IsManualCriticalAlert = CAST(ci.IsManualCriticalAlert AS bit),
+                                    ExpiresAtUtc = ci.ExpiresAtUtc,
+                                    Source = ci.Source,
+                                    Reason = ci.Reason
                                 FROM dbo.CrowdInfo ci
                                 WHERE ci.Active = 1
                                   AND ci.Latitude IS NOT NULL
                                   AND ci.Longitude IS NOT NULL
                                   AND NULLIF(LTRIM(RTRIM(ci.LocationName)), '') IS NOT NULL
-                                  AND CAST(ci.[Timestamp] AS date) BETWEEN DATEADD(DAY, -1, @TargetDate) AND DATEADD(DAY, 1, @TargetDate)
+                                  AND (
+                                    ci.IsManualCriticalAlert = 1
+                                    OR ci.[Timestamp] >= DATEADD(MINUTE, -30, SYSUTCDATETIME())
+                                )
                             )
                             SELECT TOP (8)
                                 Id,
@@ -174,10 +181,20 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 CrowdLevel,
                                 [Timestamp],
                                 DistanceKm,
+                                IsManualCriticalAlert,
+                                ExpiresAtUtc,
+                                Source,
+                                Reason,
                                 Active
                             FROM CrowdInfoBase
                             WHERE DistanceKm <= @RadiusKm
+                                    AND Active = 1   
+                                    AND (
+                                        IsManualCriticalAlert = 0
+                                        OR ExpiresAtUtc > SYSUTCDATETIME()
+                                    )
                             ORDER BY
+                                CASE WHEN CrowdLevel >= 4 THEN 0 ELSE 1 END,
                                 [Timestamp] DESC,
                                 DistanceKm ASC,
                                 CrowdLevel DESC;";
@@ -521,6 +538,109 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             using var connection = await OpenConnectionAsync(ct);
             return await connection.QueryAsync<LocalAiWeatherContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
+        }
+        public async Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(
+    double latitude,
+    double longitude,
+    double radiusKm,
+    CancellationToken ct = default)
+        {
+            const string sql = @"
+                            WITH SuggestionBase AS
+                            (
+                                SELECT
+                                    s.Id,
+                                    s.OriginalPlace,
+                                    s.SuggestedAlternatives,
+                                    s.Reason,
+                                    s.Message,
+                                    s.Context,
+                                    s.EventId,
+                                    s.PlaceId,
+                                    Latitude = CAST(s.Latitude AS float),
+                                    Longitude = CAST(s.Longitude AS float),
+                                    s.LocationLabel,
+                                    s.Title,
+                                    s.Active,
+
+                                    DistanceKm =
+                                        6371.0 * ACOS(
+                                            CASE
+                                                WHEN
+                                                    COS(RADIANS(@Lat)) *
+                                                    COS(RADIANS(CAST(s.Latitude AS float))) *
+                                                    COS(RADIANS(CAST(s.Longitude AS float)) - RADIANS(@Lng)) +
+                                                    SIN(RADIANS(@Lat)) *
+                                                    SIN(RADIANS(CAST(s.Latitude AS float))) > 1
+                                                THEN 1
+
+                                                WHEN
+                                                    COS(RADIANS(@Lat)) *
+                                                    COS(RADIANS(CAST(s.Latitude AS float))) *
+                                                    COS(RADIANS(CAST(s.Longitude AS float)) - RADIANS(@Lng)) +
+                                                    SIN(RADIANS(@Lat)) *
+                                                    SIN(RADIANS(CAST(s.Latitude AS float))) < -1
+                                                THEN -1
+
+                                                ELSE
+                                                    COS(RADIANS(@Lat)) *
+                                                    COS(RADIANS(CAST(s.Latitude AS float))) *
+                                                    COS(RADIANS(CAST(s.Longitude AS float)) - RADIANS(@Lng)) +
+                                                    SIN(RADIANS(@Lat)) *
+                                                    SIN(RADIANS(CAST(s.Latitude AS float)))
+                                            END
+                                        )
+
+                                FROM dbo.Suggestion s
+
+                                WHERE s.Active = 1
+                                    AND s.Latitude IS NOT NULL
+                                    AND s.Longitude IS NOT NULL
+                                    AND
+                                    (
+                                        NULLIF(LTRIM(RTRIM(s.SuggestedAlternatives)), '') IS NOT NULL
+                                        OR NULLIF(LTRIM(RTRIM(s.Title)), '') IS NOT NULL
+                                        OR NULLIF(LTRIM(RTRIM(s.LocationLabel)), '') IS NOT NULL
+                                    )
+                            )
+
+                            SELECT TOP (12)
+                                Id,
+                                OriginalPlace,
+                                SuggestedAlternatives,
+                                Reason,
+                                Message,
+                                Context,
+                                EventId,
+                                PlaceId,
+                                Latitude,
+                                Longitude,
+                                LocationLabel,
+                                Title,
+                                Active,
+                                DistanceKm
+
+                            FROM SuggestionBase
+
+                            WHERE DistanceKm <= @RadiusKm
+
+                            ORDER BY
+                                DistanceKm ASC,
+                                Title ASC;";
+
+            var parameters = new DynamicParameters();
+
+            parameters.Add("@Lat", latitude, DbType.Double);
+            parameters.Add("@Lng", longitude, DbType.Double);
+            parameters.Add("@RadiusKm", radiusKm, DbType.Double);
+
+            using var connection = await OpenConnectionAsync(ct);
+
+            return await connection.QueryAsync<LocalAiSuggestionContextDTO>(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    cancellationToken: ct));
         }
     }
 }

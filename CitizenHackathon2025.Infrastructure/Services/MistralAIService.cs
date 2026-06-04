@@ -12,12 +12,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
 {
     public sealed class MistralAIService : IMistralAIService
     {
-        private const string OllamaChatEndpoint = "api/chat";
-        
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<MistralAIService> _logger;
         private readonly ILanguagePromptBuilder _languagePromptBuilder;
+        private static readonly Uri OllamaChatEndpoint = new("api/chat", UriKind.Relative);
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -29,17 +28,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _languagePromptBuilder = languagePromptBuilder;
-        }
+            _languagePromptBuilder = languagePromptBuilder ?? throw new ArgumentNullException(nameof(languagePromptBuilder));
 
-        private Uri BuildChatUri()
-        {
-            var baseUrl = _config["MistralAI:ApiBaseUrl"];
-
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                throw new InvalidOperationException("Missing configuration key 'MistralAI:ApiBaseUrl'.");
-
-            return new Uri(new Uri(baseUrl), OllamaChatEndpoint);
+            _logger.LogWarning("[MISTRAL DI CHECK] BaseAddress={BaseAddress}, Timeout={Timeout}", _httpClient.BaseAddress, _httpClient.Timeout);
         }
 
         public async Task<string> GenerateFromPromptAsync(string groundedPrompt, string responseLanguage = "fr-FR", CancellationToken ct = default)
@@ -50,7 +41,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var stopwatch = Stopwatch.StartNew();
             var model = GetModel();
             var temperature = GetTemperature();
-            var chatUri = BuildChatUri();
 
             var requestBody = BuildChatRequest(
                 groundedPrompt: groundedPrompt,
@@ -61,21 +51,28 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 languagePromptBuilder: _languagePromptBuilder);
 
             _logger.LogInformation(
-                "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, ChatUri={ChatUri}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
+                "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, Endpoint={Endpoint}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
                 _httpClient.BaseAddress?.ToString() ?? "<null>",
-                chatUri,
+                OllamaChatEndpoint,
                 model,
                 temperature,
                 groundedPrompt.Length);
 
-            using var response = await _httpClient.PostAsJsonAsync(chatUri, requestBody, ct);
+            using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
+            {
+                Content = JsonContent.Create(requestBody, options: JsonOptions)
+            };
+
+            using var response = await _httpClient.SendAsync(request, ct);
             var rawResponse = await response.Content.ReadAsStringAsync(ct);
 
-            _logger.LogInformation(
-                "[OLLAMA][SYNC] HTTP response received. StatusCode={StatusCode}, ElapsedMs={ElapsedMs}, ContentLength={ContentLength}",
-                (int)response.StatusCode,
-                stopwatch.ElapsedMilliseconds,
-                rawResponse?.Length ?? 0);
+            if (string.IsNullOrWhiteSpace(rawResponse))
+            {
+                _logger.LogWarning("[OLLAMA][SYNC] Empty HTTP body returned.");
+                return "No response from Mistral.";
+            }
+
+            //var parsedResponse = JsonSerializer.Deserialize<MistralResponse>(rawResponse, JsonOptions);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -130,7 +127,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var stopwatch = Stopwatch.StartNew();
             var model = GetModel();
             var temperature = GetTemperature();
-            var chatUri = BuildChatUri();
+            //var chatUri = BuildChatUri();
 
             var requestBody = BuildChatRequest(
                 groundedPrompt: groundedPrompt,
@@ -141,9 +138,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 languagePromptBuilder: _languagePromptBuilder);
 
             _logger.LogInformation(
-                "[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, ChatUri={ChatUri}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
+                "[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, Endpoint={Endpoint}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
                 _httpClient.BaseAddress?.ToString() ?? "<null>",
-                chatUri,
+                OllamaChatEndpoint,
                 model,
                 temperature,
                 groundedPrompt.Length);
@@ -154,7 +151,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var chunkCount = 0;
             var lineCount = 0;
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, chatUri)
+            using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
             {
                 Content = JsonContent.Create(requestBody)
             };

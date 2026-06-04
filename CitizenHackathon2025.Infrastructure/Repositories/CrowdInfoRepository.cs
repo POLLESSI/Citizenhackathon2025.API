@@ -38,6 +38,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var sql = @"
                     SELECT * FROM CrowdInfo
                     WHERE Active = 1
+                    AND (
+                        IsManualCriticalAlert = 0
+                        OR ExpiresAtUtc > SYSUTCDATETIME()
+                    )
+                    AND (
+                        IsManualCriticalAlert = 1
+                        OR [Timestamp] >= DATEADD(MINUTE, -30, SYSUTCDATETIME())
+                    )
                     AND (6371 * ACOS(
                         COS(RADIANS(@Lat)) * COS(RADIANS(Latitude)) *
                         COS(RADIANS(Longitude) - RADIANS(@Lon)) +
@@ -63,10 +71,24 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Longitude,
                                 CrowdLevel,
                                 [Timestamp],
-                                Active
+                                Active,
+                                IsManualCriticalAlert,
+                                ExpiresAtUtc,
+                                Source,
+                                Reason
                             FROM dbo.CrowdInfo
                             WHERE Active = 1
-                            ORDER BY [Timestamp] DESC;";
+                              AND (
+                                    IsManualCriticalAlert = 0
+                                    OR ExpiresAtUtc > SYSUTCDATETIME()
+                                  )
+                              AND (
+                                    IsManualCriticalAlert = 1
+                                    OR [Timestamp] >= DATEADD(MINUTE, -30, SYSUTCDATETIME())
+                                  )
+                            ORDER BY
+                                CASE WHEN IsManualCriticalAlert = 1 THEN 0 ELSE 1 END,
+                                [Timestamp] DESC;";
 
             return _connection.QueryAsync<CrowdInfo>(
                 new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
@@ -74,30 +96,73 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id)
         {
-            var sql = "SELECT * FROM CrowdInfo WHERE Id = @Id";
-            DynamicParameters parameters = new DynamicParameters();
-            parameters.Add("@Id", id);
+            const string sql = @"
+                            SELECT
+                                Id,
+                                LocationName,
+                                Latitude,
+                                Longitude,
+                                CrowdLevel,
+                                [Timestamp],
+                                Active,
+                                IsManualCriticalAlert,
+                                ExpiresAtUtc,
+                                Source,
+                                Reason
+                            FROM dbo.CrowdInfo
+                            WHERE Id = @Id
+                              AND Active = 1
+                              AND (
+                                    IsManualCriticalAlert = 0
+                                    OR ExpiresAtUtc > SYSUTCDATETIME()
+                                  );";
 
-            var result = await _connection.QuerySingleOrDefaultAsync<CrowdInfo>(sql, parameters);
-            return result;
+            return await _connection.QuerySingleOrDefaultAsync<CrowdInfo>(
+                sql,
+                new { Id = id });
         }
 
         public async Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo)
         {
             const string sql = @"
-                INSERT INTO CrowdInfo (LocationName, Latitude, Longitude, CrowdLevel, Timestamp)
-                VALUES (@LocationName, @Latitude, @Longitude, @CrowdLevel, @Timestamp);
-                SELECT CAST(SCOPE_IDENTITY() as int);
-            ";
-            DynamicParameters parameters = new DynamicParameters();
+                            INSERT INTO CrowdInfo
+                            (
+                                LocationName,
+                                Latitude,
+                                Longitude,
+                                CrowdLevel,
+                                [Timestamp],
+                                IsManualCriticalAlert,
+                                ExpiresAtUtc,
+                                Source,
+                                Reason
+                            )
+                            VALUES
+                            (
+                                @LocationName,
+                                @Latitude,
+                                @Longitude,
+                                @CrowdLevel,
+                                @Timestamp,
+                                @IsManualCriticalAlert,
+                                @ExpiresAtUtc,
+                                @Source,
+                                @Reason
+                            );
+
+                            SELECT CAST(SCOPE_IDENTITY() as int);
+                        ";
+
+            var parameters = new DynamicParameters();
             parameters.Add("@LocationName", crowdInfo.LocationName);
             parameters.Add("@Latitude", crowdInfo.Latitude);
             parameters.Add("@Longitude", crowdInfo.Longitude);
             parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel);
-            parameters.Add("@Latitude", crowdInfo.Latitude);     // decimal
-            parameters.Add("@Longitude", crowdInfo.Longitude);   // decimal
-            parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel); // int
             parameters.Add("@Timestamp", crowdInfo.Timestamp);
+            parameters.Add("@IsManualCriticalAlert", crowdInfo.IsManualCriticalAlert);
+            parameters.Add("@ExpiresAtUtc", crowdInfo.ExpiresAtUtc);
+            parameters.Add("@Source", crowdInfo.Source);
+            parameters.Add("@Reason", crowdInfo.Reason);
 
             var id = await _connection.QuerySingleAsync<int>(sql, parameters);
             crowdInfo.Id = id;
@@ -124,43 +189,45 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         public CrowdInfo? UpdateCrowdInfo(CrowdInfo crowdInfo)
         {
             if (crowdInfo == null || crowdInfo.Id <= 0)
-            {
                 throw new ArgumentException("Invalid crowd info provided for update.", nameof(crowdInfo));
-            }
-
-            
 
             try
             {
-                const string sql = @"UPDATE CrowdInfo
-                                     SET LocationName = @LocationName,
-                                         Latitude = @Latitude,
-                                         Longitude = @Longitude,
-                                         CrowdLevel = @CrowdLevel,
-                                         Timestamp = @Timestamp
-                                     WHERE Id = @Id AND Active = 1";
-                DynamicParameters parameters = new DynamicParameters();
-                parameters.Add("@Id", crowdInfo.Id);
-                parameters.Add("@LocationName", crowdInfo.LocationName);
-                parameters.Add("@Latitude", crowdInfo.Latitude);
-                parameters.Add("@Longitude", crowdInfo.Longitude);
-                parameters.Add("@CrowdLevel", crowdInfo.CrowdLevel);
-                parameters.Add("@Timestamp", crowdInfo.Timestamp);
+                const string sql = @"
+                                UPDATE dbo.CrowdInfo
+                                SET LocationName = @LocationName,
+                                    Latitude = @Latitude,
+                                    Longitude = @Longitude,
+                                    CrowdLevel = @CrowdLevel,
+                                    [Timestamp] = @Timestamp,
+                                    IsManualCriticalAlert = @IsManualCriticalAlert,
+                                    ExpiresAtUtc = @ExpiresAtUtc,
+                                    Source = @Source,
+                                    Reason = @Reason
+                                WHERE Id = @Id
+                                  AND Active = 1;";
 
-                var affectedRows = _connection.Execute(sql, parameters);
-
-                if (affectedRows == 0)
+                var affectedRows = _connection.Execute(sql, new
                 {
-                    return null;
-                }
-                return crowdInfo;
+                    crowdInfo.Id,
+                    crowdInfo.LocationName,
+                    crowdInfo.Latitude,
+                    crowdInfo.Longitude,
+                    crowdInfo.CrowdLevel,
+                    crowdInfo.Timestamp,
+                    crowdInfo.IsManualCriticalAlert,
+                    crowdInfo.ExpiresAtUtc,
+                    crowdInfo.Source,
+                    crowdInfo.Reason
+                });
+
+                return affectedRows == 0 ? null : crowdInfo;
             }
             catch (Exception ex)
             {
-
                 Console.WriteLine($"Error updating CrowdInfo: {ex.Message}");
+                return null;
             }
-            return null;
         }
         public async Task<int> ArchivePastCrowdInfosAsync(CancellationToken ct = default)
         {

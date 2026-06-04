@@ -42,7 +42,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 }
             };
 
-            using var response = await _httpClient.PostAsJsonAsync("api/chat", request, ct);
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/chat")
+            {
+                Content = JsonContent.Create(request)
+            };
+
+            using var response = await _httpClient.SendAsync(httpRequest, ct);
             var content = await response.Content.ReadAsStringAsync(ct);
 
             _logger.LogInformation("Ollama status code: {StatusCode}", (int)response.StatusCode);

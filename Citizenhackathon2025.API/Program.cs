@@ -1,4 +1,5 @@
-﻿using Azure.Identity;
+﻿extern alias AzureIdentity;
+using DefaultAzureCredential = AzureIdentity::Azure.Identity.DefaultAzureCredential;
 using Azure.Security.KeyVault.Secrets;
 using CitizenHackathon2025.API.Azure.Security.KeyVault;
 using CitizenHackathon2025.API.BackgroundServices;
@@ -1189,22 +1190,26 @@ internal class Program
 
     private static void MapEndpoints(WebApplication app)
     {
-        app.MapGet("/auth/hub-token", (HttpContext http, TokenGenerator tokens) =>
-        {
-            if (http.User?.Identity?.IsAuthenticated != true)
-                return Results.Unauthorized();
-
-            var hubToken = tokens.GenerateTokenFromPrincipal(http.User, expiresInMinutes: 5);
-            return Results.Ok(new { token = hubToken });
-        })
-        .RequireAuthorization();
-
         app.MapGet("/trafficcondition/latest",
             async (IMediator mediator, CancellationToken ct) =>
             {
                 var list = await mediator.Send(new GetLatestTrafficConditionQuery(), ct);
                 return (list is null || list.Count == 0) ? Results.NotFound() : Results.Ok(list);
             });
+
+        app.MapGet("/auth/hub-token", (HttpContext ctx, TokenGenerator tokenGenerator) =>
+        {
+            if (ctx.User?.Identity?.IsAuthenticated != true)
+                return Results.Unauthorized();
+
+            var token = tokenGenerator.GenerateTokenFromPrincipal(ctx.User, expiresInMinutes: 5);
+
+            return Results.Ok(new
+            {
+                token
+            });
+        })
+        .RequireAuthorization();
 
         app.MapGet("/", () => "OK");
     }

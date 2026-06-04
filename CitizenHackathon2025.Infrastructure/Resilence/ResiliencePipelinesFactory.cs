@@ -18,11 +18,7 @@ namespace CitizenHackathon2025.Infrastructure.Resilience
             };
         }
 
-        private static AsyncPolicy<HttpResponseMessage> CreatePipeline(
-            string name,
-            ILogger logger,
-            int retryCount = 3,
-            int timeoutSeconds = 20)
+        private static AsyncPolicy<HttpResponseMessage> CreatePipeline(string name, ILogger logger, int retryCount = 3, int timeoutSeconds = 180)
         {
             var retryPolicy = Policy<HttpResponseMessage>
                 .Handle<HttpRequestException>()

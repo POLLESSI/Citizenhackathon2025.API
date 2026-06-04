@@ -20,9 +20,15 @@ namespace CitizenHackathon2025.Application.Services
             }
             };
 
-            var response = await _http.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", request, ct);
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
+            {
+                Content = JsonContent.Create(request)
+            };
+
+            using var response = await _http.SendAsync(httpRequest, ct);
             response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadFromJsonAsync<OpenAIResponse>();
+
+            var json = await response.Content.ReadFromJsonAsync<OpenAIResponse>(cancellationToken: ct);
 
             return json?.choices.FirstOrDefault()?.message.content?.Trim();
         }
