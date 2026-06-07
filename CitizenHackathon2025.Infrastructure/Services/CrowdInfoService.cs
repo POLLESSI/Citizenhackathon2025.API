@@ -1,5 +1,7 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Application.Options;
 using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -7,6 +9,8 @@ using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using System.Net.Http;
 using System.Net.Http.Json;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -15,13 +19,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
     #nullable disable
         private readonly ICrowdInfoRepository _crowdInfoRepository;
+        private readonly IPlaceRepository _placeRepository;
+        private readonly ICrowdAlertVoteRepository _crowdAlertVoteRepository;
+        private readonly CriticalAlertRules _rules;
         private readonly HttpClient _http;
         private readonly IHubContext<CrowdHub> _crowdHubContext;
 
-        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, IHttpClientFactory f, IHubContext<CrowdHub> crowdHubContext)
+        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, IPlaceRepository placeRepository, ICrowdAlertVoteRepository crowdAlertVoteRepository, IHttpClientFactory httpClientFactory, IOptions<CriticalAlertRules> options, IHubContext<CrowdHub> crowdHubContext)
         {
             _crowdInfoRepository = crowdInfoRepository;
-            _http = f.CreateClient("ApiWithAuth");
+            _placeRepository = placeRepository;
+            _crowdAlertVoteRepository = crowdAlertVoteRepository;
+            _rules = options.Value;
+            _http = httpClientFactory.CreateClient("ApiWithAuth");
             _crowdHubContext = crowdHubContext;
         }
 
@@ -75,16 +85,71 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return saved!;
         }
 
-        public async Task<CrowdInfoDTO> CreateManualCriticalAlertAsync(Contracts.DTOs.ManualCrowdCriticalAlertRequest request, CancellationToken ct = default)
+        public async Task<ManualCriticalAlertResultDTO> CreateManualCriticalAlertAsync(Contracts.DTOs.ManualCrowdCriticalAlertRequest request, CancellationToken ct = default)
         {
             if (request.PlaceId <= 0)
                 throw new ArgumentOutOfRangeException(nameof(request.PlaceId));
 
-            return await _crowdInfoRepository.CreateManualCriticalAlertAsync(
+            var place = await _placeRepository.GetByIdAsync(request.PlaceId, ct);
+
+            if (place is null)
+                return new ManualCriticalAlertResultDTO
+                {
+                    Ok = false,
+                    Status = "Error",
+                    Error = $"Place {request.PlaceId} not found."
+                };
+
+            var zoneKey = BuildZoneKey(place.Latitude, place.Longitude);
+
+            await _crowdAlertVoteRepository.InsertAsync(new CrowdAlertVote
+            {
+                PlaceId = request.PlaceId,
+                ZoneKey = zoneKey,
+                UserId = null,
+                DeviceHash = request.Source ?? Guid.NewGuid().ToString("N"),
+                IpHash = null,
+                Latitude = place.Latitude,
+                Longitude = place.Longitude,
+                Reason = request.Reason
+            }, ct);
+
+            var count = await _crowdAlertVoteRepository.CountDistinctReportersAsync(
+                zoneKey,
+                _rules.WindowMinutes,
+                ct);
+
+            if (count < _rules.RequiredDistinctReports)
+            {
+                return new ManualCriticalAlertResultDTO
+                {
+                    Ok = true,
+                    Status = "Pending",
+                    ConfirmationCount = count,
+                    RequiredCount = _rules.RequiredDistinctReports
+                };
+            }
+
+            var alert = await _crowdInfoRepository.CreateManualCriticalAlertAsync(
                 request.PlaceId,
                 request.Reason,
                 request.Source ?? "ManualButton",
                 ct);
+
+            await _crowdHubContext.Clients.All.SendAsync(
+                CrowdHubMethods.ToClient.ReceiveCrowdUpdate,
+                alert,
+                ct);
+
+            return new ManualCriticalAlertResultDTO
+            {
+                Ok = true,
+                Status = "Confirmed",
+                ConfirmationCount = count,
+                RequiredCount = _rules.RequiredDistinctReports,
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_rules.AlertDurationMinutes),
+                CrowdInfoId = alert.Id
+            };
         }
 
         public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)
@@ -120,6 +185,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public Task<CrowdInfo> UpsertCrowdInfoAsync(CrowdInfo input, CancellationToken ct = default)
         {
             throw new NotImplementedException();
+        }
+
+        private static string BuildZoneKey(decimal latitude, decimal longitude)
+        {
+            var latBucket = Math.Round(latitude, 3);
+            var lngBucket = Math.Round(longitude, 3);
+
+            return $"{latBucket:0.000}:{lngBucket:0.000}";
         }
     }
 }

@@ -3,6 +3,7 @@ using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Models;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -208,6 +209,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("- Never estimate, infer, recalculate, or invent distances.");
             sb.AppendLine("- Copy distances exactly as written.");
             sb.AppendLine("- If distance is missing, write 'distance non disponible'.");
+            sb.AppendLine("- Do not convert distances from km to meters.");
+            sb.AppendLine("- Do not round distances differently.");
+            sb.AppendLine("- Copy the distance string exactly, including unit.");
+            sb.AppendLine("- If the context says 'distance 16.5 km', answer '16.5 km', not 'environ 16 km'.");
             sb.AppendLine();
 
             return sb.ToString();
@@ -462,7 +467,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             => ts.HasValue ? ts.Value.ToString(@"hh\:mm") : "—";
 
         private static string FmtDistance(double? distanceKm)
-            => distanceKm.HasValue ? $"{distanceKm.Value:0.0} km" : "— km";
+            => distanceKm.HasValue ? string.Create(CultureInfo.InvariantCulture, $"{distanceKm.Value:0.0} km") : "distance non disponible";
 
         private static LocalAiContextIntent ResolveIntent(string? prompt)
         {

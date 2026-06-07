@@ -5,6 +5,7 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using CitizenHackathon2025.Infrastructure.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -90,26 +91,10 @@ namespace CitizenHackathon2025.API.Controllers
         //[Authorize(Policy = Policies.AdminPolicy)]
         [Authorize(Policy = Policies.UserPolicy)]
         [HttpPost("manual-critical-alert")]
-        public async Task<IActionResult> ManualCriticalAlert([FromBody] ManualCrowdCriticalAlertRequest request, CancellationToken ct)
+        public async Task<ActionResult<ManualCriticalAlertResultDTO>> ManualCriticalAlert(ManualCrowdCriticalAlertRequest request, CancellationToken ct)
         {
-            if (request is null)
-                return BadRequest("Request body is required.");
-
-            if (request.PlaceId <= 0)
-                return BadRequest("PlaceId must be > 0.");
-
-            var created = await _svc.CreateManualCriticalAlertAsync(request, ct);
-
-            await _hubContext.Clients.All.SendAsync(
-                HubEvents.ToClient.ReceiveCrowdUpdate,
-                created,
-                ct);
-
-            return Ok(new
-            {
-                Status = "Critical crowd alert created",
-                CrowdInfo = created
-            });
+            var result = await _svc.CreateManualCriticalAlertAsync(request, ct);
+            return Ok(result);
         }
 
         [Authorize(Policy = "AdminOrModo")]

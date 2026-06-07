@@ -1,5 +1,4 @@
 ﻿extern alias AzureIdentity;
-using DefaultAzureCredential = AzureIdentity::Azure.Identity.DefaultAzureCredential;
 using Azure.Security.KeyVault.Secrets;
 using CitizenHackathon2025.API.Azure.Security.KeyVault;
 using CitizenHackathon2025.API.BackgroundServices;
@@ -15,6 +14,7 @@ using CitizenHackathon2025.Application.CQRS.Queries;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Application.Models;
+using CitizenHackathon2025.Application.Options;
 using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
@@ -80,6 +80,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using DefaultAzureCredential = AzureIdentity::Azure.Identity.DefaultAzureCredential;
 
 internal class Program
 {
@@ -268,6 +269,7 @@ internal class Program
         services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(configuration.GetSection("CrowdAdvisory"));
         services.Configure<DeviceHasherOptions>(configuration.GetSection("DeviceHasher"));
         services.Configure<PipelineOptions>(configuration.GetSection("Pipelines"));
+        services.Configure<CriticalAlertRules>(configuration.GetSection("CriticalAlertRules"));
 
         services.ConfigureHttpJsonOptions(options =>
         {
@@ -847,6 +849,7 @@ internal class Program
     private static void ConfigureRepositories(IServiceCollection services)
     {
         services.AddScoped<IAIRepository, AIRepository>();
+        services.AddScoped<ICrowdAlertVoteRepository, CrowdAlertVoteRepository>();
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
         services.AddScoped<ICrowdInfoAntennaRepository, CrowdInfoAntennaRepository>();
         services.AddScoped<ICrowdInfoAntennaConnectionRepository, CrowdInfoAntennaConnectionRepository>();

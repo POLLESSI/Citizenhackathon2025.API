@@ -123,6 +123,8 @@
     <Build Include="Programmability\Procedures\sp_AntennaConnection_Ping.sql" />
     <Build Include="Programmability\Procedures\sp_CrowdInfo_ManualCriticalAlert.sql" />
     <Build Include="Tables\GptJob.sql" />
+    <Build Include="Tables\CrowdAlertVote.sql" />
+    <Build Include="Programmability\Procedures\sp_CrowdAlertVote_CountDistinct.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />

@@ -11,7 +11,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<bool> ArchiveAsync(int id);
         Task<CrowdInfo?> UpsertCrowdInfoAsync(CrowdInfo input, CancellationToken ct = default);
         Task<CrowdInfo?> SaveCrowdInfoAsync(CrowdInfo crowdInfo, CancellationToken ct = default);
-        Task<CrowdInfoDTO> CreateManualCriticalAlertAsync(Contracts.DTOs.ManualCrowdCriticalAlertRequest request, CancellationToken ct = default);
+        Task<ManualCriticalAlertResultDTO> CreateManualCriticalAlertAsync(Contracts.DTOs.ManualCrowdCriticalAlertRequest request, CancellationToken ct = default);
         Task<IEnumerable<CrowdInfo>> GetAllCrowdInfoAsync(int limit = 200, CancellationToken ct = default);
         Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id, CancellationToken ct = default);
         Task<bool> DeleteCrowdInfoAsync(int id, CancellationToken ct = default);
