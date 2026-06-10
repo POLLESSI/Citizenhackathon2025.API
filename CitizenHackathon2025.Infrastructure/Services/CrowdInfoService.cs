@@ -8,10 +8,13 @@ using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
-using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net.Http;
+using System.Text;
+
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -102,22 +105,23 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var zoneKey = BuildZoneKey(place.Latitude, place.Longitude);
 
+            Console.WriteLine($"[FULL ALERT RULES] Required={_rules.RequiredDistinctReports}, Window={_rules.WindowMinutes}, Duration={_rules.AlertDurationMinutes}");
+
             await _crowdAlertVoteRepository.InsertAsync(new CrowdAlertVote
             {
                 PlaceId = request.PlaceId,
                 ZoneKey = zoneKey,
                 UserId = null,
-                DeviceHash = request.Source ?? Guid.NewGuid().ToString("N"),
+                DeviceHash = string.IsNullOrWhiteSpace(request.DeviceId) ? null : HashText(request.DeviceId),
                 IpHash = null,
                 Latitude = place.Latitude,
                 Longitude = place.Longitude,
                 Reason = request.Reason
             }, ct);
 
-            var count = await _crowdAlertVoteRepository.CountDistinctReportersAsync(
-                zoneKey,
-                _rules.WindowMinutes,
-                ct);
+            var count = await _crowdAlertVoteRepository.CountDistinctReportersAsync(zoneKey, _rules.WindowMinutes, ct);
+
+            Console.WriteLine($"[FULL ALERT QUORUM] Zone={zoneKey}, Count={count}/{_rules.RequiredDistinctReports}");
 
             if (count < _rules.RequiredDistinctReports)
             {
@@ -193,6 +197,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var lngBucket = Math.Round(longitude, 3);
 
             return $"{latBucket:0.000}:{lngBucket:0.000}";
+        }
+
+        private static string HashText(string value)
+        {
+            var bytes = SHA256.HashData(
+                Encoding.UTF8.GetBytes(value.Trim()));
+
+            return Convert.ToHexString(bytes);
         }
     }
 }

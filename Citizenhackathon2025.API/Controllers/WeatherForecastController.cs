@@ -1,4 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Dapper;
@@ -37,6 +39,33 @@ namespace CitizenHackathon2025.API.Controllers
         {
             if (dto is null) return BadRequest();
             return Ok(await _app.ManualAsync(dto, ct));
+        }
+
+        [Authorize(Policy = Policies.UserPolicy)]
+        [HttpPost("manual-critical-alert")]
+        public ActionResult<WeatherAlertResultDTO> ManualCriticalWeatherAlert([FromBody] ManualWeatherAlertDTO request)
+        {
+            if (request is null)
+                return BadRequest("Request body is required.");
+
+            if (request.Latitude < -90 || request.Latitude > 90 ||
+                request.Longitude < -180 || request.Longitude > 180)
+            {
+                return BadRequest("Invalid coordinates.");
+            }
+
+            if (request.Severity < SeverityLevel.Severe)
+            {
+                return BadRequest("Manual critical weather alert requires Severe or Critical severity.");
+            }
+
+            // TEMPORARY: pending the full WeatherAlertRepository/AppService service
+            return Ok(new WeatherAlertResultDTO
+            {
+                Ok = true,
+                Status = "Confirmed",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5)
+            });
         }
 
         [Authorize(Policy = Policies.AdminPolicy)]

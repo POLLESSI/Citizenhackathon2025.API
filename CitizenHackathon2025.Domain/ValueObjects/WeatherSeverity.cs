@@ -18,20 +18,31 @@ namespace CitizenHackathon2025.Domain.ValueObjects
             Level = level;
         }
 
-        /// <summary>
-        /// Automatically assesses severity from measurements.
-        /// </summary>
-        public static WeatherSeverity FromMetrics(WeatherType type, double temperature, double windSpeed, double rainMm)
+        public static WeatherSeverity FromMetrics(
+            WeatherType type,
+            double temperature,
+            double windSpeed,
+            double rainMm)
         {
-            // Simple logic to refine according to your actual weather model
-            if (type is WeatherType.Thunderstorm or WeatherType.Blizzard or WeatherType.Storm or WeatherType.Hail or WeatherType.Heatwave or WeatherType.ColdWave)
-                return new WeatherSeverity(type, SeverityLevel.Severe);
+            if (type is WeatherType.Thunderstorm
+                or WeatherType.Blizzard
+                or WeatherType.Storm
+                or WeatherType.Hail
+                or WeatherType.Heatwave
+                or WeatherType.ColdWave
+                or WeatherType.BlackIce
+                or WeatherType.FreezingRain)
+            {
+                return new WeatherSeverity(type, SeverityLevel.Critical);
+            }
 
             if (rainMm > 20 || windSpeed > 60 || temperature < -5 || temperature > 35)
                 return new WeatherSeverity(type, SeverityLevel.Moderate);
 
             return new WeatherSeverity(type, SeverityLevel.Mild);
         }
+
+        public bool IsCritical => Level == SeverityLevel.Critical;
 
         public override string ToString() => $"{Type} ({Level})";
 
@@ -41,18 +52,8 @@ namespace CitizenHackathon2025.Domain.ValueObjects
         public override bool Equals(object? obj)
             => obj is WeatherSeverity ws && Equals(ws);
 
-        public override int GetHashCode() => HashCode.Combine(Type, Level);
-    }
-
-    /// <summary>
-    /// Indicates the severity level associated with a weather condition.
-    /// </summary>
-    public enum SeverityLevel
-    {
-        Mild = 1,        // Normal conditions
-        Moderate = 2,    // Limited risk
-        Severe = 3,       // Significant danger
-        Critical = 4     // Extreme hazard
+        public override int GetHashCode()
+            => HashCode.Combine(Type, Level);
     }
 }
 

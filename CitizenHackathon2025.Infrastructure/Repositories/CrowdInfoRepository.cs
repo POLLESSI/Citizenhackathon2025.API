@@ -178,6 +178,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@Reason", reason, DbType.String, size: 256);
             parameters.Add("@Source", source ?? "ManualButton", DbType.String, size: 32);
 
+            Console.WriteLine($"[SP] CreateManualCriticalAlertAsync PlaceId={placeId}");
+
             return await _connection.QuerySingleAsync<CrowdInfoDTO>(
                 new CommandDefinition(
                     sql,

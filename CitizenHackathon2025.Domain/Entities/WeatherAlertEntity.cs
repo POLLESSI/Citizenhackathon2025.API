@@ -3,13 +3,13 @@
     public sealed class WeatherAlertEntity
     {
         public int Id { get; set; }
-        public string Provider { get; set; } = "openweather";
+        public string Provider { get; set; } = "outzen";
         public string ExternalId { get; set; } = "";
 
         public decimal? Latitude { get; set; }
         public decimal? Longitude { get; set; }
         public string? SenderName { get; set; }
-        public string? EventName { get; set; }
+        public string? EventName { get; set; } = "Manual Weather Alert";
         public DateTime StartUtc { get; set; }
         public DateTime EndUtc { get; set; }
         public string? Description { get; set; }
