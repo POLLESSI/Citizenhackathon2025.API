@@ -125,6 +125,7 @@
     <Build Include="Tables\GptJob.sql" />
     <Build Include="Tables\CrowdAlertVote.sql" />
     <Build Include="Programmability\Procedures\sp_CrowdAlertVote_CountDistinct.sql" />
+    <Build Include="Tables\CriticalAlertVote.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />

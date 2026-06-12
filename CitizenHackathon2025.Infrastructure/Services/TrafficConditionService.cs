@@ -1,4 +1,7 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
+﻿using Azure.Core;
+using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -40,7 +43,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             return await _trafficConditionRepository.SaveTrafficConditionAsync(trafficCondition);
         }
-
         public TrafficCondition UpdateTrafficCondition(TrafficCondition trafficCondition)
         {
             try

@@ -849,6 +849,7 @@ internal class Program
     private static void ConfigureRepositories(IServiceCollection services)
     {
         services.AddScoped<IAIRepository, AIRepository>();
+        services.AddScoped<ICriticalAlertVoteRepository, CriticalAlertVoteRepository>();
         services.AddScoped<ICrowdAlertVoteRepository, CrowdAlertVoteRepository>();
         services.AddScoped<ICrowdInfoRepository, CrowdInfoRepository>();
         services.AddScoped<ICrowdInfoAntennaRepository, CrowdInfoAntennaRepository>();
@@ -886,6 +887,7 @@ internal class Program
         services.AddScoped<IAggregateSuggestionService, AstroIAService>();
         services.AddScoped<IAntennaCadastreImportService, AntennaCadastreImportService>();
         services.AddScoped<IAntennaSimulationService, AntennaSimulationService>();
+        services.AddScoped<ICriticalAlertQuorumService, CriticalAlertQuorumService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
         services.AddScoped<CrowdInfoService>();
         services.AddScoped<ICrowdAdvisoryService, CrowdAdvisoryService>();

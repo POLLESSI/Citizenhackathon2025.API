@@ -1,5 +1,7 @@
-﻿using CitizenHackathon2025.Application.Interfaces;
+﻿using Azure.Core;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 
@@ -17,9 +19,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO dto, CancellationToken ct = default)
             => _app.CreateAsync(dto, ct);
-
         public Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default)
-            => throw new NotSupportedException("Generated weather forecasts are disabled. Use OpenWeather pull instead.");
+                    => throw new NotSupportedException("Generated weather forecasts are disabled. Use OpenWeather pull instead.");
 
         public async Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default)
         {

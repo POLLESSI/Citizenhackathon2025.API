@@ -18,9 +18,13 @@ namespace CitizenHackathon2025.API.Controllers
     public sealed class WeatherForecastController : ControllerBase
     {
         private readonly IWeatherForecastAppService _app;
+        private readonly ICriticalAlertQuorumService _criticalAlertQuorumService;
 
-        public WeatherForecastController(IWeatherForecastAppService app)
-            => _app = app;
+        public WeatherForecastController(IWeatherForecastAppService app, ICriticalAlertQuorumService criticalAlertQuorumService)
+        {
+            _app = app;
+            _criticalAlertQuorumService = criticalAlertQuorumService;
+        }
 
         [Authorize(Policy = Policies.AdminPolicy)]
         [Authorize(Policy = Policies.ModoPolicy)]
@@ -43,27 +47,44 @@ namespace CitizenHackathon2025.API.Controllers
 
         [Authorize(Policy = Policies.UserPolicy)]
         [HttpPost("manual-critical-alert")]
-        public ActionResult<WeatherAlertResultDTO> ManualCriticalWeatherAlert([FromBody] ManualWeatherAlertDTO request)
+        public async Task<ActionResult<WeatherAlertResultDTO>> ManualCriticalWeatherAlert([FromBody] ManualWeatherAlertDTO request, CancellationToken ct)
         {
             if (request is null)
                 return BadRequest("Request body is required.");
 
             if (request.Latitude < -90 || request.Latitude > 90 ||
                 request.Longitude < -180 || request.Longitude > 180)
-            {
                 return BadRequest("Invalid coordinates.");
-            }
 
             if (request.Severity < SeverityLevel.Severe)
-            {
                 return BadRequest("Manual critical weather alert requires Severe or Critical severity.");
+
+            var quorum = await _criticalAlertQuorumService.RegisterVoteAsync(
+                CriticalAlertKind.Weather,
+                null,
+                request.Latitude,
+                request.Longitude,
+                request.DeviceId,
+                request.Description,
+                ct);
+
+            if (!quorum.Confirmed)
+            {
+                return Ok(new WeatherAlertResultDTO
+                {
+                    Ok = true,
+                    Status = "Pending",
+                    ConfirmationCount = quorum.ConfirmationCount,
+                    RequiredCount = quorum.RequiredCount
+                });
             }
 
-            // TEMPORARY: pending the full WeatherAlertRepository/AppService service
             return Ok(new WeatherAlertResultDTO
             {
                 Ok = true,
                 Status = "Confirmed",
+                ConfirmationCount = quorum.ConfirmationCount,
+                RequiredCount = quorum.RequiredCount,
                 ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5)
             });
         }

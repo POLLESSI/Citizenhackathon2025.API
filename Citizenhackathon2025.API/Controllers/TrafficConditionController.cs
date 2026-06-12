@@ -1,5 +1,7 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
@@ -26,6 +28,7 @@ namespace CitizenHackathon2025.API.Controllers
     public class TrafficConditionController : ControllerBase
     {
         private readonly ITrafficConditionRepository _trafficConditionRepository;
+        private readonly ICriticalAlertQuorumService _criticalAlertQuorumService;
         private readonly ITrafficApiService _trafficApiService;
         private readonly IHubContext<TrafficHub> _hubContext;
         private readonly ILogger<TrafficConditionController> _logger;
@@ -33,9 +36,10 @@ namespace CitizenHackathon2025.API.Controllers
 
         private const string HubMethod_ReceiveTrafficConditionUpdate = "ReceiveTrafficConditionUpdate";
 
-        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext, ILogger<TrafficConditionController> logger, byte[] trafficHmacKey)
+        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ICriticalAlertQuorumService criticalAlertQuorumService, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext, ILogger<TrafficConditionController> logger, byte[] trafficHmacKey)
         {
             _trafficConditionRepository = trafficConditionRepository;
+            _criticalAlertQuorumService = criticalAlertQuorumService;
             _trafficApiService = trafficApiService;
             _hubContext = hubContext;
             _logger = logger;
@@ -262,8 +266,117 @@ namespace CitizenHackathon2025.API.Controllers
             });
         }
 
-        [HttpPost("archive-expired")]
+        [Authorize(Policy = Policies.UserPolicy)]
+        [HttpPost("manual-critical-alert")]
+        public async Task<ActionResult<TrafficAlertResultDTO>> ManualCriticalTrafficAlert([FromBody] ManualTrafficAlertDTO request, CancellationToken ct)
+        {
+            if (request is null)
+                return BadRequest("Request body is required.");
+
+            if (request.Latitude < -90 || request.Latitude > 90 ||
+                request.Longitude < -180 || request.Longitude > 180)
+            {
+                return BadRequest("Invalid coordinates.");
+            }
+
+            if (request.TrafficLevel < TrafficLevel.Heavy)
+                return BadRequest("Manual critical traffic alert requires Heavy or Jammed level.");
+
+            var quorum = await _criticalAlertQuorumService.RegisterVoteAsync(CriticalAlertKind.Traffic, null, request.Latitude, request.Longitude, request.DeviceId, request.Description, ct);
+
+            if (!quorum.Confirmed)
+            {
+                return Ok(new TrafficAlertResultDTO
+                {
+                    Ok = true,
+                    Status = "Pending",
+                    ConfirmationCount = quorum.ConfirmationCount,
+                    RequiredCount = quorum.RequiredCount
+                });
+            }
+
+            var nowUtc = DateTime.UtcNow;
+
+            var dto = new TrafficConditionDTO
+            {
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                DateCondition = nowUtc,
+                CongestionLevel = ((int)request.TrafficLevel).ToString(),
+                IncidentType = request.IncidentType,
+                Message = request.Description,
+                Level = (byte)request.TrafficLevel
+            };
+
+            var dateUtc = dto.DateCondition.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(dto.DateCondition, DateTimeKind.Utc)
+                : dto.DateCondition.ToUniversalTime();
+
+            var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
+                provider: "manual",
+                lat: dto.Latitude,
+                lon: dto.Longitude,
+                dateUtc: dateUtc,
+                incidentType: dto.IncidentType,
+                location: dto.Location,
+                congestionLevel: dto.CongestionLevel,
+                timeBucket: TimeSpan.FromMinutes(1));
+
+            var entity = new TrafficCondition
+            {
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                DateCondition = dateUtc,
+                CongestionLevel = dto.CongestionLevel,
+                IncidentType = dto.IncidentType,
+
+                Provider = "manual",
+                ExternalId = externalId,
+                Fingerprint = fingerprint,
+                LastSeenAt = nowUtc,
+
+                Title = dto.Message,
+                Road = dto.Location,
+                Severity = dto.Level,
+                Active = true
+            };
+
+            TrafficUpsertIdentityHmac.Ensure(
+                entity,
+                defaultProvider: "manual",
+                hmacKey: _trafficHmacKey,
+                timeBucket: TimeSpan.FromMinutes(1));
+
+            var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
+            if (saved is null)
+            {
+                return Ok(new TrafficAlertResultDTO
+                {
+                    Ok = false,
+                    Status = "Error",
+                    Error = "UPSERT failed"
+                });
+            }
+
+            var savedDto = saved.MapToTrafficConditionDTO();
+
+            await _hubContext.Clients.All.SendAsync(
+                HubEvents.ToClient.TrafficUpdated,
+                savedDto,
+                ct);
+
+            return Ok(new TrafficAlertResultDTO
+            {
+                Ok = true,
+                Status = "Confirmed",
+                ConfirmationCount = quorum.ConfirmationCount,
+                RequiredCount = quorum.RequiredCount,
+                ExpiresAtUtc = nowUtc.AddMinutes(5)
+            });
+        }
+
         [Authorize(Policy = Policies.AdminPolicy)]
+        [HttpPost("archive-expired")]
         public async Task<IActionResult> ArchiveExpiredTrafficConditions(CancellationToken ct)
         {
             var archived = await _trafficConditionRepository.ArchivePastTrafficConditionsAsync(ct);
