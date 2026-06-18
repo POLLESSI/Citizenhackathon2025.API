@@ -34,11 +34,28 @@ namespace CitizenHackathon2025.Infrastructure.Services
             CancellationToken ct = default)
         {
             var safePrompt = prompt?.Trim() ?? string.Empty;
+            var hasChildren =
+                safePrompt.Contains("enfant", StringComparison.OrdinalIgnoreCase) ||
+                safePrompt.Contains("enfants", StringComparison.OrdinalIgnoreCase) ||
+                safePrompt.Contains("famille", StringComparison.OrdinalIgnoreCase) ||
+                safePrompt.Contains("kids", StringComparison.OrdinalIgnoreCase) ||
+                safePrompt.Contains("children", StringComparison.OrdinalIgnoreCase);
             var lat = NormalizeLatitude(latitude);
             var lng = NormalizeLongitude(longitude);
+            string? locationLabel = null;
+            var keywordPlaces = await _localAiRepo.SearchPlacesByKeywordsAsync(safePrompt, limit: 10, ct);
             var radiusKm = NormalizeRadiusKm(Limits.RadiusKm);
             var targetDate = ResolveTargetDate(safePrompt);
             var intent = ResolveIntent(safePrompt);
+            var requestedPlace = keywordPlaces.FirstOrDefault();
+
+            if (requestedPlace is not null)
+            {
+                lat = requestedPlace.Latitude ?? lat;
+                lng = requestedPlace.Longitude ?? lng;
+
+                locationLabel = requestedPlace.Name;
+            }
 
             _logger.LogInformation(
                 "Building local AI context. PromptLength={PromptLength}, Lat={Lat}, Lng={Lng}, RadiusKm={RadiusKm}, TargetDate={TargetDate:yyyy-MM-dd}, Intent={@Intent}",
@@ -73,21 +90,17 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 ? _localAiRepo.GetNearbyWeatherAsync(lat, lng, targetDate, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiWeatherContextDTO>());
 
+            Task<IEnumerable<LocalAiCriticalAlertContextDTO>> criticalAlertsTask =
+                 _localAiRepo.GetNearbyCriticalAlertsAsync(lat, lng, radiusKm, ct);
+
             await Task.WhenAll(
                 placesTask,
                 eventsTask,
                 crowdCalendarTask,
                 crowdInfoTask,
                 trafficTask,
-                weatherTask).ConfigureAwait(false);
-
-            var places = (await placesTask.ConfigureAwait(false))
-                .Where(IsPlaceRelevant)
-                .OrderBy(x => x.DistanceKm ?? double.MaxValue)
-                .ThenByDescending(x => x.Capacity ?? int.MinValue)
-                .ThenBy(x => x.Name ?? string.Empty)
-                .Take(Limits.MaxPlaces)
-                .ToList();
+                weatherTask,
+                criticalAlertsTask).ConfigureAwait(false);
 
             var events = (await eventsTask.ConfigureAwait(false))
                 .Where(IsEventRelevant)
@@ -126,14 +139,62 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .Take(Limits.MaxWeather)
                 .ToList();
 
-            _logger.LogInformation(
-                "Local AI context built. Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}",
+            var badWeatherDetected = weather.Any(w =>
+                w.IsSevere == true ||
+                (w.RainfallMm ?? 0d) > 0d ||
+                (w.WindSpeedKmh ?? 0d) >= 45d ||
+                (w.TemperatureC ?? 15d) <= 0d ||
+                (w.TemperatureC ?? 15d) >= 32d);
+
+            var criticalAlerts = (await criticalAlertsTask.ConfigureAwait(false))
+                .Where(a => a.Status == "Confirmed")
+                .OrderByDescending(a => a.Severity)
+                .ThenBy(a => a.DistanceKm ?? double.MaxValue)
+                .Take(20)
+                .ToList();
+
+            var nearbyPlaces = (await placesTask.ConfigureAwait(false))
+                .Where(IsPlaceRelevant)
+                .Where(p => !IsUnsafeCandidate(p, criticalAlerts))
+                .ToList();
+
+            var places = keywordPlaces
+                .Concat(nearbyPlaces)
+                .GroupBy(p => p.Id)
+                .Select(g => g.First())
+                .OrderBy(p => p.DistanceKm ?? double.MaxValue)
+                .ThenBy(p => p.Name)
+                .Take(Limits.MaxPlaces)
+                .ToList();
+
+            if (badWeatherDetected)
+            {
+                places = places
+                    .OrderByDescending(p => p.Indoor == true)
+                    .ThenBy(p => p.DistanceKm ?? double.MaxValue)
+                    .ToList();
+            }
+
+            if (hasChildren)
+            {
+                places = places
+                    .OrderByDescending(p =>
+                        (p.Tag ?? "").Contains("child", StringComparison.OrdinalIgnoreCase) ||
+                        (p.Tag ?? "").Contains("famille", StringComparison.OrdinalIgnoreCase) ||
+                        (p.Tag ?? "").Contains("enfant", StringComparison.OrdinalIgnoreCase))
+                    .ThenBy(p => p.DistanceKm ?? double.MaxValue)
+                    .ToList();
+            }
+
+
+            _logger.LogInformation("Local AI context built. Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}, CriticalAlerts={CriticalAlerts}",
                 places.Count,
                 events.Count,
                 crowdCalendar.Count,
                 crowdInfo.Count,
                 traffic.Count,
-                weather.Count);
+                weather.Count,
+                criticalAlerts.Count);
 
             return new LocalAiContextDTO
             {
@@ -146,7 +207,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 CrowdCalendar = crowdCalendar,
                 CrowdInfo = crowdInfo,
                 Traffic = traffic,
-                Weather = weather
+                Weather = weather,
+                CriticalAlerts = criticalAlerts,
+                LocationLabel = locationLabel,
+                KeywordMatchedPlaces = keywordPlaces.ToList(),
+                HasChildren = hasChildren,
+                BadWeatherDetected = badWeatherDetected,
+                MaxAlternativeRadiusKm = 25
             };
         }
 
@@ -176,6 +243,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("9. If data is missing, say it clearly.");
             sb.AppendLine();
 
+            sb.AppendLine("Critical safety rules:");
+            sb.AppendLine("1. If a destination is affected by a confirmed Crowd, Weather, Traffic, or Disaster alert, do not recommend it.");
+            sb.AppendLine("2. Propose safer alternatives outside the affected zone.");
+            sb.AppendLine("3. Safety has priority over distance.");
+            sb.AppendLine("4. Alternatives may be up to 20-25 km away, including outside Wallonia if safer.");
+            sb.AppendLine("5. Do not route users toward an alert zone.");
+            sb.AppendLine("6. Never increase crowd concentration near a critical alert.");
+            sb.AppendLine("7. Clearly explain why the original destination is not recommended.");
+            sb.AppendLine();
+
             sb.AppendLine("Response style:");
             sb.AppendLine("- start with the most relevant real nearby place if one exists");
             sb.AppendLine("- if no place is available, use the most relevant real nearby event");
@@ -196,6 +273,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             AppendCrowdInfo(sb, context);
             AppendTraffic(sb, context);
             AppendWeather(sb, context);
+            AppendCriticalAlerts(sb, context);
+            AppendUserSafetyConstraints(sb, context);
 
             sb.AppendLine("Final reminder:");
             sb.AppendLine("- real places first");
@@ -213,6 +292,62 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("- Do not round distances differently.");
             sb.AppendLine("- Copy the distance string exactly, including unit.");
             sb.AppendLine("- If the context says 'distance 16.5 km', answer '16.5 km', not 'environ 16 km'.");
+            sb.AppendLine();
+
+            sb.AppendLine("Critical safety rules:");
+            sb.AppendLine("1. If the requested or nearest destination is affected by a confirmed Crowd, Weather, Traffic, or Disaster alert, do not recommend it.");
+            sb.AppendLine("2. Propose safer alternatives outside the affected zone.");
+            sb.AppendLine("3. Safety has priority over distance.");
+            sb.AppendLine("4. Alternatives may be up to 20-25 km away, including outside Wallonia if safer.");
+            sb.AppendLine("5. If weather is rainy, stormy, windy, icy, snowy, or severe, prioritize indoor places.");
+            sb.AppendLine("6. If children are present, avoid unsafe, isolated, overcrowded, road-exposed, or disaster-adjacent places.");
+            sb.AppendLine("7. Never increase crowd concentration near a critical alert zone.");
+            sb.AppendLine("8. Clearly explain why the original destination is not recommended.");
+            sb.AppendLine();
+
+            sb.AppendLine("Child-safety factuality rules:");
+            sb.AppendLine("- Do not say a place is supervised unless the context explicitly says supervised=true or the type/tag proves it.");
+            sb.AppendLine("- Do not say a place is calm unless the context explicitly says calm, quiet, low crowd, or low risk.");
+            sb.AppendLine("- If the context only says city/village, describe it as a safer fallback area, not as a supervised child-friendly place.");
+            sb.AppendLine("- Prefer wording like: 'zone de repli plus sûre selon les données disponibles'.");
+            sb.AppendLine();
+
+            sb.AppendLine("Factuality rules for alternatives:");
+            sb.AppendLine("- Do not claim that a place is indoor unless the context explicitly says indoor=true or type/tag indicates an indoor venue.");
+            sb.AppendLine("- Do not claim that a place is child-friendly unless the context explicitly says child-friendly, family, enfant, famille, playground, museum, indoor, supervised, or similar.");
+            sb.AppendLine("- If the context only says city/village, say it is a nearby fallback area, not a guaranteed child-friendly attraction.");
+            sb.AppendLine("- Never invent attractions, parks, museums, castles, indoor facilities, restaurants, or distances.");
+            sb.AppendLine();
+
+            sb.AppendLine("Answer format:");
+            sb.AppendLine("1. Start with a short safety warning if the requested destination is affected by an alert.");
+            sb.AppendLine("2. Recommend 1 to 3 alternatives only from Safe candidate alternatives.");
+            sb.AppendLine("3. For each alternative, give distance and only facts explicitly present in the context.");
+            sb.AppendLine("4. If indoor or child-friendly is unknown, say it is a safer nearby fallback area, not a guaranteed indoor/child-friendly activity.");
+            sb.AppendLine("5. Do not mention attractions that are not present in the context.");
+            sb.AppendLine();
+
+            sb.AppendLine("Places explicitly matched from user request:");
+            sb.AppendLine("These places were found by backend keyword search in dbo.Place. They are factual database results.");
+
+            foreach (var p in context.KeywordMatchedPlaces)
+            {
+                sb.AppendLine(
+                    $"- name: {p.Name}; " +
+                    $"type: {p.Type ?? "unknown"}; " +
+                    $"indoor: {(p.Indoor == true ? "true" : p.Indoor == false ? "false" : "unknown")}; " +
+                    $"lat: {p.Latitude}; lng: {p.Longitude}; " +
+                    $"capacity: {(p.Capacity?.ToString() ?? "unknown")}; " +
+                    $"tag: {p.Tag ?? "none"}");
+            }
+
+            sb.AppendLine();
+
+            sb.AppendLine("Place search rules:");
+            sb.AppendLine("- If the user mentions a place by name, first rely on 'Places explicitly matched from user request'.");
+            sb.AppendLine("- Do not require the user to provide coordinates.");
+            sb.AppendLine("- Do not invent coordinates, attractions, indoor status, child-friendly status, or distances.");
+            sb.AppendLine("- If several places match the keyword, mention the most relevant matches and ask the user to clarify only if necessary.");
             sb.AppendLine();
 
             return sb.ToString();
@@ -311,6 +446,53 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return false;
         }
 
+        private static bool IsUnsafeCandidate(LocalAiPlaceContextDTO place, IReadOnlyList<LocalAiCriticalAlertContextDTO> alerts)
+        {
+            if (place.Latitude is null || place.Longitude is null)
+                return false;
+
+            foreach (var alert in alerts)
+            {
+                var distanceKm = HaversineKm(
+                    (double)place.Latitude.Value,
+                    (double)place.Longitude.Value,
+                    (double)alert.Latitude,
+                    (double)alert.Longitude);
+
+                var unsafeRadiusKm = alert.AlertKind switch
+                {
+                    "Disaster" => 5.0,
+                    "Crowd" => 2.0,
+                    "Traffic" => 2.0,
+                    "Weather" => 3.0,
+                    _ => 1.0
+                };
+
+                if (distanceKm <= unsafeRadiusKm)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static double HaversineKm(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double r = 6371.0;
+
+            static double Rad(double x) => x * Math.PI / 180.0;
+
+            var dLat = Rad(lat2 - lat1);
+            var dLon = Rad(lon2 - lon1);
+
+            var a =
+                Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(Rad(lat1)) * Math.Cos(Rad(lat2)) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+
+            return r * c;
+        }
         private static void AppendPlaces(StringBuilder sb, LocalAiContextDTO context)
         {
             sb.AppendLine("Nearby real places:");
@@ -322,15 +504,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return;
             }
 
+            sb.AppendLine("Safe candidate alternatives:");
+            sb.AppendLine("Only recommend places from this list.");
+
             foreach (var p in context.Places)
             {
                 sb.AppendLine(
-                    $"- {p.Name}, " +
-                    $"distance {FmtDistance(p.DistanceKm)}, " +
-                    $"type {p.Type ?? "—"}, " +
-                    $"indoor {(p.Indoor.HasValue ? (p.Indoor.Value ? "yes" : "no") : "—")}, " +
-                    $"capacity {(p.Capacity?.ToString() ?? "—")}, " +
-                    $"tag {p.Tag ?? "—"}");
+                    $"- name: {p.Name}; " +
+                    $"distanceKm: {(p.DistanceKm?.ToString("0.0", CultureInfo.InvariantCulture) ?? "unknown")}; " +
+                    $"type: {p.Type ?? "unknown"}; " +
+                    $"indoor: {(p.Indoor == true ? "true" : p.Indoor == false ? "false" : "unknown")}; " +
+                    $"tag: {p.Tag ?? "none"}; " +
+                    $"capacity: {(p.Capacity?.ToString() ?? "unknown")}; " +
+                    $"safetyStatus: backend-filtered-safe");
             }
 
             sb.AppendLine();
@@ -458,6 +644,58 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     $"rain {(w.RainfallMm?.ToString("0.#") ?? "—")} mm, " +
                     $"severe {(w.IsSevere?.ToString() ?? "—")}, " +
                     $"description: {w.Description ?? w.WeatherMain ?? w.Summary ?? "—"}");
+            }
+
+            sb.AppendLine();
+        }
+
+        private static void AppendCriticalAlerts(StringBuilder sb, LocalAiContextDTO context)
+        {
+            sb.AppendLine("Confirmed critical alerts:");
+
+            if (context.CriticalAlerts is null || context.CriticalAlerts.Count == 0)
+            {
+                sb.AppendLine("- none");
+                sb.AppendLine();
+                return;
+            }
+
+            foreach (var a in context.CriticalAlerts)
+            {
+                sb.AppendLine(
+                    $"- {a.AlertKind}, " +
+                    $"status {a.Status}, " +
+                    $"severity {a.Severity}, " +
+                    $"place {a.PlaceName ?? "—"}, " +
+                    $"description {a.Description ?? "—"}, " +
+                    $"distance {FmtDistance(a.DistanceKm)}, " +
+                    $"expires {(a.ExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")}");
+            }
+
+            sb.AppendLine();
+        }
+
+        private static void AppendUserSafetyConstraints(StringBuilder sb, LocalAiContextDTO context)
+        {
+            sb.AppendLine("User safety constraints:");
+
+            if (context.HasChildren)
+            {
+                sb.AppendLine("- The user is with children.");
+                sb.AppendLine("- Prefer calm, supervised, child-friendly places.");
+                sb.AppendLine("- Avoid isolated, overcrowded, road-exposed, disaster-adjacent, or hazardous places.");
+            }
+
+            if (context.BadWeatherDetected)
+            {
+                sb.AppendLine("- Bad weather is detected.");
+                sb.AppendLine("- Prefer indoor alternatives.");
+                sb.AppendLine("- Avoid outdoor-only activities unless no safer indoor option exists.");
+            }
+
+            if (!context.HasChildren && !context.BadWeatherDetected)
+            {
+                sb.AppendLine("- none");
             }
 
             sb.AppendLine();

@@ -48,7 +48,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var prompt = request.Prompt.Trim();
             var interaction = await CreateInitialInteractionAsync(request, prompt, ct).ConfigureAwait(false);
 
-            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _appLifetime.ApplicationStopping);
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_appLifetime.ApplicationStopping);
             var requestId = _gptRequestRegistry.Register(interaction.Id, linkedCts);
 
             _ = Task.Run(
@@ -193,11 +193,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return Task.FromResult(cancelled);
         }
 
-        private async Task RunPipelineAsync(
-            GPTInteraction interaction,
-            GptPromptRequest request,
-            string requestId,
-            CancellationToken ct)
+        private async Task RunPipelineAsync(GPTInteraction interaction, GptPromptRequest request, string requestId, CancellationToken ct)
         {
             try
             {
@@ -230,12 +226,18 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         TimestampUtc = DateTime.UtcNow
                     });
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
                 _logger.LogWarning(
-                    "[GPT-PIPELINE][ASYNC] Cancelled. InteractionId={InteractionId}, RequestId={RequestId}",
+                    ex,
+                    "[GPT-PIPELINE][ASYNC] Cancelled. InteractionId={InteractionId}, RequestId={RequestId}, TokenCanBeCanceled={CanBeCanceled}, TokenIsCancellationRequested={IsCancellationRequested}",
                     interaction.Id,
-                    requestId);
+                    requestId,
+                    ct.CanBeCanceled,
+                    ct.IsCancellationRequested);
+
+                await MarkFailedSafeAsync(interaction.Id, "Generation cancelled by cancellation token.")
+                    .ConfigureAwait(false);
 
                 await _hubContext.SendStatus(
                     new GptResponseStatusDto
@@ -359,7 +361,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             swContext.Stop();
 
             _logger.LogInformation(
-                "[GPT-PIPELINE] Local context built. InteractionId={InteractionId}, RequestId={RequestId}, ElapsedMs={ElapsedMs}, Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}",
+                "[GPT-PIPELINE] Local context built. InteractionId={InteractionId}, RequestId={RequestId}, ElapsedMs={ElapsedMs}, Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}, CriticalAlerts={CriticalAlerts}, HasChildren={HasChildren}, BadWeather={BadWeather}",
                 interactionId,
                 requestId,
                 swContext.ElapsedMilliseconds,
@@ -368,7 +370,24 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 localContext.CrowdCalendar.Count,
                 localContext.CrowdInfo.Count,
                 localContext.Traffic.Count,
-                localContext.Weather.Count);
+                localContext.Weather.Count,
+                localContext.CriticalAlerts.Count,
+                localContext.HasChildren,
+                localContext.BadWeatherDetected);
+
+            if (localContext.CriticalAlerts.Count > 0)
+            {
+                foreach (var alert in localContext.CriticalAlerts)
+                {
+                    _logger.LogWarning(
+                        "[GPT-SAFETY] Confirmed critical alert in AI context. Kind={Kind}, Place={Place}, Severity={Severity}, DistanceKm={DistanceKm}, ExpiresAt={ExpiresAt}",
+                        alert.AlertKind,
+                        alert.PlaceName,
+                        alert.Severity,
+                        alert.DistanceKm,
+                        alert.ExpiresAtUtc);
+                }
+            }
 
             var groundedPrompt = localAiContextService.BuildPrompt(localContext);
 
@@ -387,6 +406,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 var chunkCount = 0;
                 var streamedChars = 0;
+
+                _logger.LogInformation("[GPT-PIPELINE] Mistral streaming started. InteractionId={InteractionId}, RequestId={RequestId}", interactionId, requestId);
 
                 finalResponse = await mistralAiService.StreamFromPromptAsync(
                     groundedPrompt,
@@ -415,6 +436,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     ct: ct).ConfigureAwait(false);
             }
 
+            _logger.LogInformation(
+                "[GPT-PIPELINE] Mistral streaming finished. InteractionId={InteractionId}, RequestId={RequestId}, ResponseLength={ResponseLength}",
+                interactionId,
+                requestId,
+                finalResponse?.Length ?? 0);
+
             if (string.IsNullOrWhiteSpace(finalResponse))
                 finalResponse = "No response from Mistral.";
 
@@ -422,6 +449,42 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 interactionId,
                 finalResponse,
                 ct).ConfigureAwait(false);
+
+            var suggestionRepository = scope.ServiceProvider.GetService<ISuggestionRepository>();
+
+            if (suggestionRepository is not null && localContext.CriticalAlerts.Count > 0)
+            {
+                var mainAlert = localContext.CriticalAlerts
+                    .OrderByDescending(a => a.Severity)
+                    .ThenBy(a => a.DistanceKm ?? double.MaxValue)
+                    .First();
+
+                var suggestion = new Suggestion
+                {
+                    User_Id = 0,
+                    DateSuggestion = DateTime.UtcNow,
+
+                    OriginalPlace = mainAlert.PlaceName ?? "Affected area",
+                    SuggestedAlternatives = finalResponse,
+
+                    Reason = $"Confirmed {mainAlert.AlertKind} alert near requested area.",
+
+                    Message = finalResponse,
+                    Context = groundedPrompt,
+
+                    Latitude = effectiveLatitude,
+                    Longitude = effectiveLongitude,
+
+                    DistanceKm = mainAlert.DistanceKm,
+                    LocationLabel = mainAlert.PlaceName,
+
+                    Title = "OutZen safe alternative suggestion",
+                    Active = true
+                };
+
+                await suggestionRepository.SaveSuggestionAsync(suggestion, ct)
+                    .ConfigureAwait(false);
+            }
 
             if (!updated)
                 throw new InvalidOperationException($"Failed to persist final GPT response for interaction {interactionId}.");

@@ -9,6 +9,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
     /// </summary>
     public interface ILocalAiDataRepository
     {
+        Task<IReadOnlyList<LocalAiPlaceContextDTO>> SearchPlacesByKeywordsAsync(string userPrompt, int limit = 10, CancellationToken ct = default);
         Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(
             double latitude,
             double longitude,
@@ -70,6 +71,11 @@ namespace CitizenHackathon2025.Domain.Interfaces
             double radiusKm,
             CancellationToken ct = default);
         Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(
+            double latitude,
+            double longitude,
+            double radiusKm,
+            CancellationToken ct = default);
+        Task<IEnumerable<LocalAiCriticalAlertContextDTO>> GetNearbyCriticalAlertsAsync(
             double latitude,
             double longitude,
             double radiusKm,

@@ -1,12 +1,12 @@
 ﻿using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Data;
 using System.Security.Cryptography;
 using System.Text;
+using Dapper;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -263,20 +263,41 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             interaction.Model ??= "mistral";
             interaction.Temperature ??= 0.3f;
-            interaction.SourceType ??= "MistralLocal";
 
-            _logger.LogInformation(
-                "Creating pending GPT interaction. PromptLength={PromptLength}, Latitude={Latitude}, Longitude={Longitude}",
-                interaction.Prompt.Length,
-                interaction.Latitude,
-                interaction.Longitude);
+            interaction.PromptHash = ComputePromptHash(
+                $"{interaction.Prompt}|{Guid.NewGuid():N}|{DateTime.UtcNow:O}");
 
-            var created = await UpsertInteractionAsync(interaction);
+            const string sql = """
+                            INSERT INTO dbo.GptInteractions
+                            (
+                                Prompt,
+                                PromptHash,
+                                Response,
+                                CreatedAt,
+                                Active,
+                                Model,
+                                Temperature,
+                                TokenCount
+                            )
+                            OUTPUT INSERTED.*
+                            VALUES
+                            (
+                                @Prompt,
+                                @PromptHash,
+                                @Response,
+                                SYSUTCDATETIME(),
+                                1,
+                                @Model,
+                                @Temperature,
+                                @TokenCount
+                            );
+                            """;
 
-            if (created is null)
-                throw new InvalidOperationException("Failed to create pending GPT interaction.");
-
-            return created;
+            return await _connection.QuerySingleAsync<GPTInteraction>(
+                new CommandDefinition(
+                    sql,
+                    interaction,
+                    cancellationToken: ct));
         }
 
         public async Task SaveInteractionAsync(GPTInteraction interaction)

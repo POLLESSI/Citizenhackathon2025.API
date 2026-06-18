@@ -50,6 +50,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 _rules.WindowMinutes,
                 ct);
 
+            Console.WriteLine($"[QUORUM] Zone={zoneKey} Count={count}");
+
             return new CriticalAlertQuorumResult
             {
                 Confirmed = count >= _rules.RequiredDistinctReports,

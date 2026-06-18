@@ -5,6 +5,7 @@ using CitizenHackathon2025.Infrastructure.Persistence;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Text.RegularExpressions;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
@@ -29,6 +30,79 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             connection.Open();
             return connection;
+        }
+
+        public async Task<IReadOnlyList<LocalAiPlaceContextDTO>> SearchPlacesByKeywordsAsync(
+            string userPrompt,
+            int limit = 10,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(userPrompt))
+                return Array.Empty<LocalAiPlaceContextDTO>();
+
+            var tokens = ExtractSearchTokens(userPrompt);
+
+            if (tokens.Count == 0)
+                return Array.Empty<LocalAiPlaceContextDTO>();
+
+            var whereParts = new List<string>();
+            var parameters = new DynamicParameters();
+
+            parameters.Add("@Limit", Math.Clamp(limit, 1, 25));
+
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                var paramName = $"@Token{i}";
+                parameters.Add(paramName, $"%{tokens[i]}%");
+
+                whereParts.Add($"""
+            (
+                p.Name LIKE {paramName}
+                OR p.Type LIKE {paramName}
+                OR p.Tag LIKE {paramName}
+            )
+            """);
+            }
+
+            var sql = $"""
+                    SELECT TOP(@Limit)
+                        p.Id,
+                        p.Name,
+                        p.Type,
+                        p.Indoor,
+                        CAST(p.Latitude AS FLOAT) AS Latitude,
+                        CAST(p.Longitude AS FLOAT) AS Longitude,
+                        p.Capacity,
+                        p.Tag,
+                        CAST(0 AS FLOAT) AS DistanceKm
+                    FROM dbo.Place p
+                    WHERE p.Active = 1
+                      AND ({string.Join(" OR ", whereParts)})
+                    ORDER BY
+                        CASE
+                            WHEN p.Name LIKE @ExactName THEN 0
+                            WHEN p.Tag LIKE @ExactName THEN 1
+                            ELSE 2
+                        END,
+                        p.Name ASC;
+                    """;
+
+            parameters.Add("@ExactName", $"%{userPrompt.Trim()}%");
+
+            try
+            {
+                using var connection = await OpenConnectionAsync(ct);
+
+                var rows = await connection.QueryAsync<LocalAiPlaceContextDTO>(
+                    new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+                return rows.ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[LOCAL-AI][PLACE-KEYWORD-SEARCH] SQL failed: {ex}");
+                return Array.Empty<LocalAiPlaceContextDTO>();
+            }
         }
 
         public async Task<IEnumerable<LocalAiCrowdCalendarContextDTO>> GetNearbyCrowdCalendarAsync(
@@ -291,10 +365,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         }
 
         public async Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(
-    double latitude,
-    double longitude,
-    double radiusKm,
-    CancellationToken ct = default)
+            double latitude,
+            double longitude,
+            double radiusKm,
+            CancellationToken ct = default)
         {
             const string sql = @"
                             WITH PlaceBase AS
@@ -540,10 +614,10 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
         public async Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(
-    double latitude,
-    double longitude,
-    double radiusKm,
-    CancellationToken ct = default)
+            double latitude,
+            double longitude,
+            double radiusKm,
+            CancellationToken ct = default)
         {
             const string sql = @"
                             WITH SuggestionBase AS
@@ -641,6 +715,126 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                     sql,
                     parameters,
                     cancellationToken: ct));
+        }
+        public async Task<IEnumerable<LocalAiCriticalAlertContextDTO>> GetNearbyCriticalAlertsAsync(
+            double latitude,
+            double longitude,
+            double radiusKm,
+            CancellationToken ct = default)
+        {
+            const string sql = """
+                            DECLARE @UserPoint geography =
+                                geography::Point(@Latitude, @Longitude, 4326);
+
+                            SELECT *
+                            FROM
+                            (
+                                SELECT
+                                    'Disaster' AS AlertKind,
+                                    Status,
+                                    Latitude,
+                                    Longitude,
+                                    PlaceName,
+                                    Description,
+                                    CAST(Severity AS INT) AS Severity,
+                                    CreatedAtUtc,
+                                    ExpiresAtUtc,
+                                    @UserPoint.STDistance(geography::Point(Latitude, Longitude, 4326)) / 1000.0 AS DistanceKm
+                                FROM dbo.DisasterAlert
+                                WHERE Active = 1
+                                  AND Status = 'Confirmed'
+                                  AND (ExpiresAtUtc IS NULL OR ExpiresAtUtc >= SYSUTCDATETIME())
+
+                                UNION ALL
+
+                                SELECT
+                                    'Crowd' AS AlertKind,
+                                    'Confirmed' AS Status,
+                                    Latitude,
+                                    Longitude,
+                                    LocationName AS PlaceName,
+                                    Reason AS Description,
+                                    CrowdLevel AS Severity,
+                                    [Timestamp] AS CreatedAtUtc,
+                                    ExpiresAtUtc,
+                                    @UserPoint.STDistance(geography::Point(Latitude, Longitude, 4326)) / 1000.0 AS DistanceKm
+                                FROM dbo.CrowdInfo
+                                WHERE Active = 1
+                                  AND IsManualCriticalAlert = 1
+                                  AND CrowdLevel >= 4
+                                  AND (ExpiresAtUtc IS NULL OR ExpiresAtUtc >= SYSUTCDATETIME())
+
+                                UNION ALL
+
+                                SELECT
+                                    'Traffic' AS AlertKind,
+                                    'Confirmed' AS Status,
+                                    Latitude,
+                                    Longitude,
+                                    Road AS PlaceName,
+                                    Title AS Description,
+                                    ISNULL(CAST(Severity AS INT), 4) AS Severity,
+                                    LastSeenAt AS CreatedAtUtc,
+                                    DATEADD(MINUTE, 10, LastSeenAt) AS ExpiresAtUtc,
+                                    @UserPoint.STDistance(geography::Point(Latitude, Longitude, 4326)) / 1000.0 AS DistanceKm
+                                FROM dbo.TrafficCondition
+                                WHERE Active = 1
+                                  AND Provider = 'manual'
+                                  AND ISNULL(Severity, 0) >= 3
+                                  AND LastSeenAt >= DATEADD(MINUTE, -30, SYSUTCDATETIME())
+
+                                UNION ALL
+
+                                SELECT
+                                    'Weather' AS AlertKind,
+                                    'Confirmed' AS Status,
+                                    Latitude,
+                                    Longitude,
+                                    NULL AS PlaceName,
+                                    Description,
+                                    CASE WHEN IsSevere = 1 THEN 4 ELSE 3 END AS Severity,
+                                    DateWeather AS CreatedAtUtc,
+                                    DATEADD(MINUTE, 30, DateWeather) AS ExpiresAtUtc,
+                                    @UserPoint.STDistance(geography::Point(Latitude, Longitude, 4326)) / 1000.0 AS DistanceKm
+                                FROM dbo.WeatherForecast
+                                WHERE Active = 1
+                                  AND IsSevere = 1
+                                  AND DateWeather >= DATEADD(HOUR, -2, SYSUTCDATETIME())
+                            ) q
+                            WHERE q.DistanceKm <= @RadiusKm
+                            ORDER BY q.Severity DESC, q.DistanceKm ASC;
+                            """;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@Latitude", latitude, DbType.Double);
+            parameters.Add("@Longitude", longitude, DbType.Double);
+            parameters.Add("@RadiusKm", radiusKm, DbType.Double);
+
+            using var connection = await OpenConnectionAsync(ct);
+
+            return await connection.QueryAsync<LocalAiCriticalAlertContextDTO>(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    cancellationToken: ct));
+        }
+
+        private static List<string> ExtractSearchTokens(string prompt)
+        {
+            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "bonjour", "bonsoir", "mistral", "quoi", "que", "qui", "quoi", "faire",
+                "interessant", "intéressant", "week-end", "weekend", "avec", "des",
+                "enfants", "famille", "aller", "visiter", "autour", "près", "proche",
+                "de", "du", "la", "le", "les", "à", "a", "y", "il", "t"
+            };
+
+            return Regex.Matches(prompt, @"[\p{L}\p{N}'\-]{3,}")
+                .Select(m => m.Value.Trim('\'', '-'))
+                .Where(x => !stopWords.Contains(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToList();
         }
     }
 }

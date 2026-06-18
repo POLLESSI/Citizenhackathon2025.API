@@ -10,11 +10,18 @@
         public double Longitude { get; init; }
 
         public List<LocalAiPlaceContextDTO> Places { get; init; } = new();
+        public List<LocalAiPlaceContextDTO> KeywordMatchedPlaces { get; set; } = new();
         public List<LocalAiEventContextDTO> Events { get; init; } = new();
         public List<LocalAiCrowdCalendarContextDTO> CrowdCalendar { get; init; } = new();
         public List<LocalAiCrowdInfoContextDTO> CrowdInfo { get; init; } = new();
         public List<LocalAiTrafficContextDTO> Traffic { get; init; } = new();
         public List<LocalAiWeatherContextDTO> Weather { get; init; } = new();
+        public List<LocalAiCriticalAlertContextDTO> CriticalAlerts { get; set; } = new();
+
+        public bool HasChildren { get; set; }
+        public bool PreferIndoorWhenRain { get; set; } = true;
+        public bool BadWeatherDetected { get; set; }
+        public double MaxAlternativeRadiusKm { get; set; } = 25;
     }
 }
 

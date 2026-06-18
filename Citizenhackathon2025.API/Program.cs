@@ -117,6 +117,7 @@ internal class Program
         ConfigureApplicationServices(services);
         ConfigureHostedServices(services, configuration, env); 
         ConfigureMediatR(services);
+        ConfigureNoSql(services, configuration);
 
 #if DEBUG
         services
@@ -192,6 +193,10 @@ internal class Program
         builder.Logging.AddConsole();
     }
 
+    private static void ConfigureNoSql(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddMongoPersistence(configuration);
+    }
     private static bool IsUsableEventHubConnectionString(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -856,6 +861,7 @@ internal class Program
         services.AddScoped<ICrowdInfoAntennaConnectionRepository, CrowdInfoAntennaConnectionRepository>();
         services.AddScoped<ICrowdSafetyAlertRepository, CrowdSafetyAlertRepository>();
         services.AddScoped<ICrowdCalendarRepository, CrowdCalendarRepository>();
+        services.AddScoped<IDisasterAlertRepository, DisasterAlertRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
         services.AddScoped<ILocalAiDataRepository, LocalAiDataRepository>();
