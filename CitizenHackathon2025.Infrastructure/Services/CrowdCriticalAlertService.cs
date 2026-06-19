@@ -1,4 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Options;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -7,8 +9,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
         private readonly CriticalAlertRules _rules;
 
-        public CrowdCriticalAlertService(
-            IOptions<CriticalAlertRules> options)
+        public CrowdCriticalAlertService(IOptions<CriticalAlertRules> options)
         {
             _rules = options.Value;
         }

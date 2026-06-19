@@ -1,10 +1,11 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Models;
-using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
@@ -18,19 +19,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly IWallonieEnPocheSyncRepository _syncRepository;
         private readonly IHubContext<PlaceHub> _placeHub;
         private readonly IHubContext<EventHub> _eventHub;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
         private readonly ILogger<WallonieEnPocheSyncService> _logger;
 
-        public WallonieEnPocheSyncService(
-            IWallonieEnPocheSourceClient sourceClient,
-            IWallonieEnPocheSyncRepository syncRepository,
-            IHubContext<PlaceHub> placeHub,
-            IHubContext<EventHub> eventHub,
-            ILogger<WallonieEnPocheSyncService> logger)
+        public WallonieEnPocheSyncService(IWallonieEnPocheSourceClient sourceClient, IWallonieEnPocheSyncRepository syncRepository, IHubContext<PlaceHub> placeHub, IHubContext<EventHub> eventHub, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<WallonieEnPocheSyncService> logger)
         {
             _sourceClient = sourceClient;
             _syncRepository = syncRepository;
             _placeHub = placeHub;
             _eventHub = eventHub;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
             _logger = logger;
         }
 
@@ -126,6 +124,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         _logger.LogError(ex, "Error syncing event {ExternalId}", ev.ExternalId);
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Mongo snapshot write failed. SQL flow continues.");
             }
             finally
             {

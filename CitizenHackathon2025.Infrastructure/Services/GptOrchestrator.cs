@@ -284,10 +284,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 throw new ArgumentException("Prompt cannot be empty.", nameof(request));
         }
 
-        private async Task<GPTInteraction> CreateInitialInteractionAsync(
-            GptPromptRequest request,
-            string prompt,
-            CancellationToken ct)
+        private async Task<GPTInteraction> CreateInitialInteractionAsync(GptPromptRequest request, string prompt, CancellationToken ct)
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var gptRepository = scope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();

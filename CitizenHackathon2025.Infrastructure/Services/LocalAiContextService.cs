@@ -27,11 +27,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<LocalAiContextDTO> BuildContextAsync(
-            string prompt,
-            double? latitude,
-            double? longitude,
-            CancellationToken ct = default)
+        public async Task<LocalAiContextDTO> BuildContextAsync(string prompt, double? latitude, double? longitude, CancellationToken ct = default)
         {
             var safePrompt = prompt?.Trim() ?? string.Empty;
             var hasChildren =

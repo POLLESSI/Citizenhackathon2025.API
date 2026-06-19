@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
@@ -11,15 +12,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
         private readonly ILogger<OllamaGenerativeAiService> _logger;
 
-        public OllamaGenerativeAiService(
-            HttpClient httpClient,
-            IConfiguration config,
-            ILogger<OllamaGenerativeAiService> logger)
+        public OllamaGenerativeAiService(HttpClient httpClient, IConfiguration config, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<OllamaGenerativeAiService> logger)
         {
             _httpClient = httpClient;
             _config = config;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
             _logger = logger;
         }
 

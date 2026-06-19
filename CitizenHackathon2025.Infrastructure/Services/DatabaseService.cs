@@ -31,34 +31,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return false;
             }
         }
-
-        /// <summary>
-        /// Executes an arbitrary SQL command (⚠️ beware of injections!)
-        /// </summary>
-        //public async Task<int> ExecuteCommandAsync(string sql)
-        //{
-        //    try
-        //    {
-        //        return await _connection.ExecuteAsync(sql);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Erreur lors de l'exécution de la commande SQL");
-        //        throw;
-        //    }
-        //}
-
-        /// <summary>
-        /// Empty a table (useful for maintenance scripts).
-        /// </summary>
-        //public async Task<int> TruncateTableAsync(string tableName)
-        //{
-        //    if (string.IsNullOrWhiteSpace(tableName))
-        //        throw new ArgumentException("Le nom de la table est requis.");
-
-        //    string sql = $"TRUNCATE TABLE [{tableName}]";
-        //    //return await ExecuteCommandAsync(sql);
-        //}
     }
 }
 

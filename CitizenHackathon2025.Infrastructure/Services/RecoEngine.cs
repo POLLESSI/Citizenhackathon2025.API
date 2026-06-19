@@ -1,8 +1,9 @@
-﻿using System.Globalization;
-using System.Threading; 
-using CitizenHackathon2025.Application.Interfaces;
-using Microsoft.Extensions.Logging;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.Logging;
+using System.Globalization;
+using System.Threading; 
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -15,19 +16,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly ITrafficConditionService _trafficService;
         private readonly ICrowdInfoService _crowdService;
         private readonly IPlaceService _placeService;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
         private readonly ILogger<RecoEngine> _logger;
 
-        public RecoEngine(
-            IWeatherForecastService weatherService,
-            ITrafficConditionService trafficService,
-            ICrowdInfoService crowdService,
-            IPlaceService placeService,
-            ILogger<RecoEngine> logger)
+        public RecoEngine(IWeatherForecastService weatherService, ITrafficConditionService trafficService, ICrowdInfoService crowdService, IPlaceService placeService, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<RecoEngine> logger)
         {
             _weatherService = weatherService;
             _trafficService = trafficService;
             _crowdService = crowdService;
             _placeService = placeService;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
             _logger = logger;
         }
 
@@ -39,7 +37,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var recommendations = new List<Place>();
 
             var latestList = await _weatherService.GetLatestWeatherForecastAsync(ct);
-            var latest = latestList?.FirstOrDefault();
             var traffic = await _trafficService.GetLatestTrafficConditionAsync(limit: 10, ct: ct);
             var crowds = await _crowdService.GetAllCrowdInfoAsync(limit: 200, ct: ct);
             var places = await _placeService.GetLatestPlaceAsync(limit: 200, ct: ct);
@@ -49,7 +46,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             foreach (var place in places)
             {
-                var isIndoor = place.Indoor; // ✅ bool direct
+                var isIndoor = place.Indoor;
 
                 var isCrowdedNearby = crowds.Any(c =>
                     Math.Abs(c.Latitude - place.Latitude) <= proximity &&
@@ -61,6 +58,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             _logger.LogInformation("✅ {Count} recommendations generated.", recommendations.Count);
+
             return recommendations;
         }
     }

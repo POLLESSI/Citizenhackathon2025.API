@@ -1,15 +1,16 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class PlaceService : IPlaceService
     {
-#nullable disable
+    #nullable disable
         private readonly IPlaceRepository _repo;
-
         public PlaceService(IPlaceRepository repo)
         {
             _repo = repo;
@@ -38,9 +39,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return await _repo.GetByIdAsync(id);
         }
 
-        public Task<Place> SaveAsync(Place place, CancellationToken ct = default)
+        public async Task<Place> SaveAsync(Place place, CancellationToken ct = default)
         {
-            throw new NotImplementedException();
+            ArgumentNullException.ThrowIfNull(place);
+
+            return await _repo.SavePlaceAsync(place);
         }
 
         public async Task<Place> SavePlaceAsync(Place place)

@@ -1,5 +1,6 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
@@ -8,14 +9,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public class NotificationService : INotificationService
     {
         private readonly ILogger<NotificationService> _logger;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
         private readonly IHubContext<NotificationHub> _hubContext;
 
-        public NotificationService(ILogger<NotificationService> logger, IHubContext<NotificationHub> hubContext)
+        public NotificationService(ILogger<NotificationService> logger, IMongoSnapshotWriter mongoSnapshotWriter, IHubContext<NotificationHub> hubContext)
         {
             _logger = logger;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
             _hubContext = hubContext;
         }
-
 
         /// <summary>
         /// Send a simple notification (console, log, etc.)
@@ -27,6 +29,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 throw new ArgumentException("The notification message cannot be empty.");
 
             _logger.LogInformation("📢 Notification : {Message}", message);
+
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", message);
         }
 
@@ -37,8 +40,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
         /// <param name="message">Related post</param>
         public async Task NotifyEventAsync(string type, string message)
         {
-            string formatted = $"[{type}] {message}";
+            var formatted = $"[{type}] {message}";
+
             _logger.LogInformation("📣 [{Type}] : {Message}", type, message);
+
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", formatted);
         }
     }

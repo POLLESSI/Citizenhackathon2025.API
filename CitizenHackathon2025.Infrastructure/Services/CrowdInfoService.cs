@@ -8,14 +8,17 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Services;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
-
+using ManualCrowdCriticalAlertRequestContract = CitizenHackathon2025.Contracts.DTOs.ManualCrowdCriticalAlertRequest;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -29,15 +32,20 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly CriticalAlertRules _rules;
         private readonly HttpClient _http;
         private readonly IHubContext<CrowdHub> _crowdHubContext;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ILogger<CrowdInfoService> _logger;
 
-        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, ICriticalAlertQuorumService criticalAlertQuorumService, IPlaceRepository placeRepository, IHttpClientFactory httpClientFactory, IOptions<CriticalAlertRules> options, IHubContext<CrowdHub> crowdHubContext)
+        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, ICriticalAlertQuorumService criticalAlertQuorumService, IPlaceRepository placeRepository, ICrowdAlertVoteRepository crowdAlertVoteRepository, IOptions<CriticalAlertRules> options, HttpClient http, IHubContext<CrowdHub> crowdHubContext, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<CrowdInfoService> logger)
         {
             _crowdInfoRepository = crowdInfoRepository;
             _criticalAlertQuorumService = criticalAlertQuorumService;
             _placeRepository = placeRepository;
+            _crowdAlertVoteRepository = crowdAlertVoteRepository;
             _rules = options.Value;
-            _http = httpClientFactory.CreateClient("ApiWithAuth");
+            _http = http;
             _crowdHubContext = crowdHubContext;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _logger = logger;
         }
 
         public async Task<List<CrowdInfoDTO>> GetAllAsync()
@@ -90,63 +98,77 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return saved!;
         }
 
-        public async Task<ManualCriticalAlertResultDTO> CreateManualCriticalAlertAsync(CitizenHackathon2025.Contracts.DTOs.ManualCrowdCriticalAlertRequest request, CancellationToken ct = default)
+        public async Task<ManualCriticalAlertResultDTO> CreateManualCriticalAlertAsync(ManualCrowdCriticalAlertRequestContract request, CancellationToken ct = default)
         {
-            if (request.PlaceId <= 0)
-                throw new ArgumentOutOfRangeException(nameof(request.PlaceId));
-
-            var place = await _placeRepository.GetByIdAsync(request.PlaceId, ct);
-
-            if (place is null)
+            try
             {
+                if (request.PlaceId <= 0)
+                    throw new ArgumentOutOfRangeException(nameof(request.PlaceId));
+
+                var place = await _placeRepository.GetByIdAsync(request.PlaceId, ct);
+
+                if (place is null)
+                {
+                    return new ManualCriticalAlertResultDTO
+                    {
+                        Ok = false,
+                        Status = "Error",
+                        Error = $"Place {request.PlaceId} not found."
+                    };
+                }
+
+                var quorum = await _criticalAlertQuorumService.RegisterVoteAsync(
+                    CriticalAlertKind.Crowd,
+                    request.PlaceId,
+                    place.Latitude,
+                    place.Longitude,
+                    request.DeviceId,
+                    request.Reason,
+                    ct);
+
+                if (!quorum.Confirmed)
+                {
+                    return new ManualCriticalAlertResultDTO
+                    {
+                        Ok = true,
+                        Status = "Pending",
+                        ConfirmationCount = quorum.ConfirmationCount,
+                        RequiredCount = quorum.RequiredCount
+                    };
+                }
+
+                var alert = await _crowdInfoRepository.CreateManualCriticalAlertAsync(
+                    request.PlaceId,
+                    request.Reason,
+                    request.Source ?? "ManualButton",
+                    ct);
+
+                await _crowdHubContext.Clients.All.SendAsync(
+                    CrowdHubMethods.ToClient.ReceiveCrowdUpdate,
+                    alert,
+                    ct);
+
+                return new ManualCriticalAlertResultDTO
+                {
+                    Ok = true,
+                    Status = "Confirmed",
+                    ConfirmationCount = quorum.ConfirmationCount,
+                    RequiredCount = quorum.RequiredCount,
+                    ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_rules.AlertDurationMinutes),
+                    CrowdInfoId = alert.Id
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create manual critical crowd alert for PlaceId={PlaceId}.", request.PlaceId);
+
                 return new ManualCriticalAlertResultDTO
                 {
                     Ok = false,
                     Status = "Error",
-                    Error = $"Place {request.PlaceId} not found."
+                    Error = ex.Message
                 };
             }
-
-            var quorum = await _criticalAlertQuorumService.RegisterVoteAsync(
-                CriticalAlertKind.Crowd,
-                request.PlaceId,
-                place.Latitude,
-                place.Longitude,
-                request.DeviceId,
-                request.Reason,
-                ct);
-
-            if (!quorum.Confirmed)
-            {
-                return new ManualCriticalAlertResultDTO
-                {
-                    Ok = true,
-                    Status = "Pending",
-                    ConfirmationCount = quorum.ConfirmationCount,
-                    RequiredCount = quorum.RequiredCount
-                };
-            }
-
-            var alert = await _crowdInfoRepository.CreateManualCriticalAlertAsync(
-                request.PlaceId,
-                request.Reason,
-                request.Source ?? "ManualButton",
-                ct);
-
-            await _crowdHubContext.Clients.All.SendAsync(
-                CrowdHubMethods.ToClient.ReceiveCrowdUpdate,
-                alert,
-                ct);
-
-            return new ManualCriticalAlertResultDTO
-            {
-                Ok = true,
-                Status = "Confirmed",
-                ConfirmationCount = quorum.ConfirmationCount,
-                RequiredCount = quorum.RequiredCount,
-                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(_rules.AlertDurationMinutes),
-                CrowdInfoId = alert.Id
-            };
         }
 
         public CrowdInfo UpdateCrowdInfo(CrowdInfo crowdInfo)

@@ -2,6 +2,9 @@
 using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Collections;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Repositories;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
 using System.Text;
@@ -15,14 +18,15 @@ public class AIService : IAIService
     private readonly OpenAIOptions _options;
     private readonly IOpenWeatherService _weather;
     private readonly IAIRepository _aiRepository;
+    private readonly IGptInteractionNoSqlRepository _gptNoSqlRepository;
 
-    public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather, IAIRepository aiRepository)
+    public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather, IAIRepository aiRepository, IGptInteractionNoSqlRepository gptNoSqlRepository)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _weather = weather;
         _aiRepository = aiRepository;
-
+        _gptNoSqlRepository = gptNoSqlRepository;
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
     }
 
@@ -66,34 +70,39 @@ public class AIService : IAIService
     public Task<string> SummarizeTextAsync(string input)
         => SendChatRequestAsync("You are a professional resume assistant.", $"Summarize this in French:\n\n{input}", 0.5);
 
-    public Task<string> GenerateSuggestionAsync(string prompt)
-        => SendChatRequestAsync("You are a smart tour assistant.", prompt);
+    public async Task<string> GenerateSuggestionAsync(string prompt)
+    {
+        return await SendChatRequestAsync("You are a smart tour assistant.", prompt);
+    }
+        
 
-    public Task<string> TranslateToFrenchAsync(string englishText)
-        => SendChatRequestAsync("You are a professional translator.", $"Translate into French (natural and professional style):\n\n{englishText}", 0.3);
+    public async Task<string> TranslateToFrenchAsync(string englishText)
+    {
+        return await SendChatRequestAsync("You are a professional translator.", $"Translate into French (natural and professional style):\n\n{englishText}", 0.3);
+    }
 
-    public Task<string> TranslateToDutchAsync(string englishText)
+    public async Task<string> TranslateToDutchAsync(string englishText)
     {
         if (string.IsNullOrWhiteSpace(englishText))
             throw new ArgumentException("Text cannot be empty.", nameof(englishText));
 
-        return SendChatRequestAsync("You are an English-Dutch translator.", $"Translate into Dutch (natural style):\n\n{englishText}", 0.3);
+        return await SendChatRequestAsync("You are an English-Dutch translator.", $"Translate into Dutch (natural style):\n\n{englishText}", 0.3);
     }
 
-    public Task<string> TranslateToGermanAsync(string englishText)
+    public async Task<string> TranslateToGermanAsync(string englishText)
     {
         if (string.IsNullOrWhiteSpace(englishText))
             throw new ArgumentException("Text cannot be empty", nameof(englishText));
 
-        return SendChatRequestAsync("You are a helpful assistant that translates English to German.", $"Translate the following to German:\n\n{englishText}", 0.3);
+        return await SendChatRequestAsync("You are a helpful assistant that translates English to German.", $"Translate the following to German:\n\n{englishText}", 0.3);
     }
 
-    public Task<string> AskChatGptAsync(string prompt)
+    public async Task<string> AskChatGptAsync(string prompt)
     {
         if (string.IsNullOrWhiteSpace(prompt))
             throw new ArgumentException("Prompt cannot be empty.", nameof(prompt));
 
-        return SendChatRequestAsync("You are a helpful assistant answering general questions.", prompt, 0.5);
+        return await SendChatRequestAsync("You are a helpful assistant answering general questions.", prompt, 0.5);
     }
 
     public Task<string> SuggestAlternativeAsync(string prompt)
@@ -137,16 +146,34 @@ public class AIService : IAIService
         return await _aiRepository.GetByIdAsync(id);
     }
 
-    public async Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt)
+    public async Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(prompt) || string.IsNullOrWhiteSpace(reply))
             throw new ArgumentException("Prompt and reply are required.");
 
-        var interaction = new GPTInteraction { Prompt = prompt, Response = reply, CreatedAt = createdAt, Active = true };
+        var interaction = new GPTInteraction
+        {
+            Prompt = prompt,
+            Response = reply,
+            CreatedAt = createdAt,
+            Active = true
+        };
+
         await _aiRepository.SaveInteractionAsync(interaction);
+
+        var document = new GptInteractionDocument
+        {
+            PromptPreview = prompt.Length <= 500 ? prompt : prompt[..500],
+            Response = reply,
+            Model = _options.Model,
+            Success = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        await _gptNoSqlRepository.InsertAsync(document, ct);
     }
 
-    public async Task<GPTInteraction> GetByIdAsync(int id)
+    public async Task<GPTInteraction?> GetByIdAsync(int id)
     {
         if (id <= 0)
             throw new ArgumentOutOfRangeException(nameof(id));

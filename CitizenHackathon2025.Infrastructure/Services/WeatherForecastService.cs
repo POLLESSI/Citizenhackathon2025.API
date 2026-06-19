@@ -4,21 +4,35 @@ using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
     public sealed class WeatherForecastService : IWeatherForecastService
     {
         private readonly IWeatherForecastAppService _app;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ILogger<WeatherForecastService> _logger;
 
-        public WeatherForecastService(IWeatherForecastAppService app)
-            => _app = app;
+        public WeatherForecastService(IWeatherForecastAppService app, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<WeatherForecastService> logger)
+        {
+            _app = app;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _logger = logger;
+        }
 
-        public Task AddAsync(WeatherForecastDTO dto, CancellationToken ct = default)
-            => _app.CreateAsync(dto, ct);
+        public async Task AddAsync(WeatherForecastDTO dto, CancellationToken ct = default)
+        {
+            await _app.CreateAsync(dto, ct);
+        }
 
-        public Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO dto, CancellationToken ct = default)
-            => _app.CreateAsync(dto, ct);
+        public async Task<WeatherForecastDTO> SaveWeatherForecastAsync(
+            WeatherForecastDTO dto,
+            CancellationToken ct = default)
+        {
+            return await _app.CreateAsync(dto, ct);
+        }
         public Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default)
                     => throw new NotSupportedException("Generated weather forecasts are disabled. Use OpenWeather pull instead.");
 

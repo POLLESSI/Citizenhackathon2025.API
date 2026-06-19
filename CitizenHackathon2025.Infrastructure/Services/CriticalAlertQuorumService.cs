@@ -3,6 +3,8 @@ using CitizenHackathon2025.Application.Options;
 using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,24 +14,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public sealed class CriticalAlertQuorumService : ICriticalAlertQuorumService
     {
         private readonly ICriticalAlertVoteRepository _repo;
-        private readonly CriticalAlertRules _rules;
+        private readonly IOptions<CriticalAlertRules> _rule;
 
-        public CriticalAlertQuorumService(
-            ICriticalAlertVoteRepository repo,
-            IOptions<CriticalAlertRules> options)
+        public CriticalAlertQuorumService(ICriticalAlertVoteRepository repo, IOptions<CriticalAlertRules> options)
         {
             _repo = repo;
-            _rules = options.Value;
+            _rule = options;
         }
 
-        public async Task<CriticalAlertQuorumResult> RegisterVoteAsync(
-            CriticalAlertKind kind,
-            int? placeId,
-            decimal latitude,
-            decimal longitude,
-            string? deviceId,
-            string? reason,
-            CancellationToken ct = default)
+        public async Task<CriticalAlertQuorumResult> RegisterVoteAsync(CriticalAlertKind kind, int? placeId, decimal latitude, decimal longitude, string? deviceId, string? reason, CancellationToken ct = default)
         {
             var zoneKey = BuildZoneKey(latitude, longitude);
 
@@ -47,16 +40,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var count = await _repo.CountDistinctReportersAsync(
                 kind,
                 zoneKey,
-                _rules.WindowMinutes,
+                _rule.Value.WindowMinutes,
                 ct);
-
-            Console.WriteLine($"[QUORUM] Zone={zoneKey} Count={count}");
 
             return new CriticalAlertQuorumResult
             {
-                Confirmed = count >= _rules.RequiredDistinctReports,
+                Confirmed = count >= _rule.Value.RequiredDistinctReports,
                 ConfirmationCount = count,
-                RequiredCount = _rules.RequiredDistinctReports,
+                RequiredCount = _rule.Value.RequiredDistinctReports,
                 ZoneKey = zoneKey
             };
         }

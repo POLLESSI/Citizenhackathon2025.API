@@ -1,11 +1,12 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Infrastructure.Extensions;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using CitizenHackathon2025.Infrastructure.Extensions;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -18,16 +19,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly IMistralAIService _mistralService;
         private readonly IUserRepository _userRepository;
         private readonly IMemoryCache _cache;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
         private readonly ILogger<SuggestionService> _logger;
 
-        public SuggestionService(
-            ISuggestionRepository suggestionRepository,
-            IPlaceRepository placeRepository,
-            IEventRepository eventRepository,
-            IMistralAIService mistralService,
-            IUserRepository userRepository,
-            IMemoryCache cache,
-            ILogger<SuggestionService> logger)
+        public SuggestionService(ISuggestionRepository suggestionRepository, IPlaceRepository placeRepository, IEventRepository eventRepository, IMistralAIService mistralService, IUserRepository userRepository, IMemoryCache cache, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<SuggestionService> logger)
         {
             _suggestionRepository = suggestionRepository;
             _placeRepository = placeRepository;
@@ -35,6 +30,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _mistralService = mistralService;
             _userRepository = userRepository;
             _cache = cache;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
             _logger = logger;
         }
 
@@ -97,10 +93,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public async Task<Suggestion> SaveSuggestionAsync(Suggestion suggestion, CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(suggestion);
+
             return await _suggestionRepository.SaveSuggestionAsync(suggestion, ct);
         }
 
-        public async Task<IEnumerable<Suggestion>> GenerateSuggestionAsync(string context, CancellationToken ct)
+        public async Task<IEnumerable<Suggestion>> GenerateSuggestionAsync(string context, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(context))
                 return Enumerable.Empty<Suggestion>();
@@ -109,7 +106,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 $"Generate one useful suggestion for the following context: {context}. " +
                 $"Respect GDPR and do not store or infer personal data.";
 
-            var generatedText = await _mistralService.GenerateFromPromptAsync(groundedPrompt: prompt, responseLanguage: "fr-FR", ct: ct);
+            var generatedText = await _mistralService.GenerateFromPromptAsync(
+                groundedPrompt: prompt,
+                responseLanguage: "fr-FR",
+                ct: ct);
 
             return new List<Suggestion>
             {
@@ -182,6 +182,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating and saving suggestion for user {UserId}.", userId);
+                _logger.LogWarning(ex, "Mongo snapshot write failed. SQL flow continues.");
+
                 return null;
             }
         }

@@ -5,7 +5,9 @@ using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.DTOs.DTOs.Antennas;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -17,18 +19,20 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly ICrowdInfoAntennaService _antennaSvc;
         private readonly IHubContext<CrowdInfoAntennaConnectionHub> _hub;
         private readonly ICrowdSafetyDetectionService _safety;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ILogger<AntennaSimulationService> _logger;
 
-        public AntennaSimulationService(ICrowdInfoAntennaConnectionRepository connRepo, ICrowdInfoAntennaService antennaSvc, IHubContext<CrowdInfoAntennaConnectionHub> hub, ICrowdSafetyDetectionService safety)
+        public AntennaSimulationService(ICrowdInfoAntennaConnectionRepository connRepo, ICrowdInfoAntennaService antennaSvc, IHubContext<CrowdInfoAntennaConnectionHub> hub, ICrowdSafetyDetectionService safety, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<AntennaSimulationService> logger)
         {
             _connRepo = connRepo;
             _antennaSvc = antennaSvc;
             _hub = hub;
             _safety = safety;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _logger = logger;
         }
 
-        public async Task SimulateAsync(
-            SimulateAntennaConnectionsRequest request,
-            CancellationToken ct = default)
+        public async Task SimulateAsync(SimulateAntennaConnectionsRequest request, CancellationToken ct = default)
         {
             if (request.AntennaId <= 0)
                 throw new ArgumentOutOfRangeException(nameof(request.AntennaId));
@@ -61,16 +65,23 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     deviceHash: deviceHash,
                     ipHash: null,
                     macHash: null,
-                    source: 9, // 9 = simulator
+                    source: 9,
                     signalStrength: null,
                     band: "SIM",
                     additionalJson: """{"simulated":true}""",
                     ct: ct);
             }
 
-            var counts = await _antennaSvc.GetCountsAsync(request.AntennaId, windowMinutes: Math.Max(1, durationSeconds / 60), ct);
+            var counts = await _antennaSvc.GetCountsAsync(
+                request.AntennaId,
+                windowMinutes: Math.Max(1, durationSeconds / 60),
+                ct);
 
-            await _safety.EvaluateAntennaAsync(request.AntennaId, counts.ActiveConnections, counts.UniqueDevices, ct);
+            await _safety.EvaluateAntennaAsync(
+                request.AntennaId,
+                counts.ActiveConnections,
+                counts.UniqueDevices,
+                ct);
 
             await _hub.Clients
                 .Group(CrowdInfoAntennaConnectionHubMethods.AntennaGroup(request.AntennaId))
@@ -93,7 +104,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         private static int ApplyJitter(int value, int jitterPercent)
         {
-            if (jitterPercent <= 0) return value;
+            if (jitterPercent <= 0)
+                return value;
 
             var min = value * (100 - jitterPercent) / 100;
             var max = value * (100 + jitterPercent) / 100;

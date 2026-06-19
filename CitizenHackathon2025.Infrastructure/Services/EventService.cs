@@ -1,7 +1,9 @@
 ﻿using CitizenHackathon2025.Application.Common;
 using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -10,11 +12,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
     #nullable disable
         private readonly IEventRepository _eventRepository;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ILogger<EventService> _logger;
 
-        public EventService(IEventRepository eventRepository)
+        public EventService(IEventRepository eventRepository, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<EventService> logger)
         {
             _eventRepository = eventRepository;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _logger = logger;
         }
+
         public async Task<Event> GetByIdAsync(int id)
         {
             if (id <= 0)

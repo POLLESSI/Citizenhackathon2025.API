@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Application.Services
@@ -6,24 +7,24 @@ namespace CitizenHackathon2025.Application.Services
     public sealed class TourismSuggestionService
     {
         private readonly IGenerativeAiService _ai;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
         private readonly ILogger<TourismSuggestionService> _logger;
 
-        public TourismSuggestionService(
-            IGenerativeAiService ai,
-            ILogger<TourismSuggestionService> logger)
+        public TourismSuggestionService(IGenerativeAiService ai, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<TourismSuggestionService> logger)
         {
             _ai = ai;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
             _logger = logger;
         }
 
         public async Task<string> GenerateAsync(string prompt, CancellationToken ct = default)
         {
             var finalPrompt =
-                """
-                You are a reliable local tourist assistant.
-                You must not invent facts that are absent from the context.
-                Provide a useful, concise, and actionable answer.
-                """ + "\n\n" + prompt;
+            """
+            You are a reliable local tourist assistant.
+            You must not invent facts that are absent from the context.
+            Provide a useful, concise, and actionable answer.
+            """ + "\n\n" + prompt;
 
             return await _ai.GenerateTextAsync(finalPrompt, ct);
         }

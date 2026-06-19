@@ -162,7 +162,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             throw new NotImplementedException();
         }
 
-        public async Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt)
+        public async Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt, CancellationToken ct = default)
         {
             await _repo.SaveInteractionAsync(prompt, reply, createdAt);
         }

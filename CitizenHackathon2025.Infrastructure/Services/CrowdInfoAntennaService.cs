@@ -3,6 +3,8 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Services;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -10,6 +12,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
         private readonly ICrowdInfoAntennaRepository _antRepo;
         private readonly ICrowdInfoAntennaConnectionRepository _connRepo;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ILogger<CrowdInfoAntennaService> _logger;
 
         // Dependency on EventRepository/service (you already have it in OutZen)
         private readonly IEventReadService _eventRead; // To create/adapt: ​​GetById -> lat/lng
@@ -17,15 +21,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public CrowdInfoAntennaService(
             ICrowdInfoAntennaRepository antRepo,
             ICrowdInfoAntennaConnectionRepository connRepo,
-            IEventReadService eventRead)
+            IMongoSnapshotWriter mongoSnapshotWriter,
+            IEventReadService eventRead,
+            ILogger<CrowdInfoAntennaService> logger)
         {
             _antRepo = antRepo;
             _connRepo = connRepo;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
             _eventRead = eventRead;
+            _logger = logger;
         }
-
-       
-
         public async Task<IReadOnlyList<CrowdInfoAntennaDTO>> GetAllAsync(CancellationToken ct)
         {
             var all = await _antRepo.GetAllAsync(ct);
@@ -128,10 +133,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<CrowdInfoAntennaDTO> CreateAntennaAsync(CreateCrowdInfoAntennaDTO dto, CancellationToken ct)
         {
-            // Hard validation (useful even if you have DataAnnotations on the API side)
-            if (dto.Latitude is < -90 or > 90) throw new ArgumentOutOfRangeException(nameof(dto.Latitude));
-            if (dto.Longitude is < -180 or > 180) throw new ArgumentOutOfRangeException(nameof(dto.Longitude));
-            if (dto.MaxCapacity is not null && dto.MaxCapacity <= 0) throw new ArgumentOutOfRangeException(nameof(dto.MaxCapacity));
+            if (dto.Latitude is < -90 or > 90)
+                throw new ArgumentOutOfRangeException(nameof(dto.Latitude));
+
+            if (dto.Longitude is < -180 or > 180)
+                throw new ArgumentOutOfRangeException(nameof(dto.Longitude));
+
+            if (dto.MaxCapacity is not null && dto.MaxCapacity <= 0)
+                throw new ArgumentOutOfRangeException(nameof(dto.MaxCapacity));
 
             var entity = new CrowdInfoAntenna
             {

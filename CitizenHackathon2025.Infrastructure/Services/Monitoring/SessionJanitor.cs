@@ -1,10 +1,11 @@
 ﻿#nullable enable
-using System.Threading;
-using System.Threading.Tasks;
+using CitizenHackathon2025.Domain.Interfaces;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using Microsoft.Extensions.DependencyInjection; // ✅ for CreateScope
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection; // ✅ for CreateScope
-using CitizenHackathon2025.Domain.Interfaces;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CitizenHackathon2025.Infrastructure.Services.Monitoring
 {
@@ -22,26 +23,40 @@ namespace CitizenHackathon2025.Infrastructure.Services.Monitoring
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _log.LogInformation("SessionJanitor started (interval: {Interval} min)", _interval.TotalMinutes);
+            _log.LogInformation(
+                "SessionJanitor started (interval: {Interval} min)",
+                _interval.TotalMinutes);
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    using var scope = _scopeFactory.CreateScope(); // ✅ create a scope
-                    var repo = scope.ServiceProvider.GetRequiredService<IUserSessionRepository>(); // ✅ scoped
+                    using var scope = _scopeFactory.CreateScope();
+
+                    var repo = scope.ServiceProvider
+                        .GetRequiredService<IUserSessionRepository>();
 
                     var deleted = await repo.PurgeExpiredAsync();
+
                     if (deleted > 0)
-                        _log.LogInformation("SessionJanitor purged {Count} expired sessions.", deleted);
+                    {
+                        _log.LogInformation(
+                            "SessionJanitor purged {Count} expired sessions.",
+                            deleted);
+                    }
                 }
                 catch (Exception ex)
                 {
                     _log.LogError(ex, "SessionJanitor purge failed");
                 }
 
-                try { await Task.Delay(_interval, stoppingToken); }
-                catch (TaskCanceledException) { /* shutdown */ }
+                try
+                {
+                    await Task.Delay(_interval, stoppingToken);
+                }
+                catch (TaskCanceledException)
+                {
+                }
             }
 
             _log.LogInformation("SessionJanitor stopped.");

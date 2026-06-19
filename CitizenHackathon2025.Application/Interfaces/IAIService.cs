@@ -21,7 +21,7 @@ namespace CitizenHackathon2025.Application.Interfaces
         Task<string> TranslateToGermanAsync(string englishText);
         Task<string> SuggestAlternativeAsync(string prompt);
         Task<string> SuggestAlternativeWithWeatherAsync(string location);
-        Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt);
+        Task SaveInteractionAsync(string prompt, string reply, DateTime createdAt, CancellationToken ct = default);
         Task<GPTInteraction?> GetByIdAsync(int id);
     }
 }

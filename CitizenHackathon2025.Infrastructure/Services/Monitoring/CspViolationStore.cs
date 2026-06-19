@@ -10,7 +10,8 @@ namespace CitizenHackathon2025.Infrastructure.Services.Monitoring
 
         public void Add(CspReportContent report)
         {
-            if (report is null) return;
+            if (report is null)
+                return;
 
             lock (_lock)
             {

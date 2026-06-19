@@ -5,7 +5,9 @@ using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -13,10 +15,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
     #nullable disable
         private readonly ITrafficConditionRepository _trafficConditionRepository;
+        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ILogger<TrafficConditionService> _logger;
 
-        public TrafficConditionService(ITrafficConditionRepository trafficConditionRepository)
+        public TrafficConditionService(ITrafficConditionRepository trafficConditionRepository, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<TrafficConditionService> logger)
         {
             _trafficConditionRepository = trafficConditionRepository;
+            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _logger = logger;
         }
 
         public Task<TrafficDTO> CheckRoadAsync(Domain.Entities.ValueObjects.Location from, string to)
