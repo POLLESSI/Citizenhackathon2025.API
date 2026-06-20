@@ -20,7 +20,8 @@ namespace CitizenHackathon2025.Infrastructure.Extensions
             services.AddScoped<ICrowdSnapshotRepository, CrowdSnapshotRepository>();
             services.AddScoped<IGptInteractionNoSqlRepository, GptInteractionNoSqlRepository>();
             services.AddScoped<ITrafficSnapshotRepository, TrafficSnapshotRepository>();
-            //services.AddScoped<ISignalRDiagnosticRepository, SignalRDiagnosticRepository>();
+            services.AddScoped<ISignalRDiagnosticRepository, SignalRDiagnosticRepository>();
+            services.AddScoped<INoSqlArchivingService, NoSqlArchivingService>();
             services.AddScoped<IWeatherSnapshotRepository, WeatherSnapshotRepository>();
             services.AddScoped<IMongoSnapshotWriter, MongoSnapshotWriter>();
 

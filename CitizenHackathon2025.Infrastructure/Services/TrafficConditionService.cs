@@ -6,6 +6,8 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Collections;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Repositories;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -15,13 +17,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
     #nullable disable
         private readonly ITrafficConditionRepository _trafficConditionRepository;
-        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ITrafficSnapshotRepository _trafficSnapshotRepository;
         private readonly ILogger<TrafficConditionService> _logger;
 
-        public TrafficConditionService(ITrafficConditionRepository trafficConditionRepository, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<TrafficConditionService> logger)
+        public TrafficConditionService(ITrafficConditionRepository trafficConditionRepository, ITrafficSnapshotRepository trafficSnapshotRepository, ILogger<TrafficConditionService> logger)
         {
             _trafficConditionRepository = trafficConditionRepository;
-            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _trafficSnapshotRepository = trafficSnapshotRepository;
             _logger = logger;
         }
 
@@ -47,7 +49,34 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<TrafficCondition> SaveTrafficConditionAsync(TrafficCondition trafficCondition)
         {
-            return await _trafficConditionRepository.SaveTrafficConditionAsync(trafficCondition);
+            var saved = await _trafficConditionRepository.SaveTrafficConditionAsync(trafficCondition);
+
+            try
+            {
+                var snapshot = new TrafficSnapshotDocument
+                {
+                    TrafficConditionId = saved.Id,
+                    Source = saved.Provider,
+                    RoadName = saved.Road,
+                    FromLocation = null,
+                    ToLocation = null,
+                    Severity = saved.Severity?.ToString(),
+                    Status = saved.CongestionLevel,
+                    Description = saved.Title ?? saved.IncidentType,
+                    Latitude = (double)saved.Latitude,
+                    Longitude = (double)saved.Longitude,
+                    ObservedAtUtc = saved.LastSeenAt,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+
+                await _trafficSnapshotRepository.InsertAsync(snapshot);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Mongo traffic snapshot failed. SQL traffic condition remains saved.");
+            }
+
+            return saved;
         }
         public TrafficCondition UpdateTrafficCondition(TrafficCondition trafficCondition)
         {

@@ -5,6 +5,7 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Collections;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Repositories;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
 using System.Text;
@@ -19,15 +20,22 @@ public class AIService : IAIService
     private readonly IOpenWeatherService _weather;
     private readonly IAIRepository _aiRepository;
     private readonly IGptInteractionNoSqlRepository _gptNoSqlRepository;
+    private readonly ILogger<AIService> _logger;
 
-    public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather, IAIRepository aiRepository, IGptInteractionNoSqlRepository gptNoSqlRepository)
+    public AIService(HttpClient httpClient, IOptions<OpenAIOptions> options, IOpenWeatherService weather, IAIRepository aiRepository, IGptInteractionNoSqlRepository gptNoSqlRepository, ILogger<AIService> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _weather = weather;
         _aiRepository = aiRepository;
         _gptNoSqlRepository = gptNoSqlRepository;
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
+        _logger = logger;
+
+        if (!string.IsNullOrWhiteSpace(_options.ApiKey))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", _options.ApiKey);
+        }
     }
 
     public string GetModel() => _options.Model;
@@ -161,18 +169,25 @@ public class AIService : IAIService
 
         await _aiRepository.SaveInteractionAsync(interaction);
 
-        var document = new GptInteractionDocument
+        try
         {
-            PromptPreview = prompt.Length <= 500 ? prompt : prompt[..500],
-            Response = reply,
-            Model = _options.Model,
-            Success = true,
-            CreatedAtUtc = DateTime.UtcNow
-        };
+            var document = new GptInteractionDocument
+            {
+                SqlInteractionId = interaction.Id > 0 ? interaction.Id : null,
+                PromptPreview = prompt.Length <= 500 ? prompt : prompt[..500],
+                Response = reply,
+                Model = _options.Model,
+                Success = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
 
-        await _gptNoSqlRepository.InsertAsync(document, ct);
+            await _gptNoSqlRepository.InsertAsync(document, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Mongo GPT archive failed. SQL interaction remains saved.");
+        }
     }
-
     public async Task<GPTInteraction?> GetByIdAsync(int id)
     {
         if (id <= 0)

@@ -5,6 +5,7 @@ using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Collections;
 using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -12,13 +13,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public sealed class WeatherForecastService : IWeatherForecastService
     {
         private readonly IWeatherForecastAppService _app;
-        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly IWeatherSnapshotRepository _weatherSnapshotRepository;
         private readonly ILogger<WeatherForecastService> _logger;
 
-        public WeatherForecastService(IWeatherForecastAppService app, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<WeatherForecastService> logger)
+        public WeatherForecastService(IWeatherForecastAppService app, IWeatherSnapshotRepository weatherSnapshotRepository, ILogger<WeatherForecastService> logger)
         {
             _app = app;
-            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _weatherSnapshotRepository = weatherSnapshotRepository;
             _logger = logger;
         }
 
@@ -28,10 +29,51 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
 
         public async Task<WeatherForecastDTO> SaveWeatherForecastAsync(
-            WeatherForecastDTO dto,
-            CancellationToken ct = default)
+    WeatherForecastDTO dto,
+    CancellationToken ct = default)
         {
-            return await _app.CreateAsync(dto, ct);
+            var saved = await _app.CreateAsync(dto, ct);
+
+            try
+            {
+                var snapshot = new WeatherSnapshotDocument
+                {
+                    WeatherForecastId = saved.Id > int.MaxValue ? null : (int?)saved.Id,
+                    PlaceId = null,
+                    EventId = null,
+                    PlaceName = null,
+
+                    Latitude = (double)saved.Latitude,
+                    Longitude = (double)saved.Longitude,
+
+                    TemperatureC = saved.TemperatureC,
+                    FeelsLikeC = null,
+                    WindSpeedKmh = saved.WindSpeedKmh,
+                    RainfallMm = saved.RainfallMm,
+                    HumidityPercent = saved.Humidity,
+
+                    WeatherType = saved.WeatherType.ToString(),
+                    Severity = null,
+                    Provider = saved.Provider.ToString(),
+
+                    Summary = saved.Summary,
+                    Description = saved.Description,
+
+                    IsSevere = saved.IsSevere,
+                    IsCritical = false,
+
+                    ForecastAtUtc = saved.DateWeather.UtcDateTime,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+
+                await _weatherSnapshotRepository.InsertAsync(snapshot, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Mongo weather snapshot failed. SQL weather forecast remains saved.");
+            }
+
+            return saved;
         }
         public Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default)
                     => throw new NotSupportedException("Generated weather forecasts are disabled. Use OpenWeather pull instead.");

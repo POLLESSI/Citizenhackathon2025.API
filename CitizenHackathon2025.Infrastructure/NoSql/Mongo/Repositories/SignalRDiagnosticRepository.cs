@@ -1,13 +1,25 @@
 ﻿using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Collections;
+using MongoDB.Driver;
 
 namespace CitizenHackathon2025.Infrastructure.NoSql.Mongo.Repositories
 {
     public sealed class SignalRDiagnosticRepository : ISignalRDiagnosticRepository
     {
-        public Task InsertAsync(SignalRDiagnosticDocument document, CancellationToken ct = default)
+        private readonly IMongoCollection<SignalRDiagnosticDocument> _collection;
+
+        public SignalRDiagnosticRepository(IMongoDbContext context)
         {
-            throw new NotImplementedException();
+            _collection = context.Collection<SignalRDiagnosticDocument>("signalr_diagnostics");
+        }
+
+        public Task InsertAsync(
+            SignalRDiagnosticDocument document,
+            CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(document);
+
+            return _collection.InsertOneAsync(document, cancellationToken: ct);
         }
     }
 }

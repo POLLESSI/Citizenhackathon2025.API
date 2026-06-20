@@ -9,6 +9,7 @@ using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
+using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Collections;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Services;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.AspNetCore.SignalR;
@@ -32,10 +33,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly CriticalAlertRules _rules;
         private readonly HttpClient _http;
         private readonly IHubContext<CrowdHub> _crowdHubContext;
-        private readonly IMongoSnapshotWriter _mongoSnapshotWriter;
+        private readonly ICrowdSnapshotRepository _crowdSnapshotRepository;
         private readonly ILogger<CrowdInfoService> _logger;
 
-        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, ICriticalAlertQuorumService criticalAlertQuorumService, IPlaceRepository placeRepository, ICrowdAlertVoteRepository crowdAlertVoteRepository, IOptions<CriticalAlertRules> options, HttpClient http, IHubContext<CrowdHub> crowdHubContext, IMongoSnapshotWriter mongoSnapshotWriter, ILogger<CrowdInfoService> logger)
+        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, ICriticalAlertQuorumService criticalAlertQuorumService, IPlaceRepository placeRepository, ICrowdAlertVoteRepository crowdAlertVoteRepository, IOptions<CriticalAlertRules> options, HttpClient http, IHubContext<CrowdHub> crowdHubContext, ICrowdSnapshotRepository crowdSnapshotRepository, ILogger<CrowdInfoService> logger)
         {
             _crowdInfoRepository = crowdInfoRepository;
             _criticalAlertQuorumService = criticalAlertQuorumService;
@@ -44,7 +45,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _rules = options.Value;
             _http = http;
             _crowdHubContext = crowdHubContext;
-            _mongoSnapshotWriter = mongoSnapshotWriter;
+            _crowdSnapshotRepository = crowdSnapshotRepository;
             _logger = logger;
         }
 
@@ -92,9 +93,43 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (saved != null)
             {
+                try
+                {
+                    var snapshot = new CrowdSnapshotDocument
+                    {
+                        CrowdInfoId = saved.Id,
+                        PlaceId = null,
+                        EventId = null,
+                        PlaceName = saved.LocationName,
+                        EventName = null,
+
+                        Latitude = (double)saved.Latitude,
+                        Longitude = (double)saved.Longitude,
+
+                        CurrentCount = saved.CrowdLevel,
+                        Capacity = null,
+                        DensityRatio = null,
+
+                        CrowdLevel = saved.CrowdLevel.ToString(),
+                        Source = saved.Source ?? "SQL",
+                        Message = saved.Reason,
+                        IsCritical = saved.IsManualCriticalAlert,
+
+                        SnapshotAtUtc = saved.Timestamp,
+                        CreatedAtUtc = DateTime.UtcNow
+                    };
+
+                    await _crowdSnapshotRepository.InsertAsync(snapshot, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Mongo crowd snapshot failed. SQL crowd info remains saved.");
+                }
+
                 await _crowdHubContext.BroadcastCrowdUpdate(saved);
-                await _crowdHubContext.BroadcastCrowdRefreshRequested("sync"); 
+                await _crowdHubContext.BroadcastCrowdRefreshRequested("sync");
             }
+
             return saved!;
         }
 

@@ -14,12 +14,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
     public sealed class CriticalAlertQuorumService : ICriticalAlertQuorumService
     {
         private readonly ICriticalAlertVoteRepository _repo;
-        private readonly IOptions<CriticalAlertRules> _rule;
+        private readonly CriticalAlertRules _rule;
+        private readonly ILogger<CriticalAlertQuorumService> _logger;
 
-        public CriticalAlertQuorumService(ICriticalAlertVoteRepository repo, IOptions<CriticalAlertRules> options)
+        public CriticalAlertQuorumService(ICriticalAlertVoteRepository repo, IOptions<CriticalAlertRules> options, ILogger<CriticalAlertQuorumService> logger)
         {
             _repo = repo;
-            _rule = options;
+            _rule = options.Value;
+            _logger = logger;
         }
 
         public async Task<CriticalAlertQuorumResult> RegisterVoteAsync(CriticalAlertKind kind, int? placeId, decimal latitude, decimal longitude, string? deviceId, string? reason, CancellationToken ct = default)
@@ -40,14 +42,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var count = await _repo.CountDistinctReportersAsync(
                 kind,
                 zoneKey,
-                _rule.Value.WindowMinutes,
+                _rule.WindowMinutes,
                 ct);
 
             return new CriticalAlertQuorumResult
             {
-                Confirmed = count >= _rule.Value.RequiredDistinctReports,
+                Confirmed = count >= _rule.RequiredDistinctReports,
                 ConfirmationCount = count,
-                RequiredCount = _rule.Value.RequiredDistinctReports,
+                RequiredCount = _rule.RequiredDistinctReports,
                 ZoneKey = zoneKey
             };
         }
