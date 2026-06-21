@@ -14,7 +14,7 @@ namespace CitizenHackathon2025.Infrastructure.Resilience
                 OpenAi = CreatePipeline("OpenAI", logger, timeoutSeconds: 25),
                 Traffic = CreatePipeline("Traffic", logger, timeoutSeconds: 10),
                 Weather = CreatePipeline("Weather", logger, timeoutSeconds: 8),
-                Ollama = CreatePipeline("Ollama", logger, timeoutSeconds: 300)
+                Ollama = CreatePipeline("Ollama", logger, timeoutSeconds: 600)
             };
         }
 

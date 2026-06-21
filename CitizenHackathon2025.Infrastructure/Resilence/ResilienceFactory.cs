@@ -17,7 +17,7 @@ namespace CitizenHackathon2025.Infrastructure.Resilience
                 OpenAi = CreatePipeline("OpenAI", logger),
                 Traffic = CreatePipeline("Traffic", logger),
                 Weather = CreatePipeline("Weather", logger),
-                Ollama = CreatePipeline("Ollama", logger, TimeSpan.FromSeconds(300))
+                Ollama = CreatePipeline("Ollama", logger, TimeSpan.FromSeconds(600))
             };
         }
 

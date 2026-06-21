@@ -32,11 +32,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             _logger.LogWarning("[MISTRAL DI CHECK] BaseAddress={BaseAddress}, Timeout={Timeout}", _httpClient.BaseAddress, _httpClient.Timeout);
         }
-
         public async Task<string> GenerateFromPromptAsync(string groundedPrompt, string responseLanguage = "fr-FR", CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(groundedPrompt))
                 throw new ArgumentException("Grounded prompt cannot be null or empty.", nameof(groundedPrompt));
+
+            _logger.LogInformation("[OLLAMA] PromptLength={Length}", groundedPrompt.Length);
+
+            _logger.LogDebug("[OLLAMA] PromptPreview={Preview}", groundedPrompt.Length > 1000 ? groundedPrompt[..1000] : groundedPrompt);
 
             var stopwatch = Stopwatch.StartNew();
             var model = GetModel();

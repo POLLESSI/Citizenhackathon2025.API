@@ -40,13 +40,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return result ?? Enumerable.Empty<Suggestion>();
         }
 
-        public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(
-            string prompt,
-            int limit = 100,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<Suggestion>> GetAllSuggestionsAsync(string prompt, int limit = 100, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(prompt))
                 return Enumerable.Empty<Suggestion>();
+
+            _logger.LogWarning(
+                "[SUGGESTION-MISTRAL] PromptLength={Length}",
+                prompt.Length);
 
             var cacheKey = $"mistral:suggestions:{prompt.Hash()}:{limit}";
 
@@ -56,7 +57,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return cachedResponse;
             }
 
-            var generatedText = await _mistralService.GenerateFromPromptAsync(groundedPrompt: prompt, responseLanguage: "fr-FR", ct: ct);
+            var generatedText = await _mistralService.GenerateFromPromptAsync(
+                groundedPrompt: prompt,
+                responseLanguage: "fr-FR",
+                ct: ct);
 
             var response = new List<Suggestion>
             {

@@ -703,7 +703,7 @@ internal class Program
                 ? apiUrl.Replace("/api/chat", "/")
                 : apiUrl.TrimEnd('/') + "/");
 
-            client.Timeout = TimeSpan.FromSeconds(300);
+            client.Timeout = TimeSpan.FromSeconds(configuration.GetValue<int?>("MistralAI:TimeoutSeconds") ?? 180);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
         });
 

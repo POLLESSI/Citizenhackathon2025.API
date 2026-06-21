@@ -427,6 +427,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
             else
             {
+                _logger.LogWarning("[GPT ORCHESTRATOR] Final grounded prompt length = {Length}", groundedPrompt.Length);
+                _logger.LogWarning("[GPT ORCHESTRATOR] Final grounded prompt preview:\n{Preview}", groundedPrompt[..Math.Min(2000, groundedPrompt.Length)]);
+
                 finalResponse = await mistralAiService.GenerateFromPromptAsync(
                     groundedPrompt: groundedPrompt,
                     responseLanguage: responseLanguage,
