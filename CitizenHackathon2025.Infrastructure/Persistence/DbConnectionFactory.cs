@@ -6,17 +6,28 @@ namespace CitizenHackathon2025.Infrastructure.Persistence
 {
     public sealed class DbConnectionFactory
     {
-        private readonly string _connectionString;
+        private readonly IConfiguration _configuration;
 
         public DbConnectionFactory(IConfiguration configuration)
         {
-            _connectionString = configuration.GetConnectionString("default")
-                ?? throw new InvalidOperationException("Connection string 'default' not found.");
+            _configuration = configuration;
         }
 
-        public IDbConnection CreateConnection()
+        public SqlConnection CreateConnection()
         {
-            return new SqlConnection(_connectionString);
+            var cs =
+                _configuration.GetConnectionString("default")
+                ?? _configuration.GetConnectionString("DefaultConnection");
+
+            if (string.IsNullOrWhiteSpace(cs))
+            {
+                throw new InvalidOperationException(
+                    "SQL ConnectionString missing. Expected ConnectionStrings:default or ConnectionStrings:DefaultConnection.");
+            }
+
+            Console.WriteLine($"[DB-FACTORY] SQL connection created. Length={cs.Length}");
+
+            return new SqlConnection(cs);
         }
     }
 }

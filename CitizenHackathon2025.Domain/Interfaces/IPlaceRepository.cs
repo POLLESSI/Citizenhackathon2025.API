@@ -19,6 +19,8 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Place? UpdatePlace(Place place);
 
         Task<Place?> UpdateAsync(Place place, CancellationToken ct = default);
+        Task<Place?> FindByNameLikeAsync(string keyword, CancellationToken ct = default);
+        Task<IReadOnlyList<Place>> GetActivePlacesAsync(CancellationToken ct = default);
     }
 }
 

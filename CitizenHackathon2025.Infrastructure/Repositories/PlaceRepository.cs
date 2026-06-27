@@ -297,6 +297,67 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 throw new InvalidOperationException($"Place name '{place.Name}' already exists.", ex);
             }
         }
+
+        public async Task<Place?> FindByNameLikeAsync(string keyword, CancellationToken ct = default)
+        {
+            const string sql = """
+                            SELECT TOP 1 *
+                            FROM dbo.Place
+                            WHERE Active = 1
+                              AND Name LIKE @Keyword
+                            ORDER BY
+                                CASE WHEN Name = @Exact THEN 0 ELSE 1 END,
+                                Name
+                            """;
+
+            return await _connection.QueryFirstOrDefaultAsync<Place>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Exact = keyword,
+                        Keyword = $"%{keyword}%"
+                    },
+                    cancellationToken: ct));
+        }
+
+        public async Task<IReadOnlyList<Place>> GetActivePlacesAsync(CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                [Id],
+                                [Name],
+                                [Type],
+                                [Indoor],
+                                [Latitude],
+                                [Longitude],
+                                [Capacity],
+                                [Tag],
+                                [ExternalSource],
+                                [ExternalId],
+                                [SourceUpdatedAtUtc],
+                                [Active]
+                            FROM dbo.Place
+                            WHERE [Active] = 1
+                              AND [Name] IS NOT NULL
+                              AND LTRIM(RTRIM([Name])) <> ''
+                              AND [Latitude] IS NOT NULL
+                              AND [Longitude] IS NOT NULL
+                            ORDER BY [Name] ASC;";
+
+            try
+            {
+                var result = await _connection.QueryAsync<Place>(
+                    new CommandDefinition(sql, cancellationToken: ct));
+
+                return result.ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving active places.");
+                return Array.Empty<Place>();
+            }
+        }
     }
 }
 

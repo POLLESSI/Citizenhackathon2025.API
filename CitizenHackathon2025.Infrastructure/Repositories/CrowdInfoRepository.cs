@@ -82,16 +82,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                     IsManualCriticalAlert = 0
                                     OR ExpiresAtUtc > SYSUTCDATETIME()
                                   )
-                              AND (
-                                    IsManualCriticalAlert = 1
-                                    OR [Timestamp] >= DATEADD(MINUTE, -30, SYSUTCDATETIME())
-                                  )
                             ORDER BY
                                 CASE WHEN IsManualCriticalAlert = 1 THEN 0 ELSE 1 END,
+                                CrowdLevel DESC,
                                 [Timestamp] DESC;";
 
-            return _connection.QueryAsync<CrowdInfo>(
-                new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
+                                return _connection.QueryAsync<CrowdInfo>(
+                                    new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
 
         public async Task<CrowdInfo?> GetCrowdInfoByIdAsync(int id)

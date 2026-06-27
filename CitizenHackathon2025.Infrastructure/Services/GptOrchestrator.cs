@@ -7,13 +7,15 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
+using CitizenHackathon2025.Infrastructure.Repositories;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Globalization;
-using System.Text.RegularExpressions;
 using System.Diagnostics;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -24,13 +26,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly IGptRequestRegistry _gptRequestRegistry;
         private readonly IHostApplicationLifetime _appLifetime;
         private readonly ILogger<GptOrchestrator> _logger;
-
-        public GptOrchestrator(
-            IServiceScopeFactory scopeFactory,
-            IHubContext<GPTHub, IGptClient> hubContext,
-            IGptRequestRegistry gptRequestRegistry,
-            IHostApplicationLifetime appLifetime,
-            ILogger<GptOrchestrator> logger)
+        
+        public GptOrchestrator(IServiceScopeFactory scopeFactory, IHubContext<GPTHub, IGptClient> hubContext, IGptRequestRegistry gptRequestRegistry, IHostApplicationLifetime appLifetime, ILogger<GptOrchestrator> logger)
         {
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
@@ -336,22 +333,44 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var gptRepository = scope.ServiceProvider.GetRequiredService<IGptInteractionRepository>();
             var localAiContextService = scope.ServiceProvider.GetRequiredService<ILocalAiContextService>();
             var mistralAiService = scope.ServiceProvider.GetRequiredService<IMistralAIService>();
+            var placeRepository = scope.ServiceProvider.GetRequiredService<IPlaceRepository>();
 
             var swContext = Stopwatch.StartNew();
 
-            var effectiveLatitude = request.Latitude;
-            var effectiveLongitude = request.Longitude;
+            var requestedName = ExtractPlaceNameFromPrompt(prompt);
 
-            if ((!effectiveLatitude.HasValue || !effectiveLongitude.HasValue) &&
-                TryExtractCoordinatesFromPrompt(prompt, out var parsedLat, out var parsedLng))
+            Place? originPlace = null;
+
+            if (!string.IsNullOrWhiteSpace(requestedName))
             {
-                effectiveLatitude = parsedLat;
-                effectiveLongitude = parsedLng;
+                originPlace = await placeRepository.FindByNameLikeAsync(requestedName, ct);
+            }
+
+            double? effectiveLatitude = null;
+            double? effectiveLongitude = null;
+
+            if (originPlace is not null)
+            {
+                effectiveLatitude = (double)originPlace.Latitude;
+                effectiveLongitude = (double)originPlace.Longitude;
+
                 _logger.LogInformation(
-                    "[GPT-PIPELINE] Effective coordinates resolved. Lat={Lat}, Lng={Lng}",
+                    "Origin resolved from SQL : {Name} ({Lat},{Lng})",
+                    originPlace.Name,
                     effectiveLatitude,
                     effectiveLongitude);
             }
+            else if (request.Latitude.HasValue &&
+                     request.Longitude.HasValue)
+            {
+                effectiveLatitude = request.Latitude.Value;
+                effectiveLongitude = request.Longitude.Value;
+
+                _logger.LogInformation(
+                    "Origin resolved from client GPS");
+            }
+
+            var places = await placeRepository.GetActivePlacesAsync(ct);
 
             var localContext = await localAiContextService.BuildContextAsync(prompt, effectiveLatitude, effectiveLongitude, ct).ConfigureAwait(false);
 
@@ -386,7 +405,24 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 }
             }
 
-            var groundedPrompt = localAiContextService.BuildPrompt(localContext);
+            string groundedPrompt = localAiContextService.BuildPrompt(localContext);
+
+            if (!string.IsNullOrWhiteSpace(requestedName) && originPlace is null)
+            {
+                groundedPrompt += $"""
+
+                            Location requested by the user :
+                            {requestedName}
+
+                            Problem:
+                            This location was not found in the SQL Place table.
+
+                            Mandatory rules:
+                            - Do not use the client's GPS coordinates to answer a question about this location.
+                            - Do not invent any distances.
+                            - Respond that the local OutZen data is insufficient to calculate alternatives around this location.
+                            """;
+            }
 
             _logger.LogInformation(
                 "[GPT-PIPELINE] Grounded prompt built. InteractionId={InteractionId}, RequestId={RequestId}, GroundedPromptLength={GroundedPromptLength}, Preview={Preview}",
@@ -397,47 +433,162 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var responseLanguage = string.IsNullOrWhiteSpace(request.LanguageCode) ? "fr-FR" : request.LanguageCode.Trim();
 
+            if (effectiveLatitude.HasValue && effectiveLongitude.HasValue)
+            {
+                var nearest = places
+
+                    // remove the departure location
+                    .Where(p =>
+                        originPlace == null ||
+                        !string.Equals(
+                            p.Name,
+                            originPlace.Name,
+                            StringComparison.OrdinalIgnoreCase))
+
+                    // remove all SQL duplicates
+                    .GroupBy(
+                        p => p.Name.Trim(),
+                        StringComparer.OrdinalIgnoreCase)
+
+                    .Select(g => g.First())
+
+                    // calculation
+                    .Select(p => new
+                    {
+                        p.Id,
+                        p.Name,
+                        p.Type,
+                        p.Tag,
+                        p.Indoor,
+                        p.Capacity,
+
+                        DistanceKm = GeoDistanceKm(
+                            effectiveLatitude!.Value,
+                            effectiveLongitude!.Value,
+                            (double)p.Latitude,
+                            (double)p.Longitude)
+                    })
+
+                    .Where(x => x.DistanceKm <= 20)
+                    .OrderBy(x => x.DistanceKm)
+                    .Take(5)
+                    .ToList();
+
+                var geoContext = JsonSerializer.Serialize(
+                    nearest.Select(x => new
+                    {
+                        x.Id,
+                        x.Name,
+                        x.Type,
+                        x.Indoor,
+                        x.Capacity,
+                        x.Tag,
+                        x.DistanceKm
+                    }),
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    });
+
+                groundedPrompt += $"""
+
+                                GEOGRAPHIC CONTEXT OUTZEN — SOURCE SQL dbo.Place
+
+                                Location requested by the user :
+                                {originPlace?.Name ?? requestedName ?? "Location not identified"}
+
+                                Origin used to calculate distances :
+                                Latitude={effectiveLatitude.Value}
+                                Longitude={effectiveLongitude.Value}
+
+                                Nearby places calculated by OutZen :
+                                {geoContext}
+
+                                Mandatory rules :
+                                - Use only the places provided in "Nearby places calculated by OutZen".
+                                - Use only the distances provided in DistanceKm.
+                                - Never recalculate distances.
+                                - Never invent a distance.
+                                - Never invent a place not listed.
+                                - If no relevant place is provided, state that the available local data is insufficient.
+                                - Answer in a maximum of 5 lines.
+                                - Mention a maximum of 5 places.
+                                - Do not repeat generic safety phrases.
+                                - Do not say "safer fallback zone" unless a confirmed critical alert exists.
+                                - Do not detail capacities unless the user requests it.
+                                """;
+
+                _logger.LogInformation(
+                    "[GPT GEO] RequestedName={RequestedName}, OriginPlace={OriginPlace}, OriginLat={OriginLat}, OriginLng={OriginLng}, NearestCount={NearestCount}",
+                    requestedName,
+                    originPlace?.Name,
+                    effectiveLatitude.Value,
+                    effectiveLongitude.Value,
+                    nearest.Count);
+            }
+            else
+            {
+                groundedPrompt += """
+
+                                GEOGRAPHICAL CONTEXT OUTZEN :
+                                No reliable SQL location could be identified in the request.
+                                Do not invent distances.
+                                If you mention a distance, write "unknown distance".
+                                Response constraints :
+                                - Answer in a maximum of 6 lines.
+                                - Provide details for a maximum of 5 locations only.
+                                - Do not repeat "safer fallback zone" for each location.
+                                - Only mention security if there is a real alert in the context.
+                                - Never write "safer fallback zone" unless a confirmed critical alert is present in CriticalAlerts.
+                                """;
+
+                _logger.LogWarning(
+                    "[GPT GEO] No reliable origin found. RequestedName={RequestedName}, RequestLat={RequestLat}, RequestLng={RequestLng}",
+                    requestedName,
+                    request.Latitude,
+                    request.Longitude);
+            }
+
             string finalResponse;
 
             if (pushChunksToHub)
             {
-                var chunkCount = 0;
-                var streamedChars = 0;
-
-                _logger.LogInformation("[GPT-PIPELINE] Mistral streaming started. InteractionId={InteractionId}, RequestId={RequestId}", interactionId, requestId);
-
                 finalResponse = await mistralAiService.StreamFromPromptAsync(
                     groundedPrompt,
                     async chunkText =>
                     {
-                        chunkCount++;
-                        streamedChars += chunkText?.Length ?? 0;
+                        if (string.IsNullOrWhiteSpace(chunkText))
+                            return;
 
-                        await _hubContext.SendChunk(
-                            new GptResponseChunkDto
-                            {
-                                InteractionId = interactionId,
-                                RequestId = requestId,
-                                Chunk = chunkText ?? string.Empty,
-                                IsFinal = false
-                            });
+                        await _hubContext.SendChunk(new GptResponseChunkDto
+                        {
+                            InteractionId = interactionId,
+                            RequestId = requestId,
+                            Chunk = chunkText,
+                            IsFinal = false
+                        });
                     },
                     responseLanguage: responseLanguage,
                     ct: ct).ConfigureAwait(false);
             }
             else
             {
-                _logger.LogWarning("[GPT ORCHESTRATOR] Final grounded prompt length = {Length}", groundedPrompt.Length);
-                _logger.LogWarning("[GPT ORCHESTRATOR] Final grounded prompt preview:\n{Preview}", groundedPrompt[..Math.Min(2000, groundedPrompt.Length)]);
-
                 finalResponse = await mistralAiService.GenerateFromPromptAsync(
                     groundedPrompt: groundedPrompt,
                     responseLanguage: responseLanguage,
                     ct: ct).ConfigureAwait(false);
             }
 
+            _logger.LogWarning(
+                "[GPT ORCHESTRATOR] Final grounded prompt length = {Length}",
+                groundedPrompt.Length);
+
+            _logger.LogWarning(
+                "[GPT ORCHESTRATOR] Final grounded prompt preview:\n{Preview}",
+                groundedPrompt[..Math.Min(2000, groundedPrompt.Length)]);
+
             _logger.LogInformation(
-                "[GPT-PIPELINE] Mistral streaming finished. InteractionId={InteractionId}, RequestId={RequestId}, ResponseLength={ResponseLength}",
+                "[GPT-PIPELINE] Mistral generation finished. InteractionId={InteractionId}, RequestId={RequestId}, ResponseLength={ResponseLength}",
                 interactionId,
                 requestId,
                 finalResponse?.Length ?? 0);
@@ -605,6 +756,69 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 SourceType = dto.SourceType,
                 CrowdLevel = dto.CrowdLevel
             };
+        }
+
+        private static string? ExtractPlaceNameFromPrompt(string prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+                return null;
+
+            var markers = new[]
+            {
+                "du côté de",
+                "du coté de",
+                "autour de",
+                "près de",
+                "pres de",
+                "proche de",
+                "aux alentours de",
+                "dans les environs de",
+                "à ",
+                "a "
+            };
+
+            foreach (var marker in markers)
+            {
+                var index = prompt.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                    continue;
+
+                var value = prompt[(index + marker.Length)..]
+                    .Trim(' ', '?', '!', '.', ',', ';', ':', '\r', '\n', '\t');
+
+                value = Regex.Replace(
+                        value,
+                        @"\b(cette semaine|ce week-end|ce weekend|aujourd'hui|demain|maintenant|en ce moment|pour ce week-end|pour ce weekend)\b.*$",
+                        "",
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                    .Trim(' ', '?', '!', '.', ',', ';', ':', '\r', '\n', '\t');
+
+                value = Regex.Replace(value, @"\s+", " ").Trim();
+
+                return string.IsNullOrWhiteSpace(value) ? null : value;
+            }
+
+            return null;
+        }
+        private static double GeoDistanceKm(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double earthRadiusKm = 6371.0088;
+
+            static double ToRad(double deg) => deg * Math.PI / 180.0;
+
+            var dLat = ToRad(lat2 - lat1);
+            var dLon = ToRad(lon2 - lon1);
+
+            var a =
+                Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRad(lat1)) *
+                Math.Cos(ToRad(lat2)) *
+                Math.Sin(dLon / 2) *
+                Math.Sin(dLon / 2);
+
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+
+            return Math.Round(earthRadiusKm * c, 2);
         }
     }
 }

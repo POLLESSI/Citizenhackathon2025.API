@@ -156,7 +156,11 @@ namespace CitizenHackathon2025.Application.Extensions
                 Latitude = (double)entity.Latitude,    // decimal -> double
                 Longitude = (double)entity.Longitude,  // decimal -> double
                 CrowdLevel = entity.CrowdLevel,
-                Timestamp = entity.Timestamp
+                Timestamp = entity.Timestamp,
+                IsManualCriticalAlert = entity.IsManualCriticalAlert,
+                ExpiresAtUtc = entity.ExpiresAtUtc,
+                Source = entity.Source,
+                Reason = entity.Reason
             };
         }
 

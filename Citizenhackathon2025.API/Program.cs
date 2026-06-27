@@ -138,6 +138,9 @@ internal class Program
         services.AddInfrastructureServices();
         services.AddOutZenServices();
 
+        // ✅ Last recording: it overwrites any potential bad ones
+        ConfigureDatabase(services, configuration);
+
         var app = builder.Build();
 
         await RunStartupChecksAsync(app);
@@ -393,12 +396,30 @@ internal class Program
     private static void ConfigureDatabase(IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<DbConnectionFactory>();
-        services.AddScoped<IDbConnection>(_ => new SqlConnection(configuration.GetConnectionString("default")));
+
+        services.AddScoped<IDbConnection>(sp =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+
+            var cs =
+                config.GetConnectionString("default")
+                ?? config.GetConnectionString("DefaultConnection");
+
+            if (string.IsNullOrWhiteSpace(cs))
+            {
+                throw new InvalidOperationException(
+                    "SQL ConnectionString missing. Expected ConnectionStrings:default or ConnectionStrings:DefaultConnection.");
+            }
+
+            Console.WriteLine($"[SQL-CONNECTION OK] Length={cs.Length}");
+
+            return new SqlConnection(cs);
+        });
+
         services.AddScoped<DatabaseService>();
 
         SqlMapper.AddTypeHandler(new RoleTypeHandler());
     }
-
     private static void ConfigureAuthentication(IServiceCollection services, IConfiguration configuration, IWebHostEnvironment env)
     {
         var securityEnabled = configuration.GetValue("Security:Enabled", true);
@@ -850,7 +871,6 @@ internal class Program
             };
         });
     }
-
     private static void ConfigureRepositories(IServiceCollection services)
     {
         services.AddScoped<IAIRepository, AIRepository>();

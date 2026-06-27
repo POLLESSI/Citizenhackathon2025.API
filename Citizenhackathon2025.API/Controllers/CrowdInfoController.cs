@@ -36,8 +36,6 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpGet("all")]
         public async Task<IActionResult> GetAllCrowdInfo(CancellationToken ct = default)
         {
-            await _crowdInfoRepository.ArchivePastCrowdInfosAsync(ct);
-
             var crowdInfos = await _crowdInfoRepository.GetAllCrowdInfoAsync(ct: ct);
 
             return Ok(crowdInfos.Select(c => c.MapToCrowdInfoDTO()).ToList());
@@ -66,8 +64,6 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatest(CancellationToken ct = default)
         {
-            await _crowdInfoRepository.ArchivePastCrowdInfosAsync(ct);
-
             var all = await _crowdInfoRepository.GetAllCrowdInfoAsync(limit: 50, ct);
 
             return Ok(all.Select(c => c.MapToCrowdInfoDTO()));
