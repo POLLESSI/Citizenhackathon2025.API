@@ -76,6 +76,8 @@ using Prometheus;
 using Serilog;
 using Serilog.Formatting.Compact;
 using System.Data;
+using System.Net;
+using System.Security.Authentication;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -756,13 +758,68 @@ internal class Program
             client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
         });
 
+        services.AddHttpClient("ODWB", (sp, client) =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = cfg["ExternalProviders:ODWB:BaseUrl"];
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("ExternalProviders:ODWB:BaseUrl is missing.");
+
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(
+                cfg.GetValue<int?>("ExternalProviders:ODWB:TimeoutSeconds") ?? 8);
+
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("curl/8.20.0");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+
+            client.DefaultRequestVersion = HttpVersion.Version11;
+            client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+        })
+        .ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            return new SocketsHttpHandler
+            {
+                SslOptions =
+                {
+                    EnabledSslProtocols = SslProtocols.Tls12
+                },
+                AllowAutoRedirect = true,
+                AutomaticDecompression =
+                    DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
+        });
+
         services.AddHttpClient<IOdwbTrafficApiService, OdwbTrafficApiService>((sp, client) =>
         {
-            var opt = sp.GetRequiredService<IOptions<TrafficApiOptions>>().Value;
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = cfg["ExternalProviders:ODWB:BaseUrl"];
 
-            client.BaseAddress = new Uri(opt.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(opt.TimeoutSeconds <= 0 ? 8 : opt.TimeoutSeconds);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("ExternalProviders:ODWB:BaseUrl is missing.");
+
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(
+                cfg.GetValue<int?>("ExternalProviders:ODWB:TimeoutSeconds") ?? 8);
+
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("curl/8.20.0");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+
+            client.DefaultRequestVersion = HttpVersion.Version11;
+            client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+        })
+        .ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            return new SocketsHttpHandler
+            {
+                SslOptions =
+                {
+                    EnabledSslProtocols = SslProtocols.Tls12
+                },
+                AllowAutoRedirect = true,
+                AutomaticDecompression =
+                    DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
         });
 
         services.AddHttpClient("OpenWeatherRaw", (sp, client) =>

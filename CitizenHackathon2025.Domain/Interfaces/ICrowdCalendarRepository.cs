@@ -5,6 +5,9 @@ namespace CitizenHackathon2025.Domain.Interfaces
     public interface ICrowdCalendarRepository
     {
         Task<IEnumerable<CrowdCalendarEntry>> GetByDateAsync(DateTime dateUtc, string regionCode, int? placeId = null);
+        Task<IEnumerable<CrowdCalendarEntry>> GetByEventNameAsync(string eventName, bool active = true);
+        Task<IEnumerable<CrowdCalendarEntry>> GetByPlaceIdAsync(int placeId,bool active = true);
+        Task<IEnumerable<CrowdCalendarEntry>> GetByRegionCodeAsync(string regionCode, bool active = true);
         Task<IEnumerable<CrowdCalendarEntry>> GetDueAdvisoriesAsync(DateTime nowUtc, string? regionFilter = null);
         Task<CrowdCalendarEntry?> GetByIdAsync(int id);
         Task<IEnumerable<CrowdCalendarEntry>> ListAsync(DateTime? fromUtc = null, DateTime? toUtc = null, string? region = null, int? placeId = null, bool? active = true);

@@ -51,6 +51,21 @@ INCLUDE
 );
 GO
 
+CREATE INDEX IX_TrafficCondition_Active_Road
+ON dbo.TrafficCondition(Active, Road)
+INCLUDE
+(
+    Latitude,
+    Longitude,
+    DateCondition,
+    CongestionLevel,
+    IncidentType,
+    LastSeenAt,
+    Title,
+    Severity
+);
+GO
+
 CREATE INDEX IX_TrafficCondition_Active_DateCondition
 ON dbo.TrafficCondition (Active, DateCondition DESC);
 GO

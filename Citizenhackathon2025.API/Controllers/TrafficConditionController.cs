@@ -130,6 +130,71 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(trafficCondition.MapToTrafficConditionDTO());
         }
 
+        [HttpGet("by-congestionlevel")]
+        public async Task<IActionResult> GetByCongestionLevel([FromQuery] string congestionLevel, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(congestionLevel))
+                return BadRequest("congestionLevel is required.");
+
+            congestionLevel = congestionLevel.Trim();
+
+            if (congestionLevel.Length < 2)
+                return BadRequest("congestionLevel must contain at least 2 characters.");
+
+            congestionLevel = TrafficCongestionHelper.NormalizeCongestionLevelQuery(congestionLevel);
+
+            var entities = await _trafficConditionRepository
+                .GetByCongestionLevelAsync(congestionLevel, ct);
+
+            var dtos = entities
+                .Select(tc => tc.MapToTrafficConditionDTO())
+                .ToList();
+
+            return Ok(dtos);
+        }
+
+        [HttpGet("by-incidenttype")]
+        public async Task<IActionResult> GetByIncidentType([FromQuery] string incidentType, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(incidentType))
+                return BadRequest("incidentType is required.");
+
+            incidentType = incidentType.Trim();
+
+            if (incidentType.Length < 2)
+                return BadRequest("incidentType must contain at least 2 characters.");
+
+            var entities = await _trafficConditionRepository
+                .GetByIncidentTypeAsync(incidentType, ct);
+
+            var dtos = entities
+                .Select(tc => tc.MapToTrafficConditionDTO())
+                .ToList();
+
+            return Ok(dtos);
+        }
+
+        [HttpGet("by-location")]
+        public async Task<IActionResult> GetByLocation([FromQuery] string location, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(location))
+                return BadRequest("location is required.");
+
+            location = location.Trim();
+
+            if (location.Length < 2)
+                return BadRequest("location must contain at least 2 characters.");
+
+            var entities = await _trafficConditionRepository
+                .GetByLocationAsync(location, ct);
+
+            var dtos = entities
+                .Select(tc => tc.MapToTrafficConditionDTO())
+                .ToList();
+
+            return Ok(dtos);
+        }
+
         [Authorize(Policy = Policies.AdminPolicy)]
         [HttpGet("test-di")]
         public IActionResult TestDi()
@@ -184,14 +249,37 @@ namespace CitizenHackathon2025.API.Controllers
             if (string.IsNullOrWhiteSpace(baseUrl))
                 return Problem("ExternalProviders:ODWB:BaseUrl is missing.");
 
-            var url = $"{baseUrl.TrimEnd('/')}?limit={limit}";
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+                return BadRequest($"Invalid ODWB BaseUrl: {baseUrl}");
 
-            var http = factory.CreateClient();
+            var separator = baseUrl.Contains('?') ? "&" : "?";
+            var url = $"{baseUrl.TrimEnd('/')}{separator}limit={Math.Clamp(limit, 1, 100)}";
 
-            using var response = await http.GetAsync(url, ct);
-            var body = await response.Content.ReadAsStringAsync(ct);
+            try
+            {
+                var http = factory.CreateClient("ODWB");
 
-            return Content(body, "application/json");
+                using var response = await http.GetAsync(url, ct);
+                var body = await response.Content.ReadAsStringAsync(ct);
+
+                return StatusCode((int)response.StatusCode, new
+                {
+                    Url = url,
+                    StatusCode = (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    Body = body
+                });
+            }
+            catch (HttpRequestException ex)
+            {
+                return StatusCode(502, new
+                {
+                    Error = "ODWB HTTP call failed.",
+                    Url = url,
+                    Message = ex.Message,
+                    Inner = ex.InnerException?.Message
+                });
+            }
         }
 
         [Authorize(Policy = "AdminOrModo")]

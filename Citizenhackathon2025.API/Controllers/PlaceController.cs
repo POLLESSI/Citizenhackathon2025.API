@@ -54,6 +54,53 @@ namespace CitizenHackathon2025.API.Controllers
 
             return Ok(place.MapToPlaceDTO());
         }
+
+        // GET /api/Place/by-name?name=Abbaye
+        [HttpGet("by-name")]
+        public async Task<IActionResult> GetPlacesByName(
+            [FromQuery] string name,
+            CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest("Name is required.");
+
+            name = name.Trim();
+
+            if (name.Length < 2)
+                return BadRequest("Name must contain at least 2 characters.");
+
+            var places = await _placeRepository.GetByNameAsync(name, ct);
+
+            var dtos = places
+                .Select(p => p.MapToPlaceDTO())
+                .ToList();
+
+            return Ok(dtos);
+        }
+
+        // GET /api/Place/by-type?type=Abbaye
+        [HttpGet("by-type")]
+        public async Task<IActionResult> GetPlacesByType(
+            [FromQuery] string type,
+            CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(type))
+                return BadRequest("Type is required.");
+
+            type = type.Trim();
+
+            if (type.Length < 2)
+                return BadRequest("Type must contain at least 2 characters.");
+
+            var places = await _placeRepository.GetByTypeAsync(type, ct);
+
+            var dtos = places
+                .Select(p => p.MapToPlaceDTO())
+                .ToList();
+
+            return Ok(dtos);
+        }
+
         // C. POST /api/Place  (create)
         [Authorize(Policy = "AdminOrModo")]
         [HttpPost("save")]

@@ -15,7 +15,8 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<Place?> GetByIdAsync(int id, CancellationToken ct = default);
 
         Task<Place> SavePlaceAsync(Place place, CancellationToken ct = default);
-
+        Task<IReadOnlyList<Place>> GetByNameAsync(string name, CancellationToken ct = default);
+        Task<IReadOnlyList<Place>> GetByTypeAsync(string type, CancellationToken ct = default);
         Place? UpdatePlace(Place place);
 
         Task<Place?> UpdateAsync(Place place, CancellationToken ct = default);

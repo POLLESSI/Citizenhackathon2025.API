@@ -307,6 +307,94 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = "EXEC dbo.CrowdCalendar_ExpireOldEntries;";
             return _db.ExecuteAsync(sql);
         }
+
+        public async Task<IEnumerable<CrowdCalendarEntry>> GetByEventNameAsync(string eventName, bool active = true)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+                return Enumerable.Empty<CrowdCalendarEntry>();
+
+            const string sql = """
+                            SELECT
+                                Id,
+                                DateUtc,
+                                RegionCode,
+                                PlaceId,
+                                EventName,
+                                ExpectedLevel,
+                                Confidence,
+                                Latitude,
+                                Longitude,
+                                StartLocalTime,
+                                EndLocalTime,
+                                LeadHours,
+                                MessageTemplate,
+                                Tags,
+                                Active,
+                                CreatedAt
+                            FROM dbo.CrowdCalendar
+                            WHERE Active = @Active
+                              AND EventName IS NOT NULL
+                              AND LTRIM(RTRIM(EventName)) <> ''
+                              AND EventName LIKE @EventName
+                            ORDER BY DateUtc DESC,
+                                     RegionCode,
+                                     ISNULL(PlaceId,-1);
+                            """;
+
+            return await _db.QueryAsync<CrowdCalendarEntry>(
+                sql,
+                new
+                {
+                    EventName = BuildLikeParameter(eventName),
+                    Active = active
+                });
+        }
+
+        public Task<IEnumerable<CrowdCalendarEntry>> GetByPlaceIdAsync(int placeId, bool active = true)
+        {
+            const string sql = """
+                            SELECT *
+                            FROM dbo.CrowdCalendar
+                            WHERE Active = @Active
+                                AND PlaceId = @PlaceId
+                            ORDER BY DateUtc DESC, RegionCode, ISNULL(PlaceId, -1);
+                            """;
+
+            return _db.QueryAsync<CrowdCalendarEntry>(sql, new
+            {
+                PlaceId = placeId,
+                Active = active
+            });
+        }
+
+        public Task<IEnumerable<CrowdCalendarEntry>> GetByRegionCodeAsync(string regionCode, bool active = true)
+        {
+            const string sql = """
+                            SELECT *
+                            FROM dbo.CrowdCalendar
+                            WHERE Active = @Active
+                                AND RegionCode IS NOT NULL
+                                AND LTRIM(RTRIM(RegionCode)) <> ''
+                                AND RegionCode LIKE @RegionCode
+                            ORDER BY DateUtc DESC, RegionCode, ISNULL(PlaceId, -1);
+                            """;
+
+            return _db.QueryAsync<CrowdCalendarEntry>(
+                sql,
+                new
+                {
+                    RegionCode = BuildLikeParameter(regionCode),
+                    Active = active
+                });
+        }
+
+        private static string BuildLikeParameter(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "%";
+
+            return $"%{value.Trim()}%";
+        }
     }
 }
 

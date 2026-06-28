@@ -54,13 +54,67 @@ namespace CitizenHackathon2025.API.Controllers
 
         // ---- LIST ----
         [HttpGet("calendar")]
-        public async Task<IActionResult> List([FromQuery] DateTime? from = null,
-                                              [FromQuery] DateTime? to = null,
-                                              [FromQuery] string? region = null,
-                                              [FromQuery] int? placeId = null,
-                                              [FromQuery] bool? active = true)
+        public async Task<IActionResult> List([FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null, [FromQuery] string? region = null, [FromQuery] int? placeId = null, [FromQuery] bool? active = true)
         {
             var items = await _repo.ListAsync(from, to, region, placeId, active);
+            return Ok(items);
+        }
+
+        // GET api/crowd/calendar/by-eventname?eventName=festival
+        [HttpGet("calendar/by-eventname")]
+        #if DEBUG
+        [AllowAnonymous]
+        #endif
+        public async Task<IActionResult> GetByEventName(
+            [FromQuery] string eventName,
+            [FromQuery] bool active = true)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+                return BadRequest("Event name is required.");
+
+            var items = await _repo.GetByEventNameAsync(
+                eventName.Trim(),
+                active);
+
+            return Ok(items);
+        }
+
+        // GET api/crowd/calendar/by-place-id?placeId=123
+        [HttpGet("calendar/by-place-id")]
+        #if DEBUG
+        [AllowAnonymous]
+        #endif
+        public async Task<IActionResult> GetByPlaceId(
+            [FromQuery] int placeId,
+            [FromQuery] bool active = true)
+        {
+            if (placeId <= 0)
+                return BadRequest("placeId must be greater than zero.");
+
+            var items = await _repo.GetByPlaceIdAsync(placeId, active);
+
+            return Ok(items);
+        }
+
+        // GET api/crowd/calendar/by-regioncode?regionCode=BE-WLX-NAM
+        [HttpGet("calendar/by-regioncode")]
+        #if DEBUG
+        [AllowAnonymous]
+        #endif
+        public async Task<IActionResult> GetByRegionCode(
+            [FromQuery] string regionCode,
+            [FromQuery] bool active = true)
+        {
+            if (string.IsNullOrWhiteSpace(regionCode))
+                return BadRequest("regionCode is required.");
+
+            regionCode = regionCode.Trim();
+
+            if (regionCode.Length < 2)
+                return BadRequest("regionCode must contain at least 2 characters.");
+
+            var items = await _repo.GetByRegionCodeAsync(regionCode, active);
+
             return Ok(items);
         }
 

@@ -48,9 +48,26 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             try
             {
-                const string sql = @"SELECT Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType, Active
+                const string sql = @"
+                                SELECT
+                                    Id, 
+                                    Latitude, 
+                                    Longitude,  
+                                    DateCondition, 
+                                    CongestionLevel, 
+                                    IncidentType,
+                                    Provider, 
+                                    ExternalId, 
+                                    Fingerprint, 
+                                    LastSeenAt, 
+                                    Title, 
+                                    Road, 
+                                    Severity, 
+                                    GeomWkt, 
+                                    Active
                                 FROM dbo.TrafficCondition
-                                WHERE Id = @Id AND Active = 1";
+                                WHERE Id = @Id
+                                  AND Active = 1;";
                 DynamicParameters parameters = new DynamicParameters();
                 parameters.Add("@Id", id, DbType.Int64);
 
@@ -59,7 +76,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting Traffic Condition by Id: {ex.ToString}");
+                _logger.LogError(ex, "Error getting TrafficCondition by Id={Id}", id);
                 return null;
             }
            
@@ -188,6 +205,84 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
                 throw;
             }
+        }
+
+        public async Task<IReadOnlyList<TrafficCondition>> GetByCongestionLevelAsync(string congestionLevel, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType,
+                                Provider, ExternalId, Fingerprint, LastSeenAt, Title, Road, Severity, GeomWkt, Active
+                            FROM dbo.TrafficCondition
+                            WHERE Active = 1
+                              AND CongestionLevel IS NOT NULL
+                              AND LTRIM(RTRIM(CongestionLevel)) <> ''
+                              AND CongestionLevel LIKE @CongestionLevel
+                            ORDER BY LastSeenAt DESC, DateCondition DESC;";
+
+            var value = congestionLevel.Trim();
+
+            var result = await _connection.QueryAsync<TrafficCondition>(
+                new CommandDefinition(
+                    sql,
+                    new { CongestionLevel = $"%{value}%" },
+                    cancellationToken: ct));
+
+            return result.ToList();
+        }
+
+        public async Task<IReadOnlyList<TrafficCondition>> GetByIncidentTypeAsync(string incidentType, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType,
+                                Provider, ExternalId, Fingerprint, LastSeenAt, Title, Road, Severity, GeomWkt, Active
+                            FROM dbo.TrafficCondition
+                            WHERE Active = 1
+                              AND IncidentType IS NOT NULL
+                              AND LTRIM(RTRIM(IncidentType)) <> ''
+                              AND
+                              (
+                                    IncidentType LIKE @IncidentType
+                                    OR Title LIKE @IncidentType
+                                    OR Road LIKE @IncidentType
+                              )
+                              ORDER BY LastSeenAt DESC, DateCondition DESC;";
+
+            var value = incidentType.Trim();
+
+            var result = await _connection.QueryAsync<TrafficCondition>(
+                new CommandDefinition(
+                    sql,
+                    new { IncidentType = $"%{value}%" },
+                    cancellationToken: ct));
+
+            return result.ToList();
+        }
+
+        public async Task<IReadOnlyList<TrafficCondition>> GetByLocationAsync(string location, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                Id, Latitude, Longitude, DateCondition, CongestionLevel, IncidentType,
+                                Provider, ExternalId, Fingerprint, LastSeenAt, Title, Road, Severity, GeomWkt, Active
+                            FROM dbo.TrafficCondition
+                            WHERE Active = 1
+                              AND (
+                                    Road LIKE @Location
+                                 OR Title LIKE @Location
+                              )
+                            ORDER BY LastSeenAt DESC, DateCondition DESC;";
+
+            var value = location.Trim();
+
+            var result = await _connection.QueryAsync<TrafficCondition>(
+                new CommandDefinition(
+                    sql,
+                    new { Location = $"%{value}%" },
+                    cancellationToken: ct));
+
+            return result.ToList();
         }
     }
 }

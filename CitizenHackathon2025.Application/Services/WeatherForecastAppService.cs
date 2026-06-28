@@ -2,6 +2,7 @@
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Application.Interfaces.OpenWeather;
 using CitizenHackathon2025.Application.WeatherForecasts.Commands;
+using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using MediatR;
@@ -187,6 +188,51 @@ namespace CitizenHackathon2025.Application.Services
             // ✅ method must return a tuple per interface
             var (alertsUpserted, forecastSaved) = await _ingestion.PullAndStoreAsync(lat, lon, ct);
             return (alertsUpserted, forecastSaved);
+        }
+
+        public async Task<List<WeatherForecastDTO>> GetByLocationAsync(decimal latitude, decimal longitude, decimal delta = 0.05m, CancellationToken ct = default)
+        {
+            if (latitude < -90 || latitude > 90)
+                throw new ArgumentOutOfRangeException(nameof(latitude), "Latitude must be between -90 and 90.");
+
+            if (longitude < -180 || longitude > 180)
+                throw new ArgumentOutOfRangeException(nameof(longitude), "Longitude must be between -180 and 180.");
+
+            if (delta <= 0 || delta > 1)
+                throw new ArgumentOutOfRangeException(nameof(delta), "Delta must be between 0 and 1.");
+
+            var rows = await _repo.GetByLocationAsync(latitude, longitude, delta, ct);
+
+            return rows
+                .Select(w => w.MapToWeatherForecastDTO())
+                .ToList();
+        }
+
+        public async Task<List<WeatherForecastDTO>> GetByWeatherTypeAsync(WeatherType weatherType, CancellationToken ct = default)
+        {
+            var rows = await _repo.GetByWeatherTypeAsync(weatherType, ct);
+
+            return rows
+                .Select(w => w.MapToWeatherForecastDTO())
+                .ToList();
+        }
+
+        public async Task<List<WeatherForecastDTO>> GetByProviderAsync(WeatherProvider provider, CancellationToken ct = default)
+        {
+            var rows = await _repo.GetByProviderAsync(provider, ct);
+
+            return rows
+                .Select(w => w.MapToWeatherForecastDTO())
+                .ToList();
+        }
+
+        public async Task<List<WeatherForecastDTO>> GetByIsSevereAsync(bool isSevere, CancellationToken ct = default)
+        {
+            var rows = await _repo.GetByIsSevereAsync(isSevere, ct);
+
+            return rows
+                .Select(w => w.MapToWeatherForecastDTO())
+                .ToList();
         }
     }
 }

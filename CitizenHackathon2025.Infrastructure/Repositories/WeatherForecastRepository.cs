@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.ReadRows;
 using Dapper;
@@ -276,6 +277,158 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
 
             return result;
+        }
+
+        public async Task<List<WeatherForecast>> GetByLocationAsync(decimal latitude, decimal longitude, decimal delta = 0.05m, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                Provider,
+                                IsSevere,
+                                Active
+                            FROM dbo.WeatherForecast
+                            WHERE Active = 1
+                              AND Latitude IS NOT NULL
+                              AND Longitude IS NOT NULL
+                              AND ABS(Latitude - @Latitude) <= @Delta
+                              AND ABS(Longitude - @Longitude) <= @Delta
+                            ORDER BY DateWeather DESC;";    
+
+            var rows = await _connection.QueryAsync<WeatherForecast>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Latitude = latitude,
+                        Longitude = longitude,
+                        Delta = delta
+                    },
+                    cancellationToken: ct));
+
+            return rows.ToList();
+        }
+
+        public async Task<List<WeatherForecast>> GetByWeatherTypeAsync(WeatherType weatherType, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                Provider,
+                                IsSevere,
+                                Active
+                            FROM dbo.WeatherForecast
+                            WHERE Active = 1
+                              AND WeatherType = @WeatherType
+                            ORDER BY DateWeather DESC;";
+
+            var rows = await _connection.QueryAsync<WeatherForecast>(
+                new CommandDefinition(
+                    sql,
+                    new { WeatherType = (int)weatherType },
+                    cancellationToken: ct));
+
+            return rows.ToList();
+        }
+
+        public async Task<List<WeatherForecast>> GetByProviderAsync(WeatherProvider provider, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                Provider,
+                                IsSevere,
+                                Active
+                            FROM dbo.WeatherForecast
+                            WHERE Active = 1
+                              AND Provider = @Provider
+                            ORDER BY DateWeather DESC;";
+
+            var rows = await _connection.QueryAsync<WeatherForecast>(
+                new CommandDefinition(
+                    sql,
+                    new { Provider = (int)provider },
+                    cancellationToken: ct));
+
+            return rows.ToList();
+        }
+
+        public async Task<List<WeatherForecast>> GetByIsSevereAsync(bool isSevere, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                Id,
+                                DateWeather AS DateWeatherUtc,
+                                Latitude,
+                                Longitude,
+                                TemperatureC,
+                                TemperatureF,
+                                Summary,
+                                RainfallMm,
+                                Humidity,
+                                WindSpeedKmh,
+                                WeatherMain,
+                                Description,
+                                Icon,
+                                IconUrl,
+                                WeatherType,
+                                Provider,
+                                IsSevere,
+                                Active
+                            FROM dbo.WeatherForecast
+                            WHERE Active = 1
+                              AND IsSevere = @IsSevere
+                            ORDER BY DateWeather DESC;";
+
+            var rows = await _connection.QueryAsync<WeatherForecast>(
+                new CommandDefinition(
+                    sql,
+                    new { IsSevere = isSevere },
+                    cancellationToken: ct));
+
+            return rows.ToList();
         }
     }
 }

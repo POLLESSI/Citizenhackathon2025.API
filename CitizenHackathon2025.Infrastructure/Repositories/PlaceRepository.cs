@@ -183,7 +183,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = @"
                             SELECT TOP(1) *
                             FROM dbo.Place
-                            WHERE Id = @Id;";
+                            WHERE Id = @Id AND Active = 1;";
 
             try
             {
@@ -357,6 +357,79 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 _logger.LogError(ex, "Error retrieving active places.");
                 return Array.Empty<Place>();
             }
+        }
+
+        public async Task<IReadOnlyList<Place>> GetByNameAsync(string name, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                [Id],
+                                [Name],
+                                [Type],
+                                [Indoor],
+                                [Latitude],
+                                [Longitude],
+                                [Capacity],
+                                [Tag],
+                                [ExternalSource],
+                                [ExternalId],
+                                [SourceUpdatedAtUtc],
+                                [Active]
+                            FROM dbo.Place
+                            WHERE Active = 1
+                              AND Name IS NOT NULL
+                              AND LTRIM(RTRIM(Name)) <> ''
+                              AND Name LIKE @Name
+                            ORDER BY
+                                CASE WHEN Name = @ExactName THEN 0 ELSE 1 END,
+                                Name ASC;";
+
+            var result = await _connection.QueryAsync<Place>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        ExactName = name.Trim(),
+                        Name = $"%{name.Trim()}%"
+                    },
+                    cancellationToken: ct));
+
+            return result.ToList();
+        }
+
+        public async Task<IReadOnlyList<Place>> GetByTypeAsync(string type, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                [Id],
+                                [Name],
+                                [Type],
+                                [Indoor],
+                                [Latitude],
+                                [Longitude],
+                                [Capacity],
+                                [Tag],
+                                [ExternalSource],
+                                [ExternalId],
+                                [SourceUpdatedAtUtc],
+                                [Active]
+                            FROM dbo.Place
+                            WHERE Active = 1
+                              AND Type IS NOT NULL
+                              AND LTRIM(RTRIM(Type)) <> ''
+                              AND Type LIKE @Type
+                            ORDER BY Name ASC;";
+
+            var result = await _connection.QueryAsync<Place>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Type = $"%{type.Trim()}%"
+                    },
+                    cancellationToken: ct));
+
+            return result.ToList();
         }
     }
 }

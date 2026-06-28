@@ -1,5 +1,4 @@
-﻿using Azure.Core;
-using CitizenHackathon2025.Application.Interfaces;
+﻿using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Domain.Entities;
@@ -25,12 +24,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task AddAsync(WeatherForecastDTO dto, CancellationToken ct = default)
         {
-            await _app.CreateAsync(dto, ct);
+            await SaveWeatherForecastAsync(dto, ct);
         }
 
-        public async Task<WeatherForecastDTO> SaveWeatherForecastAsync(
-    WeatherForecastDTO dto,
-    CancellationToken ct = default)
+        public async Task<WeatherForecastDTO> SaveWeatherForecastAsync(WeatherForecastDTO dto, CancellationToken ct = default)
         {
             var saved = await _app.CreateAsync(dto, ct);
 
@@ -70,47 +67,58 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Mongo weather snapshot failed. SQL weather forecast remains saved.");
+                _logger.LogWarning(
+                    ex,
+                    "Mongo weather snapshot failed. SQL weather forecast remains saved.");
             }
 
             return saved;
         }
+
         public Task<WeatherForecastDTO> GenerateNewForecastAsync(CancellationToken ct = default)
-                    => throw new NotSupportedException("Generated weather forecasts are disabled. Use OpenWeather pull instead.");
+            => _app.GenerateAsync(ct);
 
-        public async Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default)
-        {
-            await _app.ArchiveExpiredAsync(ct);
+        public Task<List<WeatherForecastDTO>> GetAllAsync(CancellationToken ct = default)
+            => _app.GetAllAsync(ct);
 
-            return await _app.GetAllAsync(ct);
-        }
         public Task<List<WeatherForecastDTO>> GetHistoryAsync(int limit = 128, CancellationToken ct = default)
             => _app.GetHistoryAsync(limit, ct);
 
+        public Task<WeatherForecastDTO?> GetByIdAsync(int id, CancellationToken ct = default)
+            => _app.GetByIdAsync(id, ct);
+
         public async Task<IEnumerable<WeatherForecastDTO?>> GetLatestWeatherForecastAsync(CancellationToken ct = default)
-            => await _app.GetCurrentAsync(city: null, ct);
+        {
+            var current = await _app.GetCurrentAsync(city: null, ct);
+            return current;
+        }
+
+        public Task<List<WeatherForecastDTO>> GetByLocationAsync(decimal latitude, decimal longitude, decimal delta = 0.05m, CancellationToken ct = default)
+            => _app.GetByLocationAsync(latitude, longitude, delta, ct);
+
+        public Task<List<WeatherForecastDTO>> GetByWeatherTypeAsync(WeatherType weatherType, CancellationToken ct = default)
+            => _app.GetByWeatherTypeAsync(weatherType, ct);
+
+        public Task<List<WeatherForecastDTO>> GetByProviderAsync(WeatherProvider provider, CancellationToken ct = default)
+            => _app.GetByProviderAsync(provider, ct);
+
+        public Task<List<WeatherForecastDTO>> GetByIsSevereAsync(bool isSevere, CancellationToken ct = default)
+            => _app.GetByIsSevereAsync(isSevere, ct);
 
         public Task SendWeatherToAllClientsAsync(CancellationToken ct = default)
-            => Task.CompletedTask; // or call _app.GetCurrentAsync + broadcaster if you want
+            => Task.CompletedTask;
+
+        public Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default)
+            => throw new NotSupportedException("Generated destination forecasts are disabled. Use OpenWeather pull instead.");
 
         public Task<int> ArchivePastWeatherForecastsAsync(CancellationToken ct = default)
             => _app.ArchiveExpiredAsync(ct);
 
-        // If you keep these legacy signatures :
-        public Task<WeatherForecastDTO> GetForecastAsync(string destination, CancellationToken ct = default)
-            => throw new NotSupportedException("Generated weather forecasts are disabled. Use PullAsync instead.");
         public Task<List<WeatherForecastDTO>> GetAllAsync(WeatherForecast forecast, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
-        }
-        public Task<WeatherForecastDTO?> GetByIdAsync(int id, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
-        }
+            => _app.GetAllAsync(ct);
 
         public Task<RainAlertDTO?> CheckRainfallAlertAsync(WeatherForecast wf, CancellationToken ct = default)
         {
-            // TODO: implement business logic
             return Task.FromResult<RainAlertDTO?>(null);
         }
     }

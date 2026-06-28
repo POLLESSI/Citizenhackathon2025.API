@@ -136,6 +136,55 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(await _app.GetAllAsync(ct));
         }
 
+        [HttpGet("by-location")]
+        public async Task<IActionResult> GetByLocation([FromQuery] decimal latitude, [FromQuery] decimal longitude, [FromQuery] decimal delta = 0.05m, CancellationToken ct = default)
+        {
+            if (latitude < -90 || latitude > 90)
+                return BadRequest("Invalid latitude.");
+
+            if (longitude < -180 || longitude > 180)
+                return BadRequest("Invalid longitude.");
+
+            if (delta <= 0 || delta > 1)
+                return BadRequest("delta must be between 0 and 1.");
+
+            await _app.ArchiveExpiredAsync(ct);
+
+            var result = await _app.GetByLocationAsync(latitude, longitude, delta, ct);
+
+            return Ok(result);
+        }
+
+        [HttpGet("by-weathertype")]
+        public async Task<IActionResult> GetByWeatherType([FromQuery] WeatherType weatherType, CancellationToken ct = default)
+        {
+            await _app.ArchiveExpiredAsync(ct);
+
+            var result = await _app.GetByWeatherTypeAsync(weatherType, ct);
+
+            return Ok(result);
+        }
+
+        [HttpGet("by-provider")]
+        public async Task<IActionResult> GetByProvider([FromQuery] WeatherProvider provider, CancellationToken ct = default)
+        {
+            await _app.ArchiveExpiredAsync(ct);
+
+            var result = await _app.GetByProviderAsync(provider, ct);
+
+            return Ok(result);
+        }
+
+        [HttpGet("by-issevere")]
+        public async Task<IActionResult> GetByIsSevere([FromQuery] bool isSevere, CancellationToken ct = default)
+        {
+            await _app.ArchiveExpiredAsync(ct);
+
+            var result = await _app.GetByIsSevereAsync(isSevere, ct);
+
+            return Ok(result);
+        }
+
         [HttpGet("current")]
         public async Task<IActionResult> GetCurrent([FromQuery] string? city = null, CancellationToken ct = default)
         {
@@ -160,32 +209,32 @@ namespace CitizenHackathon2025.API.Controllers
             return dto is null ? NotFound() : Ok(dto);
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [HttpGet("debug-db-weather")]
-        public async Task<IActionResult> DebugDbWeather([FromServices] IDbConnection cn)
-        {
-            const string sql = @"
-                            SELECT @@SERVERNAME AS ServerName, DB_NAME() AS DbName;
+        //[Authorize(Policy = Policies.AdminPolicy)]
+        //[HttpGet("debug-db-weather")]
+        //public async Task<IActionResult> DebugDbWeather([FromServices] IDbConnection cn)
+        //{
+        //    const string sql = @"
+        //                    SELECT @@SERVERNAME AS ServerName, DB_NAME() AS DbName;
 
-                            SELECT COUNT(*) AS WeatherRows FROM dbo.WeatherForecast;
+        //                    SELECT COUNT(*) AS WeatherRows FROM dbo.WeatherForecast;
 
-                            SELECT 
-                                p.parameter_id,
-                                p.name,
-                                TYPE_NAME(p.user_type_id) AS TypeName
-                            FROM sys.parameters p
-                            WHERE p.object_id = OBJECT_ID('dbo.sp_WeatherForecast_Upsert')
-                            ORDER BY p.parameter_id;";
+        //                    SELECT 
+        //                        p.parameter_id,
+        //                        p.name,
+        //                        TYPE_NAME(p.user_type_id) AS TypeName
+        //                    FROM sys.parameters p
+        //                    WHERE p.object_id = OBJECT_ID('dbo.sp_WeatherForecast_Upsert')
+        //                    ORDER BY p.parameter_id;";
 
-            using var multi = await cn.QueryMultipleAsync(sql);
+        //    using var multi = await cn.QueryMultipleAsync(sql);
 
-            return Ok(new
-            {
-                Db = await multi.ReadFirstAsync(),
-                Count = await multi.ReadFirstAsync(),
-                Parameters = await multi.ReadAsync()
-            });
-        }
+        //    return Ok(new
+        //    {
+        //        Db = await multi.ReadFirstAsync(),
+        //        Count = await multi.ReadFirstAsync(),
+        //        Parameters = await multi.ReadAsync()
+        //    });
+        //}
 
         //[Authorize(Policy = Policies.AdminPolicy)]
         //[HttpGet("db-info")]

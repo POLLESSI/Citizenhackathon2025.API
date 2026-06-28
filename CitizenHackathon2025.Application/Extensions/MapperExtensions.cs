@@ -422,7 +422,7 @@ namespace CitizenHackathon2025.Application.Extensions
             };
 
 
-        // DTO -> Entity (UPDATE) existe déjà pour TrafficConditionUpdateDTO → OK
+        // DTO -> Entity (UPDATE) already exists for TrafficConditionUpdateDTO → OK
 
         public static TrafficConditionDTO MapToTrafficConditionWithDateCondition(this TrafficConditionUpdateDTO dto)
         {

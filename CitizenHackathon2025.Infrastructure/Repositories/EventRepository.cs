@@ -81,7 +81,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             const string sql = @"
                             SELECT TOP(1) *
                             FROM dbo.Event
-                            WHERE Id = @Id 
+                            WHERE Id = @Id
+                            AND Active = 1;
                             ";
             try
             {
@@ -93,7 +94,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting Event : {ex.Message}");
+                _logger.LogError(ex, "Error getting Event by Id={Id}", id);
                 return null;
             }
         }
@@ -278,6 +279,85 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 _logger.LogError(ex, "Error archiving past events.");
                 return 0;
             }
+        }
+
+        public async Task<IReadOnlyList<Event>> GetByNameAsync(string name, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                [Id],
+                                [Name],
+                                [PlaceId],
+                                [Latitude],
+                                [Longitude],
+                                [DateEvent],
+                                [ExpectedCrowd],
+                                [IsOutdoor],
+                                [ExternalSource],
+                                [ExternalId],
+                                [SourceUpdatedAtUtc],
+                                [Active]
+                            FROM dbo.[Event]
+                            WHERE [Active] = 1
+                                AND [Name] IS NOT NULL
+                                AND LTRIM(RTRIM([Name])) <> ''
+                                AND [Name] LIKE @Name
+                            ORDER BY
+                                CASE WHEN [Name] = @ExactName THEN 0 ELSE 1 END,
+                                [DateEvent] ASC,
+                                [Name] ASC;";
+
+            var trimmedName = name.Trim();
+
+            var result = await _connection.QueryAsync<Event>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        ExactName = trimmedName,
+                        Name = $"%{trimmedName}%"
+                    },
+                    cancellationToken: ct));
+
+            return result.ToList();
+        }
+
+        public async Task<IReadOnlyList<Event>> GetByDateEventAsync(DateTime dateEvent, CancellationToken ct = default)
+        {
+            const string sql = @"
+                            SELECT
+                                [Id],
+                                [Name],
+                                [PlaceId],
+                                [Latitude],
+                                [Longitude],
+                                [DateEvent],
+                                [ExpectedCrowd],
+                                [IsOutdoor],
+                                [ExternalSource],
+                                [ExternalId],
+                                [SourceUpdatedAtUtc],
+                                [Active]
+                            FROM dbo.[Event]
+                            WHERE [Active] = 1
+                              AND [DateEvent] >= @StartDate
+                              AND [DateEvent] < @EndDate
+                            ORDER BY [DateEvent] ASC, [Name] ASC;";
+
+            var startDate = dateEvent.Date;
+            var endDate = startDate.AddDays(1);
+
+            var result = await _connection.QueryAsync<Event>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        StartDate = startDate,
+                        EndDate = endDate
+                    },
+                    cancellationToken: ct));
+
+            return result.ToList();
         }
     }
 }

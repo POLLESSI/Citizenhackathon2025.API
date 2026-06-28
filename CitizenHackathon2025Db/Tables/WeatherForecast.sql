@@ -42,12 +42,6 @@ BEGIN
 END;
 GO
 
-CREATE UNIQUE INDEX UX_WeatherForecast_Active_Date_Lat_Lon
-ON dbo.WeatherForecast(DateWeather, Latitude, Longitude)
-WHERE Active = 1;
-
-GO
-
 CREATE INDEX IX_WeatherForecast_Active_Future_DateWeather
 ON dbo.WeatherForecast(DateWeather)
 INCLUDE (
@@ -68,6 +62,43 @@ INCLUDE (
 )
 WHERE Active = 1;
 
+GO
+
+CREATE INDEX IX_WeatherForecast_Active_Lat_Lon_DateWeather
+ON dbo.WeatherForecast(Active, Latitude, Longitude, DateWeather DESC)
+INCLUDE
+(
+    TemperatureC,
+    Summary,
+    RainfallMm,
+    Humidity,
+    WindSpeedKmh,
+    WeatherMain,
+    Description,
+    Icon,
+    IconUrl,
+    WeatherType,
+    Provider,
+    IsSevere
+);
+GO
+
+CREATE UNIQUE INDEX UX_WeatherForecast_Active_Date_Lat_Lon
+ON dbo.WeatherForecast(DateWeather, Latitude, Longitude)
+WHERE Active = 1;
+
+GO
+
+CREATE INDEX IX_WeatherForecast_Active_WeatherType_DateWeather
+ON dbo.WeatherForecast(Active, WeatherType, DateWeather DESC);
+GO
+
+CREATE INDEX IX_WeatherForecast_Active_Provider_DateWeather
+ON dbo.WeatherForecast(Active, Provider, DateWeather DESC);
+GO
+
+CREATE INDEX IX_WeatherForecast_Active_IsSevere_DateWeather
+ON dbo.WeatherForecast(Active, IsSevere, DateWeather DESC);
 GO
 
 

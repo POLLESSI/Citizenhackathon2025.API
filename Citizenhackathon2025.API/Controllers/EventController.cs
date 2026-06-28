@@ -55,6 +55,43 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(entity.MapToEventDTO());
         }
 
+        // GET /api/Event/by-name?name=concert
+        [HttpGet("by-name")]
+        public async Task<IActionResult> GetEventsByName([FromQuery] string name, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest("Name is required.");
+
+            name = name.Trim();
+
+            if (name.Length < 2)
+                return BadRequest("Name must contain at least 2 characters.");
+
+            var entities = await _eventRepository.GetByNameAsync(name, ct);
+
+            var dtos = entities
+                .Select(e => e.MapToEventDTO())
+                .ToList();
+
+            return Ok(dtos);
+        }
+
+        // GET /api/Event/date-event?dateEvent=2026-06-28
+        [HttpGet("date-event")]
+        public async Task<IActionResult> GetEventsByDateEvent([FromQuery] DateTime dateEvent, CancellationToken ct)
+        {
+            if (dateEvent == default)
+                return BadRequest("dateEvent is required.");
+
+            var entities = await _eventRepository.GetByDateEventAsync(dateEvent, ct);
+
+            var dtos = entities
+                .Select(e => e.MapToEventDTO())
+                .ToList();
+
+            return Ok(dtos);
+        }
+
         [Authorize(Policy = "AdminOrModo")]
         [HttpPost("save")]
         public async Task<IActionResult> SaveEvent([FromBody] EventDTO eventDto)
