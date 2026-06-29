@@ -7,16 +7,16 @@ using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Traffic.Mappers;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Traffic.Mappers.Interfaces;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Traffic.Mappers.Raws;
 using CitizenHackathon2025.Infrastructure.Helpers;
-using CitizenHackathon2025.Infrastructure.Repositories;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
-using Newtonsoft.Json.Linq;
 using System.Data;
 using HubEvents = CitizenHackathon2025.Contracts.Hubs.TrafficConditionHubMethods;
 
@@ -29,6 +29,9 @@ namespace CitizenHackathon2025.API.Controllers
     {
         private readonly ITrafficConditionRepository _trafficConditionRepository;
         private readonly ICriticalAlertQuorumService _criticalAlertQuorumService;
+        private readonly ITrafficProviderMapper<ManualTrafficRaw> _manualTrafficMapper;
+        private readonly ITrafficProviderMapper<SignalRTrafficRaw> _signalRTrafficMapper;
+        private readonly ITrafficConditionNormalizer _normalizer;
         private readonly ITrafficApiService _trafficApiService;
         private readonly IHubContext<TrafficHub> _hubContext;
         private readonly ILogger<TrafficConditionController> _logger;
@@ -36,7 +39,7 @@ namespace CitizenHackathon2025.API.Controllers
 
         private const string HubMethod_ReceiveTrafficConditionUpdate = "ReceiveTrafficConditionUpdate";
 
-        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ICriticalAlertQuorumService criticalAlertQuorumService, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext, ILogger<TrafficConditionController> logger, byte[] trafficHmacKey)
+        public TrafficConditionController(ITrafficConditionRepository trafficConditionRepository, ICriticalAlertQuorumService criticalAlertQuorumService, ITrafficApiService trafficApiService, IHubContext<TrafficHub> hubContext, ILogger<TrafficConditionController> logger, byte[] trafficHmacKey, ITrafficConditionNormalizer normalizer, ITrafficProviderMapper<ManualTrafficRaw> manualTrafficMapper, ITrafficProviderMapper<SignalRTrafficRaw> signalRTrafficMapper)
         {
             _trafficConditionRepository = trafficConditionRepository;
             _criticalAlertQuorumService = criticalAlertQuorumService;
@@ -44,6 +47,9 @@ namespace CitizenHackathon2025.API.Controllers
             _hubContext = hubContext;
             _logger = logger;
             _trafficHmacKey = trafficHmacKey;
+            _normalizer = normalizer;
+            _manualTrafficMapper = manualTrafficMapper;
+            _signalRTrafficMapper = signalRTrafficMapper;
         }
 
         // 1) Endpoint to retrieve the latest in the database
@@ -106,6 +112,8 @@ namespace CitizenHackathon2025.API.Controllers
                 // Severity = ... if you have a logic
             };
 
+            _normalizer.Normalize(entity);
+
             var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
             if (saved is null) return Problem("UPSERT failed");
 
@@ -141,7 +149,7 @@ namespace CitizenHackathon2025.API.Controllers
             if (congestionLevel.Length < 2)
                 return BadRequest("congestionLevel must contain at least 2 characters.");
 
-            congestionLevel = TrafficCongestionHelper.NormalizeCongestionLevelQuery(congestionLevel);
+            congestionLevel = _normalizer.NormalizeCongestion(congestionLevel);
 
             var entities = await _trafficConditionRepository
                 .GetByCongestionLevelAsync(congestionLevel, ct);
@@ -159,13 +167,12 @@ namespace CitizenHackathon2025.API.Controllers
             if (string.IsNullOrWhiteSpace(incidentType))
                 return BadRequest("incidentType is required.");
 
-            incidentType = incidentType.Trim();
+            incidentType = _normalizer.NormalizeIncidentType(incidentType.Trim());
 
             if (incidentType.Length < 2)
                 return BadRequest("incidentType must contain at least 2 characters.");
 
-            var entities = await _trafficConditionRepository
-                .GetByIncidentTypeAsync(incidentType, ct);
+            var entities = await _trafficConditionRepository.GetByIncidentTypeAsync(incidentType, ct);
 
             var dtos = entities
                 .Select(tc => tc.MapToTrafficConditionDTO())
@@ -240,102 +247,46 @@ namespace CitizenHackathon2025.API.Controllers
             });
         }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
-        [HttpGet("debug-odwb-raw")]
-        public async Task<IActionResult> DebugOdwRaw([FromServices] IHttpClientFactory factory, [FromServices] IConfiguration config, [FromQuery] int limit = 5, CancellationToken ct = default)
-        {
-            var baseUrl = config["ExternalProviders:ODWB:BaseUrl"];
-
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                return Problem("ExternalProviders:ODWB:BaseUrl is missing.");
-
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
-                return BadRequest($"Invalid ODWB BaseUrl: {baseUrl}");
-
-            var separator = baseUrl.Contains('?') ? "&" : "?";
-            var url = $"{baseUrl.TrimEnd('/')}{separator}limit={Math.Clamp(limit, 1, 100)}";
-
-            try
-            {
-                var http = factory.CreateClient("ODWB");
-
-                using var response = await http.GetAsync(url, ct);
-                var body = await response.Content.ReadAsStringAsync(ct);
-
-                return StatusCode((int)response.StatusCode, new
-                {
-                    Url = url,
-                    StatusCode = (int)response.StatusCode,
-                    response.ReasonPhrase,
-                    Body = body
-                });
-            }
-            catch (HttpRequestException ex)
-            {
-                return StatusCode(502, new
-                {
-                    Error = "ODWB HTTP call failed.",
-                    Url = url,
-                    Message = ex.Message,
-                    Inner = ex.InnerException?.Message
-                });
-            }
-        }
-
         [Authorize(Policy = "AdminOrModo")]
         [HttpPost]
         public async Task<IActionResult> SaveTrafficCondition([FromBody] TrafficConditionDTO dto, CancellationToken ct)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-            var dateUtc = dto.DateCondition == default
-                ? DateTime.UtcNow
-                : (dto.DateCondition.Kind == DateTimeKind.Unspecified
-                    ? DateTime.SpecifyKind(dto.DateCondition, DateTimeKind.Utc)
-                    : dto.DateCondition.ToUniversalTime());
-
-            var provider = "manual";
-
-            // For a manual POST: you can choose stable (hash) OR unique (GUID)
-            // Stable is better if you want to "update the same incident".
-            var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
-                provider: provider,
-                lat: dto.Latitude,
-                lon: dto.Longitude,
-                dateUtc: dateUtc,
-                incidentType: dto.IncidentType,
-                location: dto.Location,
-                congestionLevel: dto.CongestionLevel,
-                timeBucket: TimeSpan.FromMinutes(1)
+            var raw = new ManualTrafficRaw(
+                Latitude: dto.Latitude,
+                Longitude: dto.Longitude,
+                Location: dto.Location,
+                IncidentType: dto.IncidentType,
+                CongestionLevel: dto.CongestionLevel,
+                Message: dto.Message,
+                Severity: dto.Level,
+                DateUtc: dto.DateCondition == default ? DateTime.UtcNow : dto.DateCondition
             );
 
-            var entity = new TrafficCondition
-            {
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                DateCondition = dto.DateCondition == default ? DateTime.UtcNow : dto.DateCondition.ToUniversalTime(),
-                CongestionLevel = dto.CongestionLevel,
-                IncidentType = dto.IncidentType,
+            var entity = _manualTrafficMapper.TryMap(raw, DateTime.UtcNow);
 
-                Provider = "manual",
-                ExternalId = externalId,
-                Fingerprint = fingerprint,
-                LastSeenAt = DateTime.UtcNow,
+            if (entity is null)
+                return BadRequest("Unable to map manual traffic condition.");
 
-                Title = dto.Message,
-                Road = dto.Location
-            };
-
-            // ✅ Load the key from IConfiguration/IOptions
-            var key = _trafficHmacKey; // see §6
-            TrafficUpsertIdentityHmac.Ensure(entity, defaultProvider: "manual", hmacKey: key, timeBucket: TimeSpan.FromMinutes(1));
+            TrafficUpsertIdentityHmac.Ensure(
+                entity,
+                defaultProvider: "manual",
+                hmacKey: _trafficHmacKey,
+                timeBucket: TimeSpan.FromMinutes(1));
 
             var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
-            if (saved is null) return Problem("UPSERT failed");
+
+            if (saved is null)
+                return Problem("UPSERT failed");
 
             var savedDto = saved.MapToTrafficConditionDTO();
 
-            await _hubContext.Clients.All.SendAsync(HubEvents.ToClient.TrafficUpdated, savedDto, ct);
+            await _hubContext.Clients.All.SendAsync(
+                HubEvents.ToClient.TrafficUpdated,
+                savedDto,
+                ct);
 
             return Ok(savedDto);
         }
@@ -385,49 +336,58 @@ namespace CitizenHackathon2025.API.Controllers
 
             var nowUtc = DateTime.UtcNow;
 
-            var dto = new TrafficConditionDTO
+            //var entity = new TrafficCondition
+            //{
+            //    Latitude = dto.Latitude,
+            //    Longitude = dto.Longitude,
+            //    DateCondition = dateUtc,
+            //    CongestionLevel = dto.CongestionLevel,
+            //    IncidentType = dto.IncidentType,
+
+            //    Provider = "manual",
+            //    ExternalId = externalId,
+            //    Fingerprint = fingerprint,
+            //    LastSeenAt = nowUtc,
+
+            //    Title = dto.Message,
+            //    Road = dto.Location,
+            //    Severity = dto.Level,
+            //    Active = true
+            //};
+
+            //_normalizer.Normalize(entity);
+
+            //TrafficUpsertIdentityHmac.Ensure(
+            //    entity,
+            //    defaultProvider: "manual",
+            //    hmacKey: _trafficHmacKey,
+            //    timeBucket: TimeSpan.FromMinutes(1));
+
+            //var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
+
+            var raw = new SignalRTrafficRaw(
+                Latitude: request.Latitude,
+                Longitude: request.Longitude,
+                Location: null,
+                IncidentType: request.IncidentType,
+                CongestionLevel: ((int)request.TrafficLevel).ToString(),
+                Message: request.Description,
+                Severity: (byte)request.TrafficLevel,
+                DeviceId: request.DeviceId,
+                SentAtUtc: nowUtc
+            );
+
+            var entity = _signalRTrafficMapper.TryMap(raw, nowUtc);
+
+            if (entity is null)
             {
-                Latitude = request.Latitude,
-                Longitude = request.Longitude,
-                DateCondition = nowUtc,
-                CongestionLevel = ((int)request.TrafficLevel).ToString(),
-                IncidentType = request.IncidentType,
-                Message = request.Description,
-                Level = (byte)request.TrafficLevel
-            };
-
-            var dateUtc = dto.DateCondition.Kind == DateTimeKind.Unspecified
-                ? DateTime.SpecifyKind(dto.DateCondition, DateTimeKind.Utc)
-                : dto.DateCondition.ToUniversalTime();
-
-            var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
-                provider: "manual",
-                lat: dto.Latitude,
-                lon: dto.Longitude,
-                dateUtc: dateUtc,
-                incidentType: dto.IncidentType,
-                location: dto.Location,
-                congestionLevel: dto.CongestionLevel,
-                timeBucket: TimeSpan.FromMinutes(1));
-
-            var entity = new TrafficCondition
-            {
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                DateCondition = dateUtc,
-                CongestionLevel = dto.CongestionLevel,
-                IncidentType = dto.IncidentType,
-
-                Provider = "manual",
-                ExternalId = externalId,
-                Fingerprint = fingerprint,
-                LastSeenAt = nowUtc,
-
-                Title = dto.Message,
-                Road = dto.Location,
-                Severity = dto.Level,
-                Active = true
-            };
+                return Ok(new TrafficAlertResultDTO
+                {
+                    Ok = false,
+                    Status = "Error",
+                    Error = "Unable to map SignalR/manual traffic alert."
+                });
+            }
 
             TrafficUpsertIdentityHmac.Ensure(
                 entity,
@@ -436,6 +396,7 @@ namespace CitizenHackathon2025.API.Controllers
                 timeBucket: TimeSpan.FromMinutes(1));
 
             var saved = await _trafficConditionRepository.UpsertTrafficConditionAsync(entity);
+
             if (saved is null)
             {
                 return Ok(new TrafficAlertResultDTO
@@ -478,6 +439,8 @@ namespace CitizenHackathon2025.API.Controllers
             if (id != dto.Id) return BadRequest("Id mismatch");
 
             var entity = dto.MapToEntity();                // ✅ WithId(dto.Id)
+            _normalizer.Normalize(entity);
+
             var result = _trafficConditionRepository.UpdateTrafficCondition(entity);
 
             return result != null ? Ok(result) : NotFound();

@@ -40,70 +40,46 @@ namespace CitizenHackathon2025.API.Controllers
             return Ok(r);
         }
 
-        // ✅ NEW: ODWB -> DB (UPSERT)
         [Authorize(Policy = "AdminOrModo")]
-        [HttpPost("sync")]
-        public async Task<IActionResult> Sync([FromQuery] int limit = 10, CancellationToken ct = default)
+        [HttpGet("debug-raw")]
+        public async Task<IActionResult> DebugRaw([FromServices] IHttpClientFactory factory, [FromServices] IConfiguration config, [FromQuery] int limit = 5, CancellationToken ct = default)
         {
-            var resp = await _odwb.QueryAsync(new OdwbQuery(Limit: limit), ct);
-            if (resp.Results.Count == 0) return Ok(new { Upserted = 0 });
+            var baseUrl = config["ExternalProviders:ODWB:BaseUrl"];
 
-            var now = DateTime.UtcNow;
-            var upserted = 0;
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                return Problem("ExternalProviders:ODWB:BaseUrl is missing.");
 
-            foreach (var r in resp.Results)
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out _))
+                return BadRequest($"Invalid ODWB BaseUrl: {baseUrl}");
+
+            var separator = baseUrl.Contains('?') ? "&" : "?";
+            var url = $"{baseUrl.TrimEnd('/')}{separator}limit={Math.Clamp(limit, 1, 100)}";
+
+            try
             {
-                // ODWB record is Dictionary<string, object?>
-                var entite = TryString(r, "entite") ?? "ODWB";
-                var periode = TryString(r, "periode") ?? "";
-                var total = TryInt(r, "nombre_d_accidents_de_la_circulation_total");
+                var http = factory.CreateClient("ODWB");
 
-                var lat = TryGeoLat(r) ?? 50.0m;
-                var lon = TryGeoLon(r) ?? 4.0m;
+                using var response = await http.GetAsync(url, ct);
+                var body = await response.Content.ReadAsStringAsync(ct);
 
-                var incidentType = total is null
-                    ? $"ODWB accidents {entite} {periode}"
-                    : $"ODWB accidents {entite} {periode} total={total}";
-
-                var congestion = total is null ? "N/A" : (total.Value >= 20 ? "4" : total.Value >= 10 ? "3" : "2");
-
-                var provider = "odwb";
-
-                var (externalId, fingerprint) = TrafficUpsertIdentity.BuildStableId(
-                    provider: provider,
-                    lat: lat,
-                    lon: lon,
-                    dateUtc: now,                  // Annual dataset: no live incident date
-                    incidentType: incidentType,
-                    location: entite,
-                    congestionLevel: congestion,
-                    timeBucket: TimeSpan.FromHours(24)
-                );
-
-                var tc = new TrafficCondition
+                return StatusCode((int)response.StatusCode, new
                 {
-                    Latitude = lat,
-                    Longitude = lon,
-                    DateCondition = now,
-                    CongestionLevel = congestion,
-                    IncidentType = incidentType,
-
-                    Provider = provider,
-                    ExternalId = externalId,
-                    Fingerprint = fingerprint,
-                    LastSeenAt = now,
-
-                    Title = incidentType,
-                    Road = entite,
-                    Active = true
-                };
-
-                var saved = await _repo.UpsertTrafficConditionAsync(tc);
-                if (saved is not null) upserted++;
+                    Url = url,
+                    StatusCode = (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    Body = body
+                });
             }
-
-            _log.LogInformation("ODWB sync: upserted={Count}", upserted);
-            return Ok(new { Upserted = upserted });
+            catch (HttpRequestException ex)
+            {
+                return StatusCode(502, new
+                {
+                    Error = "ODWB HTTP call failed.",
+                    Url = url,
+                    Message = ex.Message,
+                    Inner = ex.InnerException?.Message
+                });
+            }
         }
 
         private static string? TryString(Dictionary<string, object?> r, string key)

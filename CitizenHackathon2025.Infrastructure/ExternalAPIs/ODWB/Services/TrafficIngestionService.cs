@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Mappers;
@@ -11,13 +12,15 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services
     {
         private readonly IOdwbTrafficApiService _api;
         private readonly ITrafficConditionRepository _repo;
+        private readonly ITrafficConditionNormalizer _normalizer;
         private readonly ILogger<TrafficIngestionService> _log;
 
-        public TrafficIngestionService(IOdwbTrafficApiService api, ITrafficConditionRepository repo, ILogger<TrafficIngestionService> log)
+        public TrafficIngestionService(IOdwbTrafficApiService api, ITrafficConditionRepository repo, ILogger<TrafficIngestionService> log, ITrafficConditionNormalizer normalizer)
         {
             _api = api;
             _repo = repo;
             _log = log;
+            _normalizer = normalizer;
         }
 
         public async Task<int> PullAndUpsertAsync(OdwbQuery q, CancellationToken ct = default)
@@ -34,6 +37,8 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services
             var ok = 0;
             foreach (var tc in mapped)
             {
+                _normalizer.Normalize(tc);
+
                 var saved = await _repo.UpsertTrafficConditionAsync(tc);
                 if (saved is not null) ok++;
             }

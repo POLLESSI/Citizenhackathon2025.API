@@ -35,6 +35,9 @@ using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Openweather.Services;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Traffic.Mappers;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Traffic.Mappers.Interfaces;
+using CitizenHackathon2025.Infrastructure.ExternalAPIs.Traffic.Mappers.Raws;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.Wallonie.Antennas;
 using CitizenHackathon2025.Infrastructure.ExternalProviders.Common;
 using CitizenHackathon2025.Infrastructure.Init;
@@ -993,9 +996,18 @@ internal class Program
         services.AddScoped<IProfanityAdminService, ProfanityAdminService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<ISuggestionService, SuggestionService>();
+        services.AddScoped<ITrafficConditionNormalizer, TrafficConditionNormalizer>();
         services.AddScoped<ITrafficConditionService, TrafficConditionService>();
         services.AddScoped<ITrafficIngestionService, TrafficIngestionService>();
         services.AddScoped<ITrafficOdwbIngestionService, TrafficOdwbIngestionService>();
+
+        services.AddScoped<ITrafficProviderMapper<PerexTrafficRaw>, PerexTrafficMapper>();
+        services.AddScoped<ITrafficProviderMapper<WazeTrafficRaw>, WazeTrafficMapper>();
+        services.AddScoped<ITrafficProviderMapper<HereTrafficRaw>, HereTrafficMapper>();
+        services.AddScoped<ITrafficProviderMapper<TomTomTrafficRaw>, TomTomTrafficMapper>();
+        services.AddScoped<ITrafficProviderMapper<ManualTrafficRaw>, ManualTrafficMapper>();
+        services.AddScoped<ITrafficProviderMapper<SignalRTrafficRaw>, SignalRTrafficMapper>();
+
         services.AddScoped<IUiTextLocalizer, UiTextLocalizer>();
         services.AddScoped<IUserMessageService, UserMessageService>();
         services.AddScoped<IUserSessionService, CitizenHackathon2025.Infrastructure.Services.UserSessionService>();

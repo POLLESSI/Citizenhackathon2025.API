@@ -239,15 +239,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Provider, ExternalId, Fingerprint, LastSeenAt, Title, Road, Severity, GeomWkt, Active
                             FROM dbo.TrafficCondition
                             WHERE Active = 1
-                              AND IncidentType IS NOT NULL
-                              AND LTRIM(RTRIM(IncidentType)) <> ''
-                              AND
-                              (
+                              AND (
                                     IncidentType LIKE @IncidentType
-                                    OR Title LIKE @IncidentType
-                                    OR Road LIKE @IncidentType
+                                 OR Title LIKE @IncidentType
+                                 OR Road LIKE @IncidentType
                               )
-                              ORDER BY LastSeenAt DESC, DateCondition DESC;";
+                            ORDER BY LastSeenAt DESC, DateCondition DESC;";
 
             var value = incidentType.Trim();
 

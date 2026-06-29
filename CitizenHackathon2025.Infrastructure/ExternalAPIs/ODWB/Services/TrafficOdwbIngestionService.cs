@@ -1,8 +1,9 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
-using CitizenHackathon2025.Infrastructure.ExternalProviders;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Interfaces;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Models;
+using CitizenHackathon2025.Infrastructure.ExternalProviders;
 using CitizenHackathon2025.Infrastructure.Helpers;
 using CitizenHackathon2025.Shared.Options;
 using Microsoft.Extensions.Logging;
@@ -14,15 +15,18 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services
     {
         private readonly IOdwbTrafficApiService _odwb;
         private readonly ITrafficConditionRepository _repo;
+        private readonly ITrafficConditionNormalizer _normalizer;
         private readonly TrafficApiOptions _opt;
         private readonly ILogger<TrafficOdwbIngestionService> _log;
 
-        public TrafficOdwbIngestionService(
-            IOdwbTrafficApiService odwb,
-            ITrafficConditionRepository repo,
-            IOptions<TrafficApiOptions> opt,
-            ILogger<TrafficOdwbIngestionService> log)
-            => (_odwb, _repo, _opt, _log) = (odwb, repo, opt.Value, log);
+        public TrafficOdwbIngestionService(IOdwbTrafficApiService odwb, ITrafficConditionRepository repo, IOptions<TrafficApiOptions> opt, ILogger<TrafficOdwbIngestionService> log, ITrafficConditionNormalizer normalizer)
+        {
+            _odwb = odwb;
+            _repo = repo;
+            _opt = opt.Value;
+            _log = log;
+            _normalizer = normalizer;
+        }
 
         public async Task<int> SyncAsync(int? limit = null, CancellationToken ct = default)
         {
@@ -121,6 +125,8 @@ namespace CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Services
                     //Title = perexEvent.Title;
                     //Road = perexEvent.RoadName;
                 };
+
+                _normalizer.Normalize(tc);
 
                 var saved = await _repo.UpsertTrafficConditionAsync(tc);
                 if (saved is not null)
