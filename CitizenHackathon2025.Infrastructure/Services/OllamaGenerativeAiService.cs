@@ -3,6 +3,7 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -47,7 +48,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Content = JsonContent.Create(request)
             };
 
+            var sw = Stopwatch.StartNew();
+
             using var response = await _httpClient.SendAsync(httpRequest, ct);
+
+            _logger.LogInformation("Ollama answered in {Elapsed} ms", sw.ElapsedMilliseconds);
+
             var content = await response.Content.ReadAsStringAsync(ct);
 
             _logger.LogInformation("Ollama status code: {StatusCode}", (int)response.StatusCode);

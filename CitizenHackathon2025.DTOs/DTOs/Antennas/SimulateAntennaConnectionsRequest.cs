@@ -4,17 +4,12 @@
     {
         public int AntennaId { get; set; }
         public int? EventId { get; set; }
-
-        public int DeviceCount { get; set; } = 50;
-
-        // Duration during which the devices remain "alive"
+        public int DeviceCount { get; set; }
         public int DurationSeconds { get; set; } = 60;
+        public int JitterPercent { get; set; } = 10;
+        public bool BurstMode { get; set; }
 
-        // Random variation to avoid an overly perfect curve
-        public int JitterPercent { get; set; } = 15;
-
-        // Useful for simulating a rave / sudden concentration
-        public bool BurstMode { get; set; } = false;
+        public string Scenario { get; set; } = "Static";
     }
 }
 

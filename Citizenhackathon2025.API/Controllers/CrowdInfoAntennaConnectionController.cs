@@ -4,9 +4,6 @@ using CitizenHackathon2025.DTOs.DTOs.Antennas;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Buffers.Text;
-using System.Globalization;
-using System.Text;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -133,7 +130,11 @@ namespace CitizenHackathon2025.API.Controllers
         //    });
         //}
         //[Authorize(Policy = Policies.AdminPolicy)]
+        #if DEBUG
         [AllowAnonymous]
+        #else
+        [Authorize(Policy = "AdminOrModo")]
+        #endif
         [HttpPost("simulate")]
         public async Task<IActionResult> Simulate([FromBody] SimulateAntennaConnectionsRequest request, [FromServices] IAntennaSimulationService simulator, CancellationToken ct)
         {
@@ -164,6 +165,22 @@ namespace CitizenHackathon2025.API.Controllers
                     detail: ex.ToString(),
                     statusCode: 500);
             }
+        }
+
+        [Authorize(Policy = "AdminOrModo")]
+        [HttpPost("simulate-zone")]
+        public async Task<IActionResult> SimulateZone([FromBody] SimulateAntennaZoneRequest request, [FromServices] IAntennaZoneSimulationService simulator, CancellationToken ct)
+        {
+            await simulator.SimulateAsync(request, ct);
+            return Ok(new
+            {
+                request.CenterLatitude,
+                request.CenterLongitude,
+                request.RadiusMeters,
+                request.DeviceCount,
+                Status = "Zone simulation accepted",
+                SimulatedAtUtc = DateTime.UtcNow
+            });
         }
     }
 }

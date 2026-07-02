@@ -973,6 +973,7 @@ internal class Program
         services.AddScoped<IAggregateSuggestionService, AstroIAService>();
         services.AddScoped<IAntennaCadastreImportService, AntennaCadastreImportService>();
         services.AddScoped<IAntennaSimulationService, AntennaSimulationService>();
+        services.AddScoped<IAntennaZoneSimulationService, AntennaZoneSimulationService>();
         services.AddScoped<ICriticalAlertQuorumService, CriticalAlertQuorumService>();
         services.AddScoped<ICrowdInfoService, CrowdInfoService>();
         services.AddScoped<CrowdInfoService>();

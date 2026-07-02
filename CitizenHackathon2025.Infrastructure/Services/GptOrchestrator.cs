@@ -339,9 +339,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var requestedName = ExtractPlaceNameFromPrompt(prompt);
 
-            Place? originPlace = null;
+            var places = await placeRepository.GetActivePlacesAsync(ct);
 
-            if (!string.IsNullOrWhiteSpace(requestedName))
+            Place? originPlace = ResolvePlaceFromPrompt(prompt, places);
+
+            if (originPlace is null &&
+                !string.IsNullOrWhiteSpace(requestedName))
             {
                 originPlace = await placeRepository.FindByNameLikeAsync(requestedName, ct);
             }
@@ -366,11 +369,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 effectiveLatitude = request.Latitude.Value;
                 effectiveLongitude = request.Longitude.Value;
 
-                _logger.LogInformation(
-                    "Origin resolved from client GPS");
-            }
+                _logger.LogInformation("Origin resolved from client GPS");
 
-            var places = await placeRepository.GetActivePlacesAsync(ct);
+                _logger.LogInformation("Prompt reçu {Elapsed}", sw.Elapsed);
+            }
 
             var localContext = await localAiContextService.BuildContextAsync(prompt, effectiveLatitude, effectiveLongitude, ct).ConfigureAwait(false);
 
@@ -635,6 +637,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 await suggestionRepository.SaveSuggestionAsync(suggestion, ct)
                     .ConfigureAwait(false);
+                _logger.LogInformation("Prompt reçu {Elapsed}", sw.Elapsed);
             }
 
             if (!updated)
@@ -659,8 +662,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     });
             }
 
-            _logger.LogInformation(
-                "[GPT-PIPELINE] Final interaction persisted. InteractionId={InteractionId}, RequestId={RequestId}, TotalElapsedMs={ElapsedMs}, PersistedResponseLength={PersistedResponseLength}",
+            _logger.LogInformation("[GPT-PIPELINE] Final interaction persisted. InteractionId={InteractionId}, RequestId={RequestId}, TotalElapsedMs={ElapsedMs}, PersistedResponseLength={PersistedResponseLength}",
                 finalDto.Id,
                 requestId,
                 sw.ElapsedMilliseconds,
@@ -799,6 +801,36 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             return null;
+        }
+
+        private static Place? ResolvePlaceFromPrompt(string prompt, IReadOnlyList<Place> places)
+        {
+            if (string.IsNullOrWhiteSpace(prompt) || places.Count == 0)
+                return null;
+
+            var normalizedPrompt = NormalizeSearchText(prompt);
+
+            return places
+                .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+                .OrderByDescending(p => p.Name.Length)
+                .FirstOrDefault(p =>
+                    normalizedPrompt.Contains(
+                        NormalizeSearchText(p.Name),
+                        StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeSearchText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            return value
+                .Replace("’", "'")
+                .Replace("?", " ")
+                .Replace("!", " ")
+                .Replace(",", " ")
+                .Replace(".", " ")
+                .Trim();
         }
         private static double GeoDistanceKm(double lat1, double lon1, double lat2, double lon2)
         {

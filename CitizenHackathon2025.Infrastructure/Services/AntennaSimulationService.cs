@@ -42,7 +42,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var jitterPercent = Math.Clamp(request.JitterPercent, 0, 80);
 
             var now = DateTime.UtcNow;
-            var salt = DateOnly.FromDateTime(now).ToString("yyyyMMdd");
+            var salt = $"{DateOnly.FromDateTime(now):yyyyMMdd}-{now:HHmm}";
 
             var effectiveCount = ApplyJitter(deviceCount, jitterPercent);
 
