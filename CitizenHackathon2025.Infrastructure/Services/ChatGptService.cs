@@ -15,7 +15,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 {
     public class ChatGptService : IAIService
     {
-#nullable disable
+    #nullable disable
         private readonly HttpClient _httpClient;
         private readonly IGptInteractionRepository _repo;
         private readonly ILogger<ChatGptService> _logger;

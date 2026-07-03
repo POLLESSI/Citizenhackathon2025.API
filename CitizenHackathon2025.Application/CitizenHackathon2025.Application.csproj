@@ -9,6 +9,9 @@
 
   <ItemGroup>
     <Folder Include="Events\" />
+    <Folder Include="AI\" />
+    <Folder Include="Mongo\" />
+    <Folder Include="SignalR\" />
     <Folder Include="ReadModels\" />
   </ItemGroup>
 
