@@ -6,7 +6,7 @@ namespace CitizenHackathon2025.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Policy = "AdminOrModo")]
     public sealed class CommandCenterController : ControllerBase
     {
         private readonly ICommandCenterService _commandCenter;

@@ -108,7 +108,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 [Id], [Name], [PlaceId], [Latitude], [Longitude], [DateEvent], [ExpectedCrowd], [IsOutdoor], [Active]
                             FROM [Event]
                             WHERE [Active] = 1
-                            ORDER BY [DateEvent] DESC;";
+                            ORDER BY [DateEvent] ASC;";
 
             return _connection.QueryAsync<Event>(new CommandDefinition(sql, new { Limit = limit }, cancellationToken: ct));
         }
