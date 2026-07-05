@@ -9,10 +9,7 @@ namespace CitizenHackathon2025.Hubs.Extensions
 {
     public static class GptHubContextExtensions
     {
-        public static async Task SendStarted(
-            this IHubContext<GPTHub, IGptClient> hubContext,
-            GptResponseStartedDto dto,
-            ILogger? logger = null)
+        public static async Task SendStarted(this IHubContext<GPTHub, IGptClient> hubContext, GptResponseStartedDto dto, ILogger? logger = null)
         {
             logger?.LogInformation(
                 "[GPT-HUB] SendStarted -> InteractionId={InteractionId}, RequestId={RequestId}",
@@ -22,10 +19,7 @@ namespace CitizenHackathon2025.Hubs.Extensions
             await hubContext.Clients.All.ReceiveGptResponseStarted(dto);
         }
 
-        public static async Task SendChunk(
-            this IHubContext<GPTHub, IGptClient> hubContext,
-            GptResponseChunkDto dto,
-            ILogger? logger = null)
+        public static async Task SendChunk(this IHubContext<GPTHub, IGptClient> hubContext, GptResponseChunkDto dto, ILogger? logger = null)
         {
             logger?.LogInformation(
                 "[GPT-HUB] SendChunk -> InteractionId={InteractionId}, RequestId={RequestId}, ChunkLength={ChunkLength}, IsFinal={IsFinal}",
@@ -35,12 +29,11 @@ namespace CitizenHackathon2025.Hubs.Extensions
                 dto.IsFinal);
 
             await hubContext.Clients.All.ReceiveGptResponseChunk(dto);
+
+            logger?.LogInformation("[GPT STREAM] chunk {Length}", dto.Chunk?.Length ?? 0);
         }
 
-        public static async Task SendStatus(
-            this IHubContext<GPTHub, IGptClient> hubContext,
-            GptResponseStatusDto dto,
-            ILogger? logger = null)
+        public static async Task SendStatus(this IHubContext<GPTHub, IGptClient> hubContext, GptResponseStatusDto dto, ILogger? logger = null)
         {
             logger?.LogInformation(
                 "[GPT-HUB] SendStatus -> InteractionId={InteractionId}, RequestId={RequestId}, Status={Status}",
@@ -51,16 +44,15 @@ namespace CitizenHackathon2025.Hubs.Extensions
             await hubContext.Clients.All.ReceiveGptResponseStatus(dto);
         }
 
-        public static async Task SendCompleted(
-            this IHubContext<GPTHub, IGptClient> hubContext,
-            GptInteractionCompletedDto dto,
-            ILogger? logger = null)
+        public static async Task SendCompleted(this IHubContext<GPTHub, IGptClient> hubContext, GptInteractionCompletedDto dto, ILogger? logger = null)
         {
             logger?.LogInformation(
                 "[GPT-HUB] SendCompleted -> InteractionId={InteractionId}",
                 dto.Id);
 
             await hubContext.Clients.All.ReceiveGptResponseCompleted(dto);
+
+            logger?.LogInformation("[GPT STREAM] completed");
         }
     }
 }

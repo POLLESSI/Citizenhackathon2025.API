@@ -36,10 +36,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 {
                     new { role = "user", content = prompt }
                 },
-                stream = false,
+                stream = true,
+                keep_alive = "30m",
                 options = new
                 {
-                    temperature
+                    temperature = 0.3,
+                    num_predict = 180,
+                    num_ctx = 2048
                 }
             };
 
@@ -63,6 +66,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var json = JsonSerializer.Deserialize<MistralResponse>(
                 content,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            _logger.LogInformation("[OLLAMA] Response parsed after {Elapsed} ms", sw.ElapsedMilliseconds);
 
             return json?.Message?.Content?.Trim() ?? "No response from Ollama.";
         }

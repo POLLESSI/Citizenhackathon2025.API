@@ -6,6 +6,7 @@ using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Diagnostics;
 
 namespace CitizenHackathon2025.API.Controllers
 {
@@ -82,7 +83,21 @@ namespace CitizenHackathon2025.API.Controllers
             if (request is null || string.IsNullOrWhiteSpace(request.Prompt))
                 return BadRequest("The prompt cannot be empty.");
 
+            var sw = Stopwatch.StartNew();
+
+            _logger.LogInformation(
+                "[GPT] Request received at {Time}. PromptLength={PromptLength}",
+                DateTime.UtcNow,
+                request.Prompt.Length);
+
             var result = await _orchestrator.StartMistralRequestAsync(request, ct);
+
+            _logger.LogInformation(
+                "[GPT] Request accepted after {Elapsed} ms. InteractionId={InteractionId}, RequestId={RequestId}",
+                sw.ElapsedMilliseconds,
+                result?.InteractionId,
+                result?.RequestId);
+
             return Accepted(result);
         }
 
