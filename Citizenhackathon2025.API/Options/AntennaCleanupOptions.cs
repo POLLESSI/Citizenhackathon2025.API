@@ -2,6 +2,7 @@
 {
     public sealed class AntennaCleanupOptions
     {
+        public bool Enabled { get; set; } = true;
         public int TimeoutSeconds { get; set; } = 60;
         public int BatchSize { get; set; } = 500;
         public int IntervalSeconds { get; set; } = 10;

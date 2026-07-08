@@ -1,57 +1,108 @@
 ﻿using CitizenHackathon2025.Application.Intelligence.AlertFusion;
-using CitizenHackathon2025.Application.Intelligence.Digital;
 using CitizenHackathon2025.Application.Intelligence.RiskAssessment;
 using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Domain.Interfaces;
 
 namespace CitizenHackathon2025.Application.Intelligence.CommandCenter
 {
     public sealed class CommandCenterService : ICommandCenterService
     {
+        private readonly ICrowdSafetyAlertRepository _alertRepository;
         private readonly IAlertFusionEngine _fusion;
         private readonly IRiskScoreCalculator _risk;
-        private readonly IDigitalTwin _digitalTwin;
 
-        public CommandCenterService(IAlertFusionEngine fusion, IRiskScoreCalculator risk, IDigitalTwin digitalTwin)
+        public CommandCenterService(ICrowdSafetyAlertRepository alertRepository, IAlertFusionEngine fusion, IRiskScoreCalculator risk)
         {
+            _alertRepository = alertRepository;
             _fusion = fusion;
             _risk = risk;
-            _digitalTwin = digitalTwin;
         }
 
-        public Task<CommandCenterSnapshotDTO> GetSnapshotAsync(CancellationToken ct = default)
+        public async Task<CommandCenterSnapshotDTO> GetSnapshotAsync(CancellationToken ct = default)
         {
-            return Task.FromResult(new CommandCenterSnapshotDTO
+            var clusters = await GetActiveIncidentsAsync(ct);
+
+            return new CommandCenterSnapshotDTO
             {
                 GeneratedAtUtc = DateTime.UtcNow,
-                GlobalRiskScore = 0,
-                CriticalIncidentCount = 0,
-                HighIncidentCount = 0,
-                ModerateIncidentCount = 0,
-                TotalActiveConnections = 0,
-                Summary = "Command Center initialized."
-            });
+                GlobalRiskScore = clusters.Count == 0 ? 0 : Math.Clamp((int)clusters.Average(c => c.RiskScore), 0, 100),
+
+                CriticalIncidentCount = clusters.Count(c => c.Severity >= 4),
+                HighIncidentCount = clusters.Count(c => c.Severity == 3),
+                ModerateIncidentCount = clusters.Count(c => c.Severity == 2),
+                TotalActiveConnections = clusters.Sum(c => c.TotalActiveConnections),
+
+                Summary = clusters.Count == 0
+                    ? "No active operational incident detected in Wallonia."
+                    : $"{clusters.Count} active incident cluster(s) detected in Wallonia."
+            };
         }
 
-        public Task<List<CrowdAlertCluster>> GetActiveIncidentsAsync(CancellationToken ct = default)
+        public async Task<List<CrowdAlertCluster>> GetActiveIncidentsAsync(CancellationToken ct = default)
         {
-            return Task.FromResult(new List<CrowdAlertCluster>());
+            var alerts = await _alertRepository.GetLatestAsync(200, ct);
+
+            var dtos = alerts
+                .Where(a => a.Active)
+                .Select(a => new CrowdSafetyAlertDTO
+                {
+                    Id = a.Id,
+                    AntennaId = a.AntennaId,
+                    EventId = a.EventId,
+                    Severity = a.Severity,
+                    Status = a.Status,
+                    ActiveConnections = a.ActiveConnections,
+                    UniqueDevices = a.UniqueDevices,
+                    BaselineConnections = a.BaselineConnections,
+                    IsRural = a.IsRural,
+                    IsNight = a.IsNight,
+                    IsKnownEvent = a.IsKnownEvent,
+                    IsSensitiveZone = a.IsSensitiveZone,
+                    Latitude = a.Latitude,
+                    Longitude = a.Longitude,
+                    Title = a.Title,
+                    Message = a.Message,
+                    DetectedAtUtc = a.DetectedAtUtc,
+                    ValidatedAtUtc = a.ValidatedAtUtc,
+                    ValidatedByUserId = a.ValidatedByUserId,
+                    Active = a.Active
+                })
+                .ToList();
+
+            var clusters = await _fusion.BuildClustersAsync(dtos, ct);
+
+            foreach (var cluster in clusters)
+                cluster.RiskScore = _risk.ComputeZoneRisk(cluster);
+
+            return clusters;
         }
 
-        public Task<List<RiskZoneDTO>> GetRiskZonesAsync(CancellationToken ct = default)
+        public async Task<List<RiskZoneDTO>> GetRiskZonesAsync(CancellationToken ct = default)
         {
-            return Task.FromResult(new List<RiskZoneDTO>());
+            var clusters = await GetActiveIncidentsAsync(ct);
+
+            return clusters
+                .Select(_risk.ToRiskZone)
+                .OrderByDescending(z => z.RiskScore)
+                .ToList();
         }
 
-        public Task<DigitalTwinSnapshotDTO> GetDigitalTwinAsync(CancellationToken ct = default)
+        public async Task<DigitalTwinSnapshotDTO> GetDigitalTwinAsync(CancellationToken ct = default)
         {
-            return Task.FromResult(new DigitalTwinSnapshotDTO
+            var clusters = await GetActiveIncidentsAsync(ct);
+
+            return new DigitalTwinSnapshotDTO
             {
                 GeneratedAtUtc = DateTime.UtcNow,
                 Scope = "Wallonia",
-                ActiveZones = 0,
-                ActiveIncidents = 0,
-                Status = "Initialized"
-            });
+                ActiveZones = clusters.Count,
+                ActiveIncidents = clusters.Sum(c => c.AlertCount),
+                Status = clusters.Any(c => c.Severity >= 4)
+                    ? "Critical"
+                    : clusters.Any()
+                        ? "Monitoring"
+                        : "Stable"
+            };
         }
     }
 }

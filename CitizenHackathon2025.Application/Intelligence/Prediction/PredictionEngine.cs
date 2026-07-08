@@ -1,42 +1,37 @@
-﻿using CitizenHackathon2025.Application.Intelligence.Prediction;
+﻿using CitizenHackathon2025.Contracts.DTOs;
 
 namespace CitizenHackathon2025.Application.Intelligence.Prediction
 {
     public sealed class PredictionEngine : IPredictionEngine
     {
-        public Task<CrowdPredictionResult> PredictCrowdAsync(
-            IReadOnlyList<CrowdPredictionPoint> history,
+        public Task<List<PredictionDTO>> PredictAsync(
+            IEnumerable<RiskZoneDTO> zones,
             CancellationToken ct = default)
         {
-            if (history is null || history.Count == 0)
-                return Task.FromResult(new CrowdPredictionResult());
-
-            var ordered = history.OrderBy(x => x.TimestampUtc).ToList();
-            var latest = ordered[^1];
-
-            if (ordered.Count < 2)
+            var result = zones.Select(z =>
             {
-                return Task.FromResult(new CrowdPredictionResult
+                var growth15 = z.HasEventRisk ? 10 : 5;
+                var growth30 = z.HasTrafficRisk || z.HasWeatherRisk ? 20 : 12;
+
+                var risk15 = Math.Clamp(z.RiskScore + growth15, 0, 100);
+                var risk30 = Math.Clamp(z.RiskScore + growth30, 0, 100);
+
+                return new PredictionDTO
                 {
-                    CurrentConnections = latest.ActiveConnections,
-                    PredictedConnections15Minutes = latest.ActiveConnections,
-                    PredictedConnections30Minutes = latest.ActiveConnections,
-                    Confidence = 30
-                });
-            }
+                    ZoneName = z.ZoneName,
+                    Latitude = z.Latitude,
+                    Longitude = z.Longitude,
+                    CurrentRiskScore = z.RiskScore,
+                    PredictedRiskScore15Min = risk15,
+                    PredictedRiskScore30Min = risk30,
+                    SaturationLikely = risk15 >= 85 || risk30 >= 85,
+                    Explanation = risk30 >= 85
+                        ? "Likely saturation within the next 30 minutes."
+                        : "No critical saturation predicted in the short term."
+                };
+            }).ToList();
 
-            var first = ordered[0];
-            var elapsedMinutes = Math.Max(1d, (latest.TimestampUtc - first.TimestampUtc).TotalMinutes);
-            var growthPerMinute = (latest.ActiveConnections - first.ActiveConnections) / elapsedMinutes;
-
-            return Task.FromResult(new CrowdPredictionResult
-            {
-                CurrentConnections = latest.ActiveConnections,
-                PredictedConnections15Minutes = Math.Max(0, (int)Math.Round(latest.ActiveConnections + growthPerMinute * 15)),
-                PredictedConnections30Minutes = Math.Max(0, (int)Math.Round(latest.ActiveConnections + growthPerMinute * 30)),
-                GrowthPerMinute = growthPerMinute,
-                Confidence = ordered.Count >= 6 ? 70 : 50
-            });
+            return Task.FromResult(result);
         }
     }
 }

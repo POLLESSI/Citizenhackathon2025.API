@@ -12,10 +12,7 @@ namespace CitizenHackathon2025.API.BackgroundWorkers
         private readonly ILogger<AntennaArchivePurgeWorker> _log;
         private readonly AntennaArchiveRetentionOptions _opt;
 
-        public AntennaArchivePurgeWorker(
-            IServiceScopeFactory scopeFactory,
-            IOptions<AntennaArchiveRetentionOptions> options,
-            ILogger<AntennaArchivePurgeWorker> log)
+        public AntennaArchivePurgeWorker(IServiceScopeFactory scopeFactory, IOptions<AntennaArchiveRetentionOptions> options, ILogger<AntennaArchivePurgeWorker> log)
         {
             _scopeFactory = scopeFactory;
             _log = log;

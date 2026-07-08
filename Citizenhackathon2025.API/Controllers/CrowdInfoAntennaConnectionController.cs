@@ -171,16 +171,49 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("simulate-zone")]
         public async Task<IActionResult> SimulateZone([FromBody] SimulateAntennaZoneRequest request, [FromServices] IAntennaZoneSimulationService simulator, CancellationToken ct)
         {
-            await simulator.SimulateAsync(request, ct);
-            return Ok(new
+            if (request is null)
+                return BadRequest("Request body is required.");
+
+            if (request.RadiusMeters <= 0)
+                return BadRequest("RadiusMeters must be > 0.");
+
+            if (request.DeviceCount is < 1 or > 10_000)
+                return BadRequest("DeviceCount must be between 1 and 10000.");
+
+            if (request.DurationSeconds is < 1 or > 86_400)
+                return BadRequest("DurationSeconds must be between 1 and 86400.");
+
+            try
             {
-                request.CenterLatitude,
-                request.CenterLongitude,
-                request.RadiusMeters,
-                request.DeviceCount,
-                Status = "Zone simulation accepted",
-                SimulatedAtUtc = DateTime.UtcNow
-            });
+                await simulator.SimulateAsync(request, ct);
+
+                return Ok(new
+                {
+                    request.CenterLatitude,
+                    request.CenterLongitude,
+                    request.RadiusMeters,
+                    request.DeviceCount,
+                    request.DurationSeconds,
+                    request.BurstMode,
+                    request.EventId,
+                    request.Scenario,
+                    Status = "Zone simulation accepted",
+                    SimulatedAtUtc = DateTime.UtcNow
+                });
+            }
+            catch (InvalidOperationException ex)
+                when (ex.Message.Contains("No antenna found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(new
+                {
+                    Status = "NoAntennaFound",
+                    Message = "No antenna found in the requested simulation zone.",
+                    request.CenterLatitude,
+                    request.CenterLongitude,
+                    request.RadiusMeters,
+                    Hint = "Use a larger RadiusMeters value or choose coordinates closer to an active antenna."
+                });
+            }
         }
     }
 }

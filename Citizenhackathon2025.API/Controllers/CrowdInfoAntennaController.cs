@@ -107,13 +107,26 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("import-cadastre")]
         public async Task<IActionResult> ImportCadastre(CancellationToken ct)
         {
-            var processed = await _cadastreImportService.ImportAsync(ct);
-
-            return Ok(new CadastreImportResultDTO
+            try
             {
-                Processed = processed,
-                SyncedAtUtc = DateTime.UtcNow
-            });
+                var imported = await _cadastreImportService.ImportAsync(ct);
+
+                return Ok(new
+                {
+                    Status = "Cadastre import completed",
+                    Imported = imported,
+                    ImportedAtUtc = DateTime.UtcNow
+                });
+            }
+            catch (HttpRequestException ex)
+            {
+                return StatusCode(StatusCodes.Status502BadGateway, new
+                {
+                    Status = "CadastreSourceUnavailable",
+                    Message = "The external antenna cadastre source is unavailable or returned an invalid response.",
+                    Detail = ex.Message
+                });
+            }
         }
         // DELETE api/crowdinfoantenna/5
         //[Authorize(Policy = "AdminOrModo")]

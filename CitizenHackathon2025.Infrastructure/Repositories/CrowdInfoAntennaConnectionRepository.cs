@@ -130,6 +130,28 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             return rows.Count();
         }
 
+        public async Task<int> DeactivateAlertsWithoutActiveConnectionsAsync(CancellationToken ct)
+        {
+            const string sql = """
+                            UPDATE a
+                            SET a.Active = 0
+                            FROM dbo.CrowdSafetyAlert a
+                            WHERE a.Active = 1
+                              AND NOT EXISTS
+                              (
+                                  SELECT 1
+                                  FROM dbo.CrowdInfoAntennaConnection c
+                                  WHERE c.Active = 1
+                                    AND c.AntennaId = a.AntennaId
+                              );
+                            """;
+
+            return await _db.ExecuteAsync(
+                new CommandDefinition(
+                    sql,
+                    cancellationToken: ct));
+        }
+
         //public async Task<IReadOnlyList<DeletedAntennaConnectionDTO>> GetDeletedAsync(
         //    int antennaId,
         //    DateTime sinceUtc,

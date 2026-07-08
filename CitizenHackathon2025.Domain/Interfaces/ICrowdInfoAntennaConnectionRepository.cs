@@ -11,6 +11,8 @@ namespace CitizenHackathon2025.Domain.Interfaces
 
         Task<int> ArchiveAndDeleteExpiredAsync(int timeoutSeconds, int batchSize, CancellationToken ct);
 
+        Task<int> DeactivateAlertsWithoutActiveConnectionsAsync(CancellationToken ct);
+
         //Task<IReadOnlyList<DeletedAntennaConnectionDTO>> GetDeletedAsync(int antennaId, DateTime sinceUtc, int take, long? cursorDeletedId, CancellationToken ct);
 
         Task<int> PurgeDeletedArchiveAsync(int retentionDays, int batchSize, CancellationToken ct);

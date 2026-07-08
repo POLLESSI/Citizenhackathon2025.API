@@ -285,6 +285,7 @@ internal class Program
         services.Configure<TrafficApiOptions>(configuration.GetSection("ExternalProviders:ODWB"));
         services.Configure<CitizenHackathon2025.API.Options.AntennaCleanupOptions>(configuration.GetSection("AntennaCleanup"));
         services.Configure<AntennaArchiveRetentionOptions>(configuration.GetSection("AntennaArchiveRetention"));
+        services.AddHostedService<AntennaConnectionCleanupWorker>();
         services.Configure<AntennaCadastreOptions>(configuration.GetSection("AntennaCadastre"));
         services.Configure<TrafficHmacOptions>(configuration.GetSection("Security"));
         services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(configuration.GetSection("CrowdAdvisory"));
@@ -1008,9 +1009,11 @@ internal class Program
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();
         services.AddScoped<IPlaceService, PlaceService>();
+        services.AddScoped<IPredictionEngine, PredictionEngine>();
         services.AddScoped<IProfanityService, ProfanityService>();
         services.AddScoped<IProfanityAdminService, ProfanityAdminService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IReplayService, ReplayService>();
         services.AddScoped<ISuggestionService, SuggestionService>();
         services.AddScoped<ITrafficConditionNormalizer, TrafficConditionNormalizer>();
         services.AddScoped<ITrafficConditionService, TrafficConditionService>();

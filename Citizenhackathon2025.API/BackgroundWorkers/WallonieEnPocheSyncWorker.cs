@@ -10,9 +10,7 @@ namespace CitizenHackathon2025.API.BackgroundWorkers
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<WallonieEnPocheSyncWorker> _logger;
 
-        public WallonieEnPocheSyncWorker(
-            IServiceScopeFactory scopeFactory,
-            ILogger<WallonieEnPocheSyncWorker> logger)
+        public WallonieEnPocheSyncWorker(IServiceScopeFactory scopeFactory, ILogger<WallonieEnPocheSyncWorker> logger)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;

@@ -1,4 +1,6 @@
-﻿namespace CitizenHackathon2025.Application.Intelligence.Decision
+﻿using CitizenHackathon2025.Contracts.DTOs;
+
+namespace CitizenHackathon2025.Application.Intelligence.Decision
 {
     public sealed class DecisionEngine : IDecisionEngine
     {
@@ -43,6 +45,91 @@
             if (riskScore >= 65 || severity == 3) return "High";
             if (riskScore >= 40 || severity == 2) return "Moderate";
             return "Normal";
+        }
+
+        public Task<List<DecisionActionDTO>> RecommendActionsAsync(IEnumerable<CrowdAlertCluster> clusters, CancellationToken ct = default)
+        {
+            var actions = new List<DecisionActionDTO>();
+
+            foreach (var cluster in clusters)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if (cluster.RiskScore >= 85 || cluster.Severity >= 4)
+                {
+                    actions.Add(new DecisionActionDTO
+                    {
+                        ZoneName = cluster.ZoneName,
+                        RiskScore = cluster.RiskScore,
+                        Severity = cluster.Severity,
+                        Priority = "Critical",
+                        ActionType = "AvoidZone",
+                        Message = "Éviter cette zone dans les recommandations utilisateur.",
+                        RequiresHumanValidation = true
+                    });
+
+                    actions.Add(new DecisionActionDTO
+                    {
+                        ZoneName = cluster.ZoneName,
+                        RiskScore = cluster.RiskScore,
+                        Severity = cluster.Severity,
+                        Priority = "Critical",
+                        ActionType = "SuggestAlternatives",
+                        Message = "Proposer automatiquement des alternatives moins fréquentées à proximité.",
+                        RequiresHumanValidation = false
+                    });
+
+                    actions.Add(new DecisionActionDTO
+                    {
+                        ZoneName = cluster.ZoneName,
+                        RiskScore = cluster.RiskScore,
+                        Severity = cluster.Severity,
+                        Priority = "Critical",
+                        ActionType = "NotifyModerator",
+                        Message = "Demander une validation humaine par un modérateur ou administrateur.",
+                        RequiresHumanValidation = true
+                    });
+                }
+                else if (cluster.RiskScore >= 65 || cluster.Severity == 3)
+                {
+                    actions.Add(new DecisionActionDTO
+                    {
+                        ZoneName = cluster.ZoneName,
+                        RiskScore = cluster.RiskScore,
+                        Severity = cluster.Severity,
+                        Priority = "High",
+                        ActionType = "DisplayWarning",
+                        Message = "Afficher un avertissement discret aux utilisateurs consultant cette zone.",
+                        RequiresHumanValidation = false
+                    });
+
+                    actions.Add(new DecisionActionDTO
+                    {
+                        ZoneName = cluster.ZoneName,
+                        RiskScore = cluster.RiskScore,
+                        Severity = cluster.Severity,
+                        Priority = "High",
+                        ActionType = "IncreaseMonitoring",
+                        Message = "Renforcer la surveillance de cette zone dans le Command Center.",
+                        RequiresHumanValidation = false
+                    });
+                }
+                else if (cluster.RiskScore >= 40 || cluster.Severity == 2)
+                {
+                    actions.Add(new DecisionActionDTO
+                    {
+                        ZoneName = cluster.ZoneName,
+                        RiskScore = cluster.RiskScore,
+                        Severity = cluster.Severity,
+                        Priority = "Moderate",
+                        ActionType = "Watch",
+                        Message = "Maintenir cette zone sous observation.",
+                        RequiresHumanValidation = false
+                    });
+                }
+            }
+
+            return Task.FromResult(actions);
         }
     }
 }

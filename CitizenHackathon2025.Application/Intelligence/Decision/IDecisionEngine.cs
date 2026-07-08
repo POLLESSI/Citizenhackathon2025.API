@@ -1,8 +1,11 @@
-﻿namespace CitizenHackathon2025.Application.Intelligence.Decision
+﻿using CitizenHackathon2025.Contracts.DTOs;
+
+namespace CitizenHackathon2025.Application.Intelligence.Decision
 {
     public interface IDecisionEngine
     {
         Task<DecisionRecommendation> RecommendAsync(DecisionContext context, CancellationToken ct = default);
+        Task<List<DecisionActionDTO>> RecommendActionsAsync(IEnumerable<CrowdAlertCluster> clusters, CancellationToken ct = default);
     }
 
     public sealed class DecisionContext

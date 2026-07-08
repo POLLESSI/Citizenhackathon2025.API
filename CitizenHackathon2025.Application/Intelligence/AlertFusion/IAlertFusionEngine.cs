@@ -4,7 +4,7 @@ namespace CitizenHackathon2025.Application.Intelligence.AlertFusion
 {
     public interface IAlertFusionEngine
     {
-        Task<List<CrowdAlertCluster>> BuildClustersAsync(IEnumerable<CrowdSafetyAlertDTO> alerts, CancellationToken ct);
+        Task<List<CrowdAlertCluster>> BuildClustersAsync(IEnumerable<CrowdSafetyAlertDTO> alerts, CancellationToken ct = default);
     }
 }
 

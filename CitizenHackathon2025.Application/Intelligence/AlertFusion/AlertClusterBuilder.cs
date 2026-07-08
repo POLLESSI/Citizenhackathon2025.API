@@ -38,42 +38,41 @@ namespace CitizenHackathon2025.Application.Intelligence.AlertFusion.AlertFusion
             if (_alerts.Count == 0)
                 throw new InvalidOperationException();
 
+            var totalUniqueDevices = _alerts.Sum(a => a.UniqueDevices);
+
             return new CrowdAlertCluster
             {
+                ZoneName = BuildZoneName(),
+
                 Latitude = _alerts.Average(a => (double)a.Latitude),
                 Longitude = _alerts.Average(a => (double)a.Longitude),
 
                 Severity = _alerts.Max(a => a.Severity),
 
-                TotalActiveConnections =
-                    _alerts.Sum(a => a.ActiveConnections),
+                RiskScore = 0,
 
-                TotalUniqueDevices =
-                    _alerts.Sum(a => a.UniqueDevices),
+                AlertCount = _alerts.Count,
 
-                AntennaCount =
-                    _alerts.Select(a => a.AntennaId)
-                           .Distinct()
-                           .Count(),
+                TotalActiveConnections = _alerts.Sum(a => a.ActiveConnections),
 
-                AntennaIds =
-                    _alerts.Select(a => a.AntennaId)
-                           .Distinct()
-                           .ToList(),
+                TotalUniqueDevices = totalUniqueDevices,
 
-                AlertIds =
-                    _alerts.Select(a => a.Id)
-                           .ToList(),
+                EstimatedPopulation = totalUniqueDevices,
 
-                FirstDetectedAtUtc =
-                    _alerts.Min(a => a.DetectedAtUtc),
+                AntennaIds = _alerts
+                    .Select(a => a.AntennaId)
+                    .Distinct()
+                    .ToList(),
 
-                LastDetectedAtUtc =
-                    _alerts.Max(a => a.DetectedAtUtc),
+                AlertIds = _alerts
+                    .Select(a => a.Id)
+                    .ToList(),
 
-                Status = "PendingValidation",
+                FirstDetectedAtUtc = _alerts.Min(a => a.DetectedAtUtc),
 
-                Message = $"Cluster containing {_alerts.Count} alerts."
+                LastDetectedAtUtc = _alerts.Max(a => a.DetectedAtUtc),
+
+                Status = "PendingValidation"
             };
         }
 
@@ -100,6 +99,19 @@ namespace CitizenHackathon2025.Application.Intelligence.AlertFusion.AlertFusion
                 Math.Sqrt(1 - a));
 
             return R * c;
+        }
+
+        private string BuildZoneName()
+        {
+            var mostSevere = _alerts
+                .OrderByDescending(a => a.Severity)
+                .ThenByDescending(a => a.ActiveConnections)
+                .First();
+
+            if (!string.IsNullOrWhiteSpace(mostSevere.Title))
+                return mostSevere.Title;
+
+            return $"Zone antennes {string.Join(", ", _alerts.Select(a => a.AntennaId).Distinct().Take(3))}";
         }
 
         private static double DegreesToRadians(double value)

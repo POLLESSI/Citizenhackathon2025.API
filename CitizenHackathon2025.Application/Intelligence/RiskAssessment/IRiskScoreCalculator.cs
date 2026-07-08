@@ -1,10 +1,11 @@
-﻿namespace CitizenHackathon2025.Application.Intelligence.RiskAssessment
+﻿using CitizenHackathon2025.Contracts.DTOs;
+
+namespace CitizenHackathon2025.Application.Intelligence.RiskAssessment
 {
     public interface IRiskScoreCalculator
     {
-        Task<RiskScoreResult> CalculateAsync(
-            RiskScoreInput input,
-            CancellationToken ct = default);
+        int ComputeZoneRisk(CrowdAlertCluster cluster);
+        RiskZoneDTO ToRiskZone(CrowdAlertCluster cluster);
     }
 
     public sealed class RiskScoreInput

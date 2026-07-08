@@ -5,6 +5,8 @@ using CitizenHackathon2025.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Globalization;
+using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 
 namespace CitizenHackathon2025.Infrastructure.Services;
@@ -16,11 +18,7 @@ public sealed class AntennaCadastreImportService : IAntennaCadastreImportService
     private readonly AntennaCadastreOptions _options;
     private readonly ILogger<AntennaCadastreImportService> _logger;
 
-    public AntennaCadastreImportService(
-        HttpClient http,
-        ICrowdInfoAntennaRepository repository,
-        IOptions<AntennaCadastreOptions> options,
-        ILogger<AntennaCadastreImportService> logger)
+    public AntennaCadastreImportService(HttpClient http, ICrowdInfoAntennaRepository repository, IOptions<AntennaCadastreOptions> options, ILogger<AntennaCadastreImportService> logger)
     {
         _http = http;
         _repository = repository;
@@ -49,8 +47,31 @@ public sealed class AntennaCadastreImportService : IAntennaCadastreImportService
 
             var url = BuildQueryUrl(offset, pageSize);
 
-            using var response = await _http.GetAsync(url, ct);
-            response.EnsureSuccessStatusCode();
+            var response = await _http.GetAsync(url, ct);
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                _logger.LogWarning(
+                    "Antenna cadastre import source returned 404. Url={Url}",
+                    url);
+
+                return 0;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(ct);
+
+                _logger.LogWarning(
+                    "Antenna cadastre import failed. StatusCode={StatusCode}, Url={Url}, Body={Body}",
+                    (int)response.StatusCode,
+                    url,
+                    body);
+
+                return 0;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(ct);
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);

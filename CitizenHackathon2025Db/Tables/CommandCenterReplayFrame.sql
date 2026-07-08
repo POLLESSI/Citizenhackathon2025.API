@@ -1,0 +1,7 @@
+﻿CREATE TABLE [dbo].[CommandCenterReplayFrame]
+(
+	[Id] BIGINT IDENTITY PRIMARY KEY,
+	[CapturedAtUtc] DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+    [FrameJson] NVARCHAR(MAX) NOT NULL,
+    [Active] BIT NOT NULL DEFAULT 1
+)

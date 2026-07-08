@@ -128,6 +128,7 @@
     <Build Include="Tables\CriticalAlertVote.sql" />
     <Build Include="Tables\DisasterAlert.sql" />
     <Build Include="Tables\EmergencyEscalationRequest.sql" />
+    <Build Include="Tables\CommandCenterReplayFrame.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\SeedData.sql" />

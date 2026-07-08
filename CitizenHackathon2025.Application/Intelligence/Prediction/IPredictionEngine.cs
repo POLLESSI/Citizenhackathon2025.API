@@ -1,8 +1,10 @@
-﻿namespace CitizenHackathon2025.Application.Intelligence.Prediction
+﻿using CitizenHackathon2025.Contracts.DTOs;
+
+namespace CitizenHackathon2025.Application.Intelligence.Prediction
 {
     public interface IPredictionEngine
     {
-        Task<CrowdPredictionResult> PredictCrowdAsync(IReadOnlyList<CrowdPredictionPoint> history, CancellationToken ct = default);
+        Task<List<PredictionDTO>> PredictAsync(IEnumerable<RiskZoneDTO> zones, CancellationToken ct = default);
     }
 
     public sealed class CrowdPredictionPoint
