@@ -154,10 +154,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .Where(p => !IsUnsafeCandidate(p, criticalAlerts))
                 .ToList();
 
-            var places = keywordPlaces
+            var mergedPlaces = keywordPlaces
                 .Concat(nearbyPlaces)
                 .GroupBy(p => p.Id)
-                .Select(g => g.First())
+                .Select(g => g.First());
+
+            var places = DeduplicateNearbyPlaces(
+                    mergedPlaces,
+                    duplicateRadiusKm: 0.1)
                 .OrderBy(p => p.DistanceKm ?? double.MaxValue)
                 .ThenBy(p => p.Name)
                 .Take(Limits.MaxPlaces)
@@ -206,7 +210,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Weather = weather,
                 CriticalAlerts = criticalAlerts,
                 LocationLabel = locationLabel,
-                KeywordMatchedPlaces = keywordPlaces.ToList(),
+                KeywordMatchedPlaces = DeduplicateNearbyPlaces(keywordPlaces, duplicateRadiusKm: 0.1).ToList(),
                 HasChildren = hasChildren,
                 BadWeatherDetected = badWeatherDetected,
                 MaxAlternativeRadiusKm = 25
@@ -488,6 +492,154 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 
             return r * c;
+        }
+
+        private static IReadOnlyList<LocalAiPlaceContextDTO>
+    DeduplicateNearbyPlaces(
+        IEnumerable<LocalAiPlaceContextDTO> places,
+        double duplicateRadiusKm = 0.1)
+        {
+            ArgumentNullException.ThrowIfNull(places);
+
+            var result = new List<LocalAiPlaceContextDTO>();
+
+            foreach (var place in places
+                         .Where(IsPlaceRelevant)
+                         .OrderBy(p => p.DistanceKm ?? double.MaxValue)
+                         .ThenBy(p => p.Name))
+            {
+                // One cannot make a geographical comparison involving an incomplete location.
+                // We are keeping it, but deduplication based on coordinates
+                // cannot be applied to it.
+                if (!place.Latitude.HasValue ||
+                    !place.Longitude.HasValue)
+                {
+                    var sameNameAlreadyExists = result.Any(existing =>
+                        string.Equals(
+                            existing.Name?.Trim(),
+                            place.Name?.Trim(),
+                            StringComparison.OrdinalIgnoreCase));
+
+                    if (!sameNameAlreadyExists)
+                        result.Add(place);
+
+                    continue;
+                }
+
+                var existingIndex = result.FindIndex(existing =>
+                {
+                    if (!existing.Latitude.HasValue ||
+                        !existing.Longitude.HasValue)
+                    {
+                        return false;
+                    }
+
+                    var distanceKm = HaversineKm(
+                        place.Latitude.Value,
+                        place.Longitude.Value,
+                        existing.Latitude.Value,
+                        existing.Longitude.Value);
+
+                    return distanceKm <= duplicateRadiusKm;
+                });
+
+                if (existingIndex < 0)
+                {
+                    result.Add(place);
+                    continue;
+                }
+
+                var existingPlace = result[existingIndex];
+
+                if (IsBetterCanonicalPlace(place, existingPlace))
+                {
+                    // Retain the shortest distance calculated by SQL.
+                    place.DistanceKm = MinNullable(
+                        place.DistanceKm,
+                        existingPlace.DistanceKm);
+
+                    result[existingIndex] = place;
+                }
+                else
+                {
+                    existingPlace.DistanceKm = MinNullable(
+                        existingPlace.DistanceKm,
+                        place.DistanceKm);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool IsBetterCanonicalPlace(
+            LocalAiPlaceContextDTO candidate,
+            LocalAiPlaceContextDTO current)
+        {
+            var candidateName = candidate.Name?.Trim() ?? string.Empty;
+            var currentName = current.Name?.Trim() ?? string.Empty;
+
+            var candidateHasHyphen = candidateName.Contains('-');
+            var currentHasHyphen = currentName.Contains('-');
+
+            if (candidateHasHyphen != currentHasHyphen)
+                return candidateHasHyphen;
+
+            var candidateLooksAbbreviated =
+                candidateName.StartsWith("St ", StringComparison.OrdinalIgnoreCase) ||
+                candidateName.StartsWith("St-", StringComparison.OrdinalIgnoreCase);
+
+            var currentLooksAbbreviated =
+                currentName.StartsWith("St ", StringComparison.OrdinalIgnoreCase) ||
+                currentName.StartsWith("St-", StringComparison.OrdinalIgnoreCase);
+
+            if (candidateLooksAbbreviated != currentLooksAbbreviated)
+                return !candidateLooksAbbreviated;
+
+            var candidateScore = GetMetadataScore(candidate);
+            var currentScore = GetMetadataScore(current);
+
+            if (candidateScore != currentScore)
+                return candidateScore > currentScore;
+
+            return candidate.Id < current.Id;
+        }
+
+        private static int GetMetadataScore(LocalAiPlaceContextDTO place)
+        {
+            var score = 0;
+
+            if (!string.IsNullOrWhiteSpace(place.Type))
+                score++;
+
+            if (!string.IsNullOrWhiteSpace(place.Tag))
+                score++;
+
+            if (place.Indoor.HasValue)
+                score++;
+
+            if ((place.Capacity ?? 0) > 0)
+                score++;
+
+            if (!string.IsNullOrWhiteSpace(place.ExternalSource))
+                score++;
+
+            if (!string.IsNullOrWhiteSpace(place.ExternalId))
+                score++;
+
+            return score;
+        }
+
+        private static double? MinNullable(
+            double? first,
+            double? second)
+        {
+            if (!first.HasValue)
+                return second;
+
+            if (!second.HasValue)
+                return first;
+
+            return Math.Min(first.Value, second.Value);
         }
         private static void AppendPlaces(StringBuilder sb, LocalAiContextDTO context)
         {

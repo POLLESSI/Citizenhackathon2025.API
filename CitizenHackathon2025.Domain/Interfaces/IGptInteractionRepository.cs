@@ -14,6 +14,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<int> ArchivePastGptInteractionsAsync();
         Task<bool> UpdateResponseAsync(int interactionId, string response, CancellationToken ct = default);
         Task<bool> MarkFailedAsync(int interactionId, string? errorMessage, CancellationToken ct = default);
+        Task<bool> MarkCancelledAsync(int interactionId, string? message = null, CancellationToken ct = default);
     }
 }
 

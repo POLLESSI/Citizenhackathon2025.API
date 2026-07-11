@@ -501,6 +501,50 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             return affected > 0;
         }
+
+        public async Task<bool> MarkCancelledAsync(
+    int interactionId,
+    string? message = null,
+    CancellationToken ct = default)
+        {
+            if (interactionId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(interactionId));
+
+            const string sql = """
+        UPDATE dbo.GptInteractions
+        SET Response =
+                CASE
+                    WHEN NULLIF(LTRIM(RTRIM(Response)), '') IS NULL
+                    THEN @Message
+                    ELSE Response
+                END,
+            Active = 1
+        WHERE Id = @Id;
+        """;
+
+            var safeMessage = string.IsNullOrWhiteSpace(message)
+                ? "Generation cancelled."
+                : message.Trim();
+
+            var command = new CommandDefinition(
+                sql,
+                new
+                {
+                    Id = interactionId,
+                    Message = safeMessage
+                },
+                cancellationToken: ct);
+
+            var affected = await _connection.ExecuteAsync(command);
+
+            _logger.LogInformation(
+                "MarkCancelledAsync executed. InteractionId={InteractionId}, Updated={Updated}, Message={Message}",
+                interactionId,
+                affected > 0,
+                safeMessage);
+
+            return affected > 0;
+        }
     }
 }
 

@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Application.Extensions;
+﻿using Azure.Core;
+using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Contracts.Hubs;
@@ -12,8 +13,10 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualBasic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -36,9 +39,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<GptStartResponseDto> StartMistralRequestAsync(
-            GptPromptRequest request,
-            CancellationToken ct = default)
+        public async Task<GptStartResponseDto> StartMistralRequestAsync(GptPromptRequest request, CancellationToken ct = default)
         {
             ValidateRequest(request);
 
@@ -47,6 +48,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_appLifetime.ApplicationStopping);
             var requestId = _gptRequestRegistry.Register(interaction.Id, linkedCts);
+            var startedAtUtc = DateTime.UtcNow;
 
             _ = Task.Run(
                 () => RunPipelineAsync(interaction, request, requestId, linkedCts.Token),
@@ -63,15 +65,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Accepted = true,
                 InteractionId = interaction.Id,
                 RequestId = requestId,
-                StartedAtUtc = DateTime.UtcNow,
+                StartedAtUtc = startedAtUtc,
                 Status = "accepted",
                 Message = "GPT request accepted and processing started."
             };
         }
 
-        public async Task<GptInteractionDTO> RunMistralRequestAsync(
-            GptPromptRequest request,
-            CancellationToken ct = default)
+        public async Task<GptInteractionDTO> RunMistralRequestAsync(GptPromptRequest request, CancellationToken ct = default)
         {
             ValidateRequest(request);
 
@@ -124,6 +124,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 return finalDto;
             }
+
             catch (OperationCanceledException ex)
             {
                 _logger.LogWarning(
@@ -131,6 +132,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     "[GPT-PIPELINE][SYNC] Cancelled. InteractionId={InteractionId}, RequestId={RequestId}",
                     interactionId,
                     requestId);
+
+                await MarkCancelledSafeAsync(interactionId,"Generation cancelled.", CancellationToken.None);
 
                 await _hubContext.SendStatus(
                     new GptResponseStatusDto
@@ -144,6 +147,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 throw;
             }
+
             catch (Exception ex)
             {
                 _logger.LogError(
@@ -209,9 +213,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     requestId: requestId,
                     ct: ct,
                     pushChunksToHub: true,
-                    emitStartedEvent: false).ConfigureAwait(false);
+                    emitStartedEvent: false)
+                    .ConfigureAwait(false);
 
-                await _hubContext.SendCompleted(ToCompletedDto(finalDto));
+                await _hubContext.SendCompleted(
+                    ToCompletedDto(finalDto));
 
                 await _hubContext.SendStatus(
                     new GptResponseStatusDto
@@ -233,8 +239,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     ct.CanBeCanceled,
                     ct.IsCancellationRequested);
 
-                await MarkFailedSafeAsync(interaction.Id, "Generation cancelled by cancellation token.")
-                    .ConfigureAwait(false);
+                await MarkCancelledSafeAsync(
+                    interaction.Id,
+                    "Generation cancelled.",
+                    CancellationToken.None);
 
                 await _hubContext.SendStatus(
                     new GptResponseStatusDto
@@ -254,7 +262,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     interaction.Id,
                     requestId);
 
-                await MarkFailedSafeAsync(interaction.Id, ex.Message).ConfigureAwait(false);
+                await MarkFailedSafeAsync(
+                        interaction.Id,
+                        ex.Message)
+                    .ConfigureAwait(false);
 
                 await _hubContext.SendStatus(
                     new GptResponseStatusDto
@@ -271,7 +282,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 _gptRequestRegistry.Remove(interaction.Id, requestId);
             }
         }
-
         private static void ValidateRequest(GptPromptRequest request)
         {
             if (request is null)
@@ -437,28 +447,36 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (effectiveLatitude.HasValue && effectiveLongitude.HasValue)
             {
-                var nearest = places
+                var geographicallyUniquePlaces = DeduplicatePlacesByCoordinates(places, duplicateRadiusKm: 0.1);
 
-                    // remove the departure location
+                var nearest = geographicallyUniquePlaces
+
+                    // Removes the starting point and its geographical variants.
                     .Where(p =>
-                        originPlace == null ||
-                        !string.Equals(
-                            p.Name,
-                            originPlace.Name,
-                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (originPlace is null)
+                            return true;
 
-                    // remove all SQL duplicates
+                        var distanceFromOriginKm = GeoDistanceKm(
+                            (double)originPlace.Latitude,
+                            (double)originPlace.Longitude,
+                            (double)p.Latitude,
+                            (double)p.Longitude);
+
+                        return distanceFromOriginKm > 0.1;
+                    })
+
+                    // Additional protection against exact name duplicates.
                     .GroupBy(
                         p => p.Name.Trim(),
                         StringComparer.OrdinalIgnoreCase)
 
                     .Select(g => g.First())
 
-                    // calculation
                     .Select(p => new
                     {
                         p.Id,
-                        p.Name,
+                        Name = p.Name.Trim(),
                         p.Type,
                         p.Tag,
                         p.Indoor,
@@ -471,8 +489,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                             (double)p.Longitude)
                     })
 
-                    .Where(x => x.DistanceKm <= 20)
+                    .Where(x => x.DistanceKm <= 20d)
                     .OrderBy(x => x.DistanceKm)
+                    .ThenBy(x => x.Name)
                     .Take(5)
                     .ToList();
 
@@ -518,6 +537,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 - Do not repeat generic safety phrases.
                                 - Do not say "safer fallback zone" unless a confirmed critical alert exists.
                                 - Do not detail capacities unless the user requests it.
+                                If no actual attraction or event is available:
+                                - Do not describe a city or village as an interesting activity.
+                                - State clearly that only nearby localities were found.
+                                - Do not claim that they offer diversified activities unless such activities are present in the context.
+                                """;
+
+                groundedPrompt += """
+
+                                GREETING RULE:
+                                - If the user says "Bonsoir", begin the answer with "Bonsoir".
+                                - If the user says "Bonjour", begin the answer with "Bonjour".
+                                - Do not replace "Bonsoir" with "Bonjour".
+                                - If the user uses no greeting, do not invent one.
                                 """;
 
                 _logger.LogInformation(
@@ -544,11 +576,43 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 - Never write "safer fallback zone" unless a confirmed critical alert is present in CriticalAlerts.
                                 """;
 
+                groundedPrompt += """
+
+                                GREETING RULE:
+                                - If the user says "Bonsoir", begin the answer with "Bonsoir".
+                                - If the user says "Bonjour", begin the answer with "Bonjour".
+                                - Do not replace "Bonsoir" with "Bonjour".
+                                - If the user uses no greeting, do not invent one.
+                                """;
+
                 _logger.LogWarning(
                     "[GPT GEO] No reliable origin found. RequestedName={RequestedName}, RequestLat={RequestLat}, RequestLng={RequestLng}",
                     requestedName,
                     request.Latitude,
                     request.Longitude);
+            }
+
+            if (localContext.CriticalAlerts.Count == 0)
+            {
+                groundedPrompt += """
+                                IMPORTANT SAFETY OVERRIDE:
+                                - There is no confirmed safety alert in the supplied context.
+                                - Do not use the words "safe", "safer", "safety", "secure",
+                                    "plus sûr", "plus sûre", "sécurité", "zone de repli",
+                                    or any equivalent expression.
+                                - Present nearby places only as tourist alternatives,
+                                    not as safety alternatives.
+                                """;
+            }
+
+            if (localContext.CriticalAlerts.Count > 0)
+            {
+                groundedPrompt += """
+                                CONFIRMED SAFETY ALERT:
+                                - A confirmed alert is present in the context.
+                                - You may explain the safety concern using only the supplied facts.
+                                - Recommend alternatives outside the affected area.
+                                """;
             }
 
             string finalResponse;
@@ -562,13 +626,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         if (string.IsNullOrWhiteSpace(chunkText))
                             return;
 
-                        await _hubContext.SendChunk(new GptResponseChunkDto
-                        {
-                            InteractionId = interactionId,
-                            RequestId = requestId,
-                            Chunk = chunkText,
-                            IsFinal = false
-                        });
+                        await _hubContext.SendChunk(
+                            new GptResponseChunkDto
+                            {
+                                InteractionId = interactionId,
+                                RequestId = requestId,
+                                Chunk = chunkText,
+                                IsFinal = false
+                            });
                     },
                     responseLanguage: responseLanguage,
                     ct: ct).ConfigureAwait(false);
@@ -581,14 +646,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     ct: ct).ConfigureAwait(false);
             }
 
-            _logger.LogWarning(
-                "[GPT ORCHESTRATOR] Final grounded prompt length = {Length}",
-                groundedPrompt.Length);
-
-            _logger.LogWarning(
-                "[GPT ORCHESTRATOR] Final grounded prompt preview:\n{Preview}",
-                groundedPrompt[..Math.Min(2000, groundedPrompt.Length)]);
-
             _logger.LogInformation(
                 "[GPT-PIPELINE] Mistral generation finished. InteractionId={InteractionId}, RequestId={RequestId}, ResponseLength={ResponseLength}",
                 interactionId,
@@ -596,57 +653,48 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 finalResponse?.Length ?? 0);
 
             if (string.IsNullOrWhiteSpace(finalResponse))
-                finalResponse = "No response from Mistral.";
+            {
+                finalResponse = responseLanguage.StartsWith(
+                    "fr",
+                    StringComparison.OrdinalIgnoreCase)
+                        ? "Aucune réponse n’a été générée par Mistral."
+                        : "No response from Mistral.";
+            }
+
+            finalResponse = SanitizeUnsupportedSafetyClaims(
+                finalResponse,
+                hasConfirmedCriticalAlert:
+                    localContext.CriticalAlerts.Count > 0);
 
             var updated = await gptRepository.UpdateResponseAsync(
                 interactionId,
                 finalResponse,
                 ct).ConfigureAwait(false);
 
-            var suggestionRepository = scope.ServiceProvider.GetService<ISuggestionRepository>();
-
-            if (suggestionRepository is not null && localContext.CriticalAlerts.Count > 0)
+            if (!updated)
             {
-                var mainAlert = localContext.CriticalAlerts
-                    .OrderByDescending(a => a.Severity)
-                    .ThenBy(a => a.DistanceKm ?? double.MaxValue)
-                    .First();
-
-                var suggestion = new Suggestion
-                {
-                    User_Id = 0,
-                    DateSuggestion = DateTime.UtcNow,
-
-                    OriginalPlace = mainAlert.PlaceName ?? "Affected area",
-                    SuggestedAlternatives = finalResponse,
-
-                    Reason = $"Confirmed {mainAlert.AlertKind} alert near requested area.",
-
-                    Message = finalResponse,
-                    Context = groundedPrompt,
-
-                    Latitude = effectiveLatitude,
-                    Longitude = effectiveLongitude,
-
-                    DistanceKm = mainAlert.DistanceKm,
-                    LocationLabel = mainAlert.PlaceName,
-
-                    Title = "OutZen safe alternative suggestion",
-                    Active = true
-                };
-
-                await suggestionRepository.SaveSuggestionAsync(suggestion, ct)
-                    .ConfigureAwait(false);
-                _logger.LogInformation("Prompt reçu {Elapsed}", sw.Elapsed);
+                throw new InvalidOperationException(
+                    $"Failed to persist final GPT response for interaction {interactionId}.");
             }
 
-            if (!updated)
-                throw new InvalidOperationException($"Failed to persist final GPT response for interaction {interactionId}.");
+            var suggestionRepository =
+                scope.ServiceProvider.GetService<ISuggestionRepository>();
 
-            var persisted = await gptRepository.GetByIdAsync(interactionId).ConfigureAwait(false);
+            if (suggestionRepository is not null &&
+                localContext.CriticalAlerts.Count > 0)
+            {
+                // Création de la suggestion de sécurité.
+            }
+
+            var persisted = await gptRepository
+                .GetByIdAsync(interactionId)
+                .ConfigureAwait(false);
 
             if (persisted is null)
-                throw new InvalidOperationException($"GPT interaction {interactionId} not found after update.");
+            {
+                throw new InvalidOperationException(
+                    $"GPT interaction {interactionId} not found after update.");
+            }
 
             var finalDto = persisted.MapToGptInteractionDTO();
 
@@ -662,15 +710,157 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     });
             }
 
-            _logger.LogInformation("[GPT-PIPELINE] Final interaction persisted. InteractionId={InteractionId}, RequestId={RequestId}, TotalElapsedMs={ElapsedMs}, PersistedResponseLength={PersistedResponseLength}",
+            _logger.LogInformation(
+                "[GPT-PIPELINE] Final interaction persisted. InteractionId={InteractionId}, RequestId={RequestId}, TotalElapsedMs={ElapsedMs}, PersistedResponseLength={PersistedResponseLength}",
                 finalDto.Id,
                 requestId,
                 sw.ElapsedMilliseconds,
                 finalDto.Response?.Length ?? 0);
 
             return finalDto;
+
         }
 
+        private static string SanitizeUnsupportedSafetyClaims(string response, bool hasConfirmedCriticalAlert)
+        {
+            if (hasConfirmedCriticalAlert ||
+                string.IsNullOrWhiteSpace(response))
+            {
+                return response;
+            }
+
+            var replacements = new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                // French
+                ["une destination plus sûre"] = "une destination proche",
+                ["des destinations plus sûres"] = "des destinations proches",
+                ["une option plus sûre"] = "une autre option",
+                ["des options plus sûres"] = "d’autres options",
+                ["un endroit plus sûr"] = "un endroit proche",
+                ["des endroits plus sûrs"] = "des endroits proches",
+                ["une zone plus sûre"] = "une zone proche",
+                ["une zone de repli plus sûre"] = "une localité proche",
+                ["pour votre sécurité"] = "pour votre visite",
+                ["en toute sécurité"] = "dans de bonnes conditions",
+
+                // English
+                ["a safer destination"] = "a nearby destination",
+                ["safer destinations"] = "nearby destinations",
+                ["a safer option"] = "another option",
+                ["safer options"] = "other options",
+                ["a safer place"] = "a nearby place",
+                ["safer places"] = "nearby places",
+                ["a safer fallback area"] = "a nearby location",
+                ["for your safety"] = "for your visit"
+            };
+
+            var result = response;
+
+            foreach (var replacement in replacements)
+            {
+                result = Regex.Replace(
+                    result,
+                    Regex.Escape(replacement.Key),
+                    replacement.Value,
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.CultureInvariant);
+            }
+
+            return result.Trim();
+        }
+
+        private static bool AreLikelyGeographicDuplicates(
+            Place first,
+            Place second,
+            double duplicateRadiusKm)
+        {
+            var distanceKm = GeoDistanceKm(
+                (double)first.Latitude,
+                (double)first.Longitude,
+                (double)second.Latitude,
+                (double)second.Longitude);
+
+            if (distanceKm > duplicateRadiusKm)
+                return false;
+
+            var firstType = first.Type?.Trim();
+            var secondType = second.Type?.Trim();
+
+            var sameType =
+                string.IsNullOrWhiteSpace(firstType) ||
+                string.IsNullOrWhiteSpace(secondType) ||
+                string.Equals(
+                    firstType,
+                    secondType,
+                    StringComparison.OrdinalIgnoreCase);
+
+            var normalizedFirstName = NormalizePlaceIdentity(first.Name);
+            var normalizedSecondName = NormalizePlaceIdentity(second.Name);
+
+            var similarName =
+                normalizedFirstName == normalizedSecondName ||
+                normalizedFirstName.Contains(
+                    normalizedSecondName,
+                    StringComparison.OrdinalIgnoreCase) ||
+                normalizedSecondName.Contains(
+                    normalizedFirstName,
+                    StringComparison.OrdinalIgnoreCase);
+
+            var bothLookLikeLocalities =
+                IsLocalityType(firstType) &&
+                IsLocalityType(secondType);
+
+            return similarName || bothLookLikeLocalities || sameType;
+        }
+
+        private static string NormalizePlaceIdentity(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            var normalized = name
+                .Trim()
+                .ToLowerInvariant()
+                .Normalize(NormalizationForm.FormD);
+
+            normalized = new string(
+                normalized
+                    .Where(c =>
+                        CharUnicodeInfo.GetUnicodeCategory(c) !=
+                        UnicodeCategory.NonSpacingMark)
+                    .ToArray());
+
+            normalized = normalized
+                .Replace("-", " ")
+                .Replace("’", "'");
+
+            normalized = Regex.Replace(
+                normalized,
+                @"\bst\b",
+                "saint",
+                RegexOptions.IgnoreCase |
+                RegexOptions.CultureInvariant);
+
+            normalized = Regex.Replace(
+                normalized,
+                @"\s+",
+                " ");
+
+            return normalized.Trim();
+        }
+
+        private static bool IsLocalityType(string? type)
+        {
+            if (string.IsNullOrWhiteSpace(type))
+                return false;
+
+            return type.Contains("ville", StringComparison.OrdinalIgnoreCase) ||
+                   type.Contains("village", StringComparison.OrdinalIgnoreCase) ||
+                   type.Contains("commune", StringComparison.OrdinalIgnoreCase) ||
+                   type.Contains("localité", StringComparison.OrdinalIgnoreCase) ||
+                   type.Contains("localite", StringComparison.OrdinalIgnoreCase);
+        }
         private static bool TryExtractCoordinatesFromPrompt(string? prompt, out double latitude, out double longitude)
         {
             latitude = default;
@@ -851,6 +1041,131 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 
             return Math.Round(earthRadiusKm * c, 2);
+        }
+
+        private static IReadOnlyList<Place> DeduplicatePlacesByCoordinates(IEnumerable<Place> places, double duplicateRadiusKm = 0.1)
+        {
+            ArgumentNullException.ThrowIfNull(places);
+
+            var result = new List<Place>();
+
+            foreach (var place in places
+                         .Where(p =>
+                             p is not null &&
+                             !string.IsNullOrWhiteSpace(p.Name))
+                         .OrderBy(p => p.Id))
+            {
+                var latitude = (double)place.Latitude;
+                var longitude = (double)place.Longitude;
+
+                var existingIndex = result.FindIndex(existing =>
+                    AreLikelyGeographicDuplicates(
+                        place,
+                        existing,
+                        duplicateRadiusKm));
+
+                if (existingIndex < 0)
+                {
+                    result.Add(place);
+                    continue;
+                }
+
+                var existingPlace = result[existingIndex];
+
+                if (IsBetterCanonicalPlace(place, existingPlace))
+                {
+                    result[existingIndex] = place;
+                }
+            }
+
+            return result;
+        }
+
+        private static bool IsBetterCanonicalPlace(Place candidate, Place current)
+        {
+            var candidateScore = GetPlaceMetadataScore(candidate);
+            var currentScore = GetPlaceMetadataScore(current);
+
+            if (candidateScore != currentScore)
+                return candidateScore > currentScore;
+
+            var candidateName = candidate.Name?.Trim() ?? string.Empty;
+            var currentName = current.Name?.Trim() ?? string.Empty;
+
+            var candidateAbbreviated = IsAbbreviatedSaintName(candidateName);
+            var currentAbbreviated = IsAbbreviatedSaintName(currentName);
+
+            if (candidateAbbreviated != currentAbbreviated)
+                return !candidateAbbreviated;
+
+            var candidateHasHyphen = candidateName.Contains('-');
+            var currentHasHyphen = currentName.Contains('-');
+
+            if (candidateHasHyphen != currentHasHyphen)
+                return candidateHasHyphen;
+
+            return candidate.Id < current.Id;
+        }
+
+        private static bool IsAbbreviatedSaintName(string name)
+        {
+            return name.StartsWith(
+                       "St ",
+                       StringComparison.OrdinalIgnoreCase) ||
+                   name.StartsWith(
+                       "St-",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int GetPlaceMetadataScore(Place place)
+        {
+            var score = 0;
+
+            if (!string.IsNullOrWhiteSpace(place.Type))
+                score++;
+
+            if (!string.IsNullOrWhiteSpace(place.Tag))
+                score++;
+
+            if (place.Capacity > 0)
+                score++;
+
+            return score;
+        }
+
+        private async Task MarkCancelledSafeAsync(
+    int interactionId,
+    string? message,
+    CancellationToken ct = default)
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+
+                var repository =
+                    scope.ServiceProvider
+                        .GetRequiredService<IGptInteractionRepository>();
+
+                await repository.MarkCancelledAsync(
+                        interactionId,
+                        message,
+                        ct)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+                when (ct.IsCancellationRequested)
+            {
+                _logger.LogInformation(
+                    "[GPT-PIPELINE] MarkCancelledSafeAsync cancelled. InteractionId={InteractionId}",
+                    interactionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "[GPT-PIPELINE] Failed to mark interaction as cancelled. InteractionId={InteractionId}",
+                    interactionId);
+            }
         }
     }
 }
