@@ -10,76 +10,39 @@ namespace CitizenHackathon2025.Domain.Interfaces
     public interface ILocalAiDataRepository
     {
         Task<IReadOnlyList<LocalAiPlaceContextDTO>> SearchPlacesByKeywordsAsync(string userPrompt, int limit = 10, CancellationToken ct = default);
-        Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(
-            double latitude,
-            double longitude,
-            double radiusKm,
-            CancellationToken ct = default);
+        Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default);
         /// <summary>
         /// Returns nearby events relevant to the requested date and radius.
         /// Results should already be filtered geographically and temporally.
         /// </summary>
-        Task<IEnumerable<LocalAiEventContextDTO>> GetNearbyEventsAsync(
-           double latitude,
-           double longitude,
-           DateTime targetDate,
-           double radiusKm,
-           CancellationToken ct = default);
+        Task<IEnumerable<LocalAiEventContextDTO>>GetNearbyEventsAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default);
 
         /// <summary>
         /// Returns nearby crowd calendar items relevant to the requested date and radius.
         /// Intended for planned / forecast crowd-sensitive events.
         /// </summary>
-        Task<IEnumerable<LocalAiCrowdCalendarContextDTO>> GetNearbyCrowdCalendarAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default);
+        Task<IEnumerable<LocalAiCrowdCalendarContextDTO>>GetNearbyCrowdCalendarAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default);
 
         /// <summary>
         /// Returns recent observed crowd information around the specified location.
         /// The implementation should interpret targetDate pragmatically, typically
         /// as "around that day" or "recent observations relevant to that day".
         /// </summary>
-        Task<IEnumerable<LocalAiCrowdInfoContextDTO>> GetNearbyCrowdInfoAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default);
+        Task<IEnumerable<LocalAiCrowdInfoContextDTO>> GetNearbyCrowdInfoAsync(double latitude, double longitude, DateTime targetDate, double radiusKm, CancellationToken ct = default);
 
         /// <summary>
         /// Returns nearby traffic incidents or traffic conditions with practical user impact.
         /// The implementation should filter by geographic radius and temporal relevance.
         /// </summary>
-        Task<IEnumerable<LocalAiTrafficContextDTO>> GetNearbyTrafficAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default);
+        Task<IEnumerable<LocalAiTrafficContextDTO>>GetNearbyTrafficAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default);
 
         /// <summary>
         /// Returns nearby weather points / forecasts relevant to the requested date and radius.
         /// Only the fields needed for practical outing guidance should be returned.
         /// </summary>
-        Task<IEnumerable<LocalAiWeatherContextDTO>> GetNearbyWeatherAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default);
-        Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(
-            double latitude,
-            double longitude,
-            double radiusKm,
-            CancellationToken ct = default);
-        Task<IEnumerable<LocalAiCriticalAlertContextDTO>> GetNearbyCriticalAlertsAsync(
-            double latitude,
-            double longitude,
-            double radiusKm,
-            CancellationToken ct = default);
+        Task<IEnumerable<LocalAiWeatherContextDTO>>GetNearbyWeatherAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default);
+        Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default);
+        Task<IEnumerable<LocalAiCriticalAlertContextDTO>> GetNearbyCriticalAlertsAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default);
     }
 }
 

@@ -3,12 +3,14 @@ using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Contracts.Hubs;
+using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
+using MediatR;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -37,6 +39,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _gptRequestRegistry = gptRequestRegistry ?? throw new ArgumentNullException(nameof(gptRequestRegistry));
             _appLifetime = appLifetime ?? throw new ArgumentNullException(nameof(appLifetime));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _logger.LogWarning("[GPT GEO PATCH] Version 2026-07-18-v3 loaded: radius=25, maxCandidates=12");
         }
 
         public async Task<GptStartResponseDto> StartMistralRequestAsync(GptPromptRequest request, CancellationToken ct = default)
@@ -347,14 +350,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var swContext = Stopwatch.StartNew();
 
-            var requestedName = ExtractPlaceNameFromPrompt(prompt);
+            var contextPrompt = NormalizeMultilingualPromptForContext(prompt);
+
+            _logger.LogInformation(
+                "[GPT MULTILINGUAL] OriginalPrompt={OriginalPrompt}; " +
+                "ContextPrompt={ContextPrompt}",
+                prompt,
+                contextPrompt);
+
+            var requestedName = ExtractPlaceNameFromPrompt(contextPrompt);
 
             var places = await placeRepository.GetActivePlacesAsync(ct);
 
-            Place? originPlace = ResolvePlaceFromPrompt(prompt, places);
+            Place? originPlace = ResolvePlaceFromPrompt(contextPrompt, places);
 
-            if (originPlace is null &&
-                !string.IsNullOrWhiteSpace(requestedName))
+            if (originPlace is null && !string.IsNullOrWhiteSpace(requestedName))
             {
                 originPlace = await placeRepository.FindByNameLikeAsync(requestedName, ct);
             }
@@ -384,7 +394,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 _logger.LogInformation("Prompt reçu {Elapsed}", sw.Elapsed);
             }
 
-            var localContext = await localAiContextService.BuildContextAsync(prompt, effectiveLatitude, effectiveLongitude, ct).ConfigureAwait(false);
+            var localContext = await localAiContextService.BuildContextAsync(contextPrompt, effectiveLatitude, effectiveLongitude, ct).ConfigureAwait(false);
 
             swContext.Stop();
 
@@ -419,6 +429,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             string groundedPrompt = localAiContextService.BuildPrompt(localContext);
 
+            groundedPrompt += $"""
+                            ORIGINAL USER QUESTION — PRESERVE ITS LANGUAGE
+                            {prompt}
+
+                            Mandatory language rule:
+                            - Answer in the language of the original user question.
+                            - The normalized context question is used only for database search.
+                            - Do not answer in the language of the normalized context question.
+                            """;
+
             if (!string.IsNullOrWhiteSpace(requestedName) && originPlace is null)
             {
                 groundedPrompt += $"""
@@ -443,15 +463,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 groundedPrompt.Length,
                 groundedPrompt[..Math.Min(300, groundedPrompt.Length)]);
 
-            var responseLanguage = string.IsNullOrWhiteSpace(request.LanguageCode) ? "fr-FR" : request.LanguageCode.Trim();
+            var responseLanguage = ResolveResponseLanguage(prompt, request.LanguageCode);
+
+            _logger.LogInformation(
+                "[GPT LANGUAGE] Requested={RequestedLanguage}; " +
+                "Resolved={ResolvedLanguage}",
+                request.LanguageCode,
+                responseLanguage);
 
             if (effectiveLatitude.HasValue && effectiveLongitude.HasValue)
             {
                 var geographicallyUniquePlaces = DeduplicatePlacesByCoordinates(places, duplicateRadiusKm: 0.1);
 
-                var nearest = geographicallyUniquePlaces
-
-                    // Removes the starting point and its geographical variants.
+                var candidates = geographicallyUniquePlaces
                     .Where(p =>
                     {
                         if (originPlace is null)
@@ -466,7 +490,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         return distanceFromOriginKm > 0.1;
                     })
 
-                    // Additional protection against exact name duplicates.
+                    // Additional protection against strictly identical names.
                     .GroupBy(
                         p => p.Name.Trim(),
                         StringComparer.OrdinalIgnoreCase)
@@ -486,14 +510,55 @@ namespace CitizenHackathon2025.Infrastructure.Services
                             effectiveLatitude!.Value,
                             effectiveLongitude!.Value,
                             (double)p.Latitude,
-                            (double)p.Longitude)
+                            (double)p.Longitude),
+
+                        InterestScore = GetTouristicInterestScore(p)
                     })
 
-                    .Where(x => x.DistanceKm <= 20d)
-                    .OrderBy(x => x.DistanceKm)
-                    .ThenBy(x => x.Name)
-                    .Take(5)
+                    // "Dans les environs" must allow approximately 25 km.
+                    .Where(x => x.DistanceKm <= 25d)
+
                     .ToList();
+
+                var nearest = candidates
+
+                    // Tangible attractions take precedence over mere locations.
+                    .OrderByDescending(x => x.InterestScore)
+                    .ThenBy(x => x.DistanceKm)
+                    .ThenBy(x => x.Name)
+                    .Take(12)
+
+                    // Final presentation by distance in the prompt.
+                    .OrderBy(x => x.DistanceKm)
+                    .ThenByDescending(x => x.InterestScore)
+                    .ThenBy(x => x.Name)
+
+                    .ToList();
+
+                _logger.LogInformation(
+                    "[NEARBY PIPELINE] Origin={Origin}; Latitude={Latitude}; Longitude={Longitude}; " +
+                    "RadiusKm={RadiusKm}; Loaded={LoadedCount}; AfterGeoDedup={AfterGeoDedupCount}; " +
+                    "InsideRadius={InsideRadiusCount}; SentToMistral={SentCount}",
+                    originPlace?.Name ?? requestedName ?? "<unknown>",
+                    effectiveLatitude.Value,
+                    effectiveLongitude.Value,
+                    25d,
+                    places.Count,
+                    geographicallyUniquePlaces.Count,
+                    candidates.Count,
+                    nearest.Count);
+
+                foreach (var candidate in nearest)
+                {
+                    _logger.LogInformation(
+                        "[NEARBY CANDIDATE] Id={Id}; Name={Name}; Type={Type}; " +
+                        "DistanceKm={DistanceKm}; InterestScore={InterestScore}",
+                        candidate.Id,
+                        candidate.Name,
+                        candidate.Type,
+                        candidate.DistanceKm,
+                        candidate.InterestScore);
+                }
 
                 var geoContext = JsonSerializer.Serialize(
                     nearest.Select(x => new
@@ -504,7 +569,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                         x.Indoor,
                         x.Capacity,
                         x.Tag,
-                        x.DistanceKm
+                        x.DistanceKm,
+                        x.InterestScore
                     }),
                     new JsonSerializerOptions
                     {
@@ -528,15 +594,20 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 Mandatory rules :
                                 - Use only the places provided in "Nearby places calculated by OutZen".
                                 - Use only the distances provided in DistanceKm.
-                                - Never recalculate distances.
-                                - Never invent a distance.
-                                - Never invent a place not listed.
+                                - Never recalculate or invent a distance.
+                                - Never invent a place, attraction or event.
                                 - If no relevant place is provided, state that the available local data is insufficient.
-                                - Answer in a maximum of 5 lines.
-                                - Mention a maximum of 5 places.
+                                - Prioritize actual tourist attractions over generic cities or villages.
+                                - A city or village is geographical context, not an attraction by itself.
                                 - Do not repeat generic safety phrases.
                                 - Do not say "safer fallback zone" unless a confirmed critical alert exists.
                                 - Do not detail capacities unless the user requests it.
+                                - When at least three actual attractions are available, mention at least three.
+                                - Group attractions by their nearby locality when this is useful.
+                                - Mention a maximum of five actual attractions.
+                                - Do not use all response slots for generic cities or villages.
+                                - Do not detail capacities unless the user requests them.
+                                - Answer concisely, but provide enough information to identify the attractions.
                                 If no actual attraction or event is available:
                                 - Do not describe a city or village as an interesting activity.
                                 - State clearly that only nearby localities were found.
@@ -615,35 +686,60 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 """;
             }
 
+            groundedPrompt += """
+                            FINAL TOURISM SELECTION RULES:
+                            - These rules override any earlier generic limit of 1 to 3 alternatives.
+                            - For a general tourism request, mention 3 to 5 actual attractions when available.
+                            - Do not select only the three nearest database records.
+                            - Prioritize tourist attractions over cities and villages.
+                            - Include relevant attractions up to 25 km from the resolved origin.
+                            - Do not discuss children unless the user explicitly mentioned children or family.
+                            - Do not add safety recommendations unless a confirmed alert exists.
+                            """;
+
             string finalResponse;
 
             if (pushChunksToHub)
             {
-                finalResponse = await mistralAiService.StreamFromPromptAsync(
-                    groundedPrompt,
-                    async chunkText =>
-                    {
-                        if (string.IsNullOrWhiteSpace(chunkText))
-                            return;
+                groundedPrompt += """
 
-                        await _hubContext.SendChunk(
-                            new GptResponseChunkDto
-                            {
-                                InteractionId = interactionId,
-                                RequestId = requestId,
-                                Chunk = chunkText,
-                                IsFinal = false
-                            });
-                    },
-                    responseLanguage: responseLanguage,
-                    ct: ct).ConfigureAwait(false);
+                            FINAL RESPONSE LIMITS:
+                            - Mention at most 5 places in the entire answer.
+                            - Five places means five places total, not five places per section.
+                            - Produce one list only.
+                            - Do not create a second list for places farther away.
+                            - Prefer actual attractions over generic towns or villages.
+                            - Every numbered item must be complete.
+                            - Never stop after an unfinished word or unfinished sentence.
+                            - End with a complete final sentence.
+                            """;
+
+                finalResponse =
+                    await mistralAiService.StreamFromPromptAsync(
+                        groundedPrompt,
+                        async chunkText =>
+                        {
+                            // Preserve spaces and line breaks.
+                            // Reject only null or truly empty strings.
+                            if (string.IsNullOrEmpty(chunkText))
+                                return;
+
+                            await _hubContext.SendChunk(
+                                new GptResponseChunkDto
+                                {
+                                    InteractionId = interactionId,
+                                    RequestId = requestId,
+                                    Chunk = chunkText,
+                                    IsFinal = false
+                                });
+                        },
+                        responseLanguage: responseLanguage,
+                        ct: ct)
+                    .ConfigureAwait(false);
             }
             else
             {
-                finalResponse = await mistralAiService.GenerateFromPromptAsync(
-                    groundedPrompt: groundedPrompt,
-                    responseLanguage: responseLanguage,
-                    ct: ct).ConfigureAwait(false);
+                finalResponse = await mistralAiService.GenerateFromPromptAsync(groundedPrompt: groundedPrompt, responseLanguage: responseLanguage, ct: ct).ConfigureAwait(false);
             }
 
             _logger.LogInformation(
@@ -654,36 +750,28 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (string.IsNullOrWhiteSpace(finalResponse))
             {
-                finalResponse = responseLanguage.StartsWith(
-                    "fr",
-                    StringComparison.OrdinalIgnoreCase)
+                finalResponse = responseLanguage.StartsWith("fr", StringComparison.OrdinalIgnoreCase)
                         ? "Aucune réponse n’a été générée par Mistral."
                         : "No response from Mistral.";
             }
 
-            finalResponse = SanitizeUnsupportedSafetyClaims(
-                finalResponse,
-                hasConfirmedCriticalAlert:
+            finalResponse = SanitizeUnsupportedSafetyClaims(finalResponse, hasConfirmedCriticalAlert:
                     localContext.CriticalAlerts.Count > 0);
 
-            var updated = await gptRepository.UpdateResponseAsync(
-                interactionId,
-                finalResponse,
-                ct).ConfigureAwait(false);
+            finalResponse = FilterUnsupportedTourismItems(finalResponse, localContext, responseLanguage);
+
+            var updated = await gptRepository.UpdateResponseAsync(interactionId, finalResponse, ct).ConfigureAwait(false);
 
             if (!updated)
             {
-                throw new InvalidOperationException(
-                    $"Failed to persist final GPT response for interaction {interactionId}.");
+                throw new InvalidOperationException($"Failed to persist final GPT response for interaction {interactionId}.");
             }
 
-            var suggestionRepository =
-                scope.ServiceProvider.GetService<ISuggestionRepository>();
+            var suggestionRepository = scope.ServiceProvider.GetService<ISuggestionRepository>();
 
-            if (suggestionRepository is not null &&
-                localContext.CriticalAlerts.Count > 0)
+            if (suggestionRepository is not null && localContext.CriticalAlerts.Count > 0)
             {
-                // Création de la suggestion de sécurité.
+                // Creation of the security suggestion.
             }
 
             var persisted = await gptRepository
@@ -692,8 +780,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (persisted is null)
             {
-                throw new InvalidOperationException(
-                    $"GPT interaction {interactionId} not found after update.");
+                throw new InvalidOperationException($"GPT interaction {interactionId} not found after update.");
             }
 
             var finalDto = persisted.MapToGptInteractionDTO();
@@ -873,10 +960,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             // 50.434780,5.876832
             // (50.434780,5.876832)
             // 50,434780 ; 5,876832
-            var match = Regex.Match(
-                prompt,
-                @"(?<lat>[+-]?\d{1,2}\.\d+)\s*[,;]\s*(?<lng>[+-]?\d{1,3}\.\d+)",
-                RegexOptions.Compiled | RegexOptions.CultureInvariant);
+            var match = Regex.Match(prompt, @"(?<lat>[+-]?\d{1,2}\.\d+)\s*[,;]\s*(?<lng>[+-]?\d{1,3}\.\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
             if (!match.Success)
                 return false;
@@ -884,26 +968,129 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var latText = match.Groups["lat"].Value.Replace(',', '.');
             var lngText = match.Groups["lng"].Value.Replace(',', '.');
 
-            if (!double.TryParse(
-                    latText,
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture,
-                    out latitude))
+            if (!double.TryParse(latText, NumberStyles.Float, CultureInfo.InvariantCulture, out latitude))
             {
                 return false;
             }
 
-            if (!double.TryParse(
-                    lngText,
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture,
-                    out longitude))
+            if (!double.TryParse(lngText, NumberStyles.Float, CultureInfo.InvariantCulture, out longitude))
             {
                 return false;
             }
 
-            return latitude is >= -90 and <= 90
-                   && longitude is >= -180 and <= 180;
+            return latitude is >= -90 and <= 90 && longitude is >= -180 and <= 180;
+        }
+
+        private static string FilterUnsupportedTourismItems(string response, LocalAiContextDTO context, string responseLanguage)
+        {
+            if (string.IsNullOrWhiteSpace(response))
+                return response;
+
+            var allowedNames = context.Places
+                .Select(place => place.Name)
+                .Concat(
+                    context.Events.Select(
+                        currentEvent => currentEvent.Title))
+                .Where(name =>
+                    !string.IsNullOrWhiteSpace(name))
+                .Select(name =>
+                    NormalizeFactKey(name!))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (allowedNames.Count == 0)
+            {
+                return BuildNoLocalResultMessage(responseLanguage);
+            }
+
+            var normalizedResponse = response
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+
+            var lines = normalizedResponse
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            var result = new List<string>();
+
+            var acceptedItems = 0;
+
+            foreach (var line in lines)
+            {
+                var numberedItem = Regex.Match(line, @"^\s*\d+\.\s*(.+)$");
+
+                if (!numberedItem.Success)
+                {
+                    result.Add(line);
+                    continue;
+                }
+
+                var content = numberedItem.Groups[1].Value.Trim();
+
+                var normalizedContent = NormalizeFactKey(content);
+
+                var supported = allowedNames.Any(allowedName =>
+                    normalizedContent.Contains(allowedName, StringComparison.OrdinalIgnoreCase));
+
+                if (!supported)
+                    continue;
+
+                acceptedItems++;
+
+                result.Add($"{acceptedItems}. {content}");
+            }
+
+            if (acceptedItems == 0)
+            {
+                return BuildNoLocalResultMessage(
+                    responseLanguage);
+            }
+
+            return string.Join(Environment.NewLine, result);
+        }
+
+        private static string NormalizeFactKey(string value)
+        {
+            var decomposed = value.Normalize(NormalizationForm.FormD);
+
+            var builder = new StringBuilder(decomposed.Length);
+
+            foreach (var character in decomposed)
+            {
+                var category = CharUnicodeInfo.GetUnicodeCategory(character);
+
+                if (category != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(char.ToLowerInvariant(character));
+                }
+            }
+
+            return Regex.Replace(builder.ToString(), @"[^\p{L}\p{N}]+", " ").Trim();
+        }
+
+        private static string BuildNoLocalResultMessage(string responseLanguage)
+        {
+            if (responseLanguage.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+                    В локальных данных OutZen недостаточно
+                    проверенной информации, чтобы предложить
+                    достопримечательности для этого места.
+                    """;
+            }
+
+            if (responseLanguage.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+                    OutZen does not have enough verified local data
+                    to recommend attractions for this location.
+                    """;
+            }
+
+            return """
+                Les données locales vérifiées d’OutZen
+                sont insuffisantes pour proposer des attractions
+                autour de cette localité.
+                """;
         }
         private async Task MarkFailedSafeAsync(int interactionId, string? errorMessage)
         {
@@ -1133,10 +1320,114 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return score;
         }
 
-        private async Task MarkCancelledSafeAsync(
-    int interactionId,
-    string? message,
-    CancellationToken ct = default)
+        private static int GetTouristicInterestScore(Place place)
+        {
+            ArgumentNullException.ThrowIfNull(place);
+
+            var searchableText = string.Join(
+                ' ',
+                place.Name ?? string.Empty,
+                place.Type ?? string.Empty,
+                place.Tag ?? string.Empty);
+
+            if (searchableText.Contains(
+                    "tourist",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return 100;
+            }
+
+            if (searchableText.Contains(
+                    "mémorial",
+                    StringComparison.OrdinalIgnoreCase) ||
+                searchableText.Contains(
+                    "memorial",
+                    StringComparison.OrdinalIgnoreCase) ||
+                searchableText.Contains(
+                    "monument",
+                    StringComparison.OrdinalIgnoreCase) ||
+                searchableText.Contains(
+                    "château",
+                    StringComparison.OrdinalIgnoreCase) ||
+                searchableText.Contains(
+                    "chateau",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return 90;
+            }
+
+            if (searchableText.Contains(
+                    "parc",
+                    StringComparison.OrdinalIgnoreCase) ||
+                searchableText.Contains(
+                    "museum",
+                    StringComparison.OrdinalIgnoreCase) ||
+                searchableText.Contains(
+                    "musée",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return 80;
+            }
+
+            if (IsLocalityType(place.Type))
+                return 20;
+
+            return 50;
+        }
+
+        private static string ResolveResponseLanguage(string prompt, string? requestedLanguage)
+        {
+            if (!string.IsNullOrWhiteSpace(prompt))
+            {
+                // Cyrillic alphabet.
+                if (Regex.IsMatch(prompt, @"[\u0400-\u04FF]"))
+                {
+                    return "ru-RU";
+                }
+
+                // Chinese characters.
+                if (Regex.IsMatch(prompt, @"[\u4E00-\u9FFF]"))
+                {
+                    return "zh-CN";
+                }
+
+                // Arabic alphabet.
+                if (Regex.IsMatch(prompt, @"[\u0600-\u06FF]"))
+                {
+                    return "ar";
+                }
+            }
+
+            return string.IsNullOrWhiteSpace(requestedLanguage) ? "fr-FR" : requestedLanguage.Trim();
+        }
+
+        private static string NormalizeMultilingualPromptForContext(string prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+                return string.Empty;
+
+            var result = prompt.Trim();
+
+            const RegexOptions options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+
+            // Russian versions of bouillon.
+            result = Regex.Replace(result, @"\b(Буйон|Буйона|Буйоне|Буйоном|Бульон|Бульона)\b", "Bouillon", options);
+            // Geographical expressions.
+            result = Regex.Replace(result, @"\bв\s+окрестностях\b", "autour de", options);
+            result = Regex.Replace(result, @"\bрядом\s+с\b", "près de", options);
+            // Temporal expressions.
+            result = Regex.Replace(result, @"\bсегодня\b", "aujourd'hui", options);
+            result = Regex.Replace(result, @"\bзавтра\b", "demain",options);
+            result = Regex.Replace(result, @"\b(в\s+эти\s+выходные|на\s+выходных)\b", "ce week-end", options);
+            result = Regex.Replace(result, @"\b(на\s+этой\s+неделе|на\s+неделе)\b", "cette semaine", options);
+            // Tourist intentions.
+            result = Regex.Replace(result, @"что\s+интересного\s+(есть|можно\s+увидеть)?", "quoi faire", options);
+            result = Regex.Replace(result, @"что\s+посмотреть", "quoi faire", options);
+            result = Regex.Replace(result, @"куда\s+сходить", "quoi faire", options);
+
+            return Regex.Replace(result, @"\s+", " ").Trim();
+        }
+        private async Task MarkCancelledSafeAsync(int interactionId, string? message, CancellationToken ct = default)
         {
             try
             {

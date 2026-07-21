@@ -19,6 +19,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using Volo.Abp.Domain.Repositories;
 using ManualCrowdCriticalAlertRequestContract = CitizenHackathon2025.Contracts.DTOs.ManualCrowdCriticalAlertRequest;
 
 namespace CitizenHackathon2025.Infrastructure.Services
@@ -29,19 +30,17 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly ICrowdInfoRepository _crowdInfoRepository;
         private readonly ICriticalAlertQuorumService _criticalAlertQuorumService;
         private readonly IPlaceRepository _placeRepository;
-        private readonly ICrowdAlertVoteRepository _crowdAlertVoteRepository;
         private readonly CriticalAlertRules _rules;
         private readonly HttpClient _http;
         private readonly IHubContext<CrowdHub> _crowdHubContext;
         private readonly ICrowdSnapshotRepository _crowdSnapshotRepository;
         private readonly ILogger<CrowdInfoService> _logger;
 
-        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, ICriticalAlertQuorumService criticalAlertQuorumService, IPlaceRepository placeRepository, ICrowdAlertVoteRepository crowdAlertVoteRepository, IOptions<CriticalAlertRules> options, HttpClient http, IHubContext<CrowdHub> crowdHubContext, ICrowdSnapshotRepository crowdSnapshotRepository, ILogger<CrowdInfoService> logger)
+        public CrowdInfoService(ICrowdInfoRepository crowdInfoRepository, ICriticalAlertQuorumService criticalAlertQuorumService, IPlaceRepository placeRepository, IOptions<CriticalAlertRules> options, HttpClient http, IHubContext<CrowdHub> crowdHubContext, ICrowdSnapshotRepository crowdSnapshotRepository, ILogger<CrowdInfoService> logger)
         {
             _crowdInfoRepository = crowdInfoRepository;
             _criticalAlertQuorumService = criticalAlertQuorumService;
             _placeRepository = placeRepository;
-            _crowdAlertVoteRepository = crowdAlertVoteRepository;
             _rules = options.Value;
             _http = http;
             _crowdHubContext = crowdHubContext;
@@ -172,6 +171,25 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     };
                 }
 
+                //var existingAlert = await _repository.GetActiveCriticalAlertByZoneAsync(quorum.ZoneKey, ct);
+
+                //if (existingAlert is not null)
+                //{
+                //    return new ManualCriticalAlertResultDTO
+                //    {
+                //        Ok = true,
+                //        Status = "Confirmed",
+                //        ConfirmationCount =
+                //            quorum.ConfirmationCount,
+                //        RequiredCount =
+                //            quorum.RequiredCount,
+                //        CrowdInfoId =
+                //            existingAlert.Id,
+                //        ExpiresAtUtc =
+                //            existingAlert.ExpiresAtUtc
+                //    };
+                //}
+
                 var alert = await _crowdInfoRepository.CreateManualCriticalAlertAsync(
                     request.PlaceId,
                     request.Reason,
@@ -241,21 +259,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
             throw new NotImplementedException();
         }
 
-        private static string BuildZoneKey(decimal latitude, decimal longitude)
-        {
-            var latBucket = Math.Round(latitude, 3);
-            var lngBucket = Math.Round(longitude, 3);
-
-            return $"{latBucket:0.000}:{lngBucket:0.000}";
-        }
-
-        private static string HashText(string value)
-        {
-            var bytes = SHA256.HashData(
-                Encoding.UTF8.GetBytes(value.Trim()));
-
-            return Convert.ToHexString(bytes);
-        }
     }
 }
 

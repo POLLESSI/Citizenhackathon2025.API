@@ -69,7 +69,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return;
             }
 
-            _requests.TryRemove(interactionId, out _);
+            if (_requests.TryRemove(interactionId, out var removedRequest))
+            {
+                removedRequest.CancellationTokenSource.Dispose();
+            }
         }
     }
 }

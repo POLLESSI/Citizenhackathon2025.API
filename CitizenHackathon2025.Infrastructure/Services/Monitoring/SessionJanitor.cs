@@ -1,5 +1,4 @@
-﻿#nullable enable
-using CitizenHackathon2025.Domain.Interfaces;
+﻿using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.NoSql.Mongo.Abstractions;
 using Microsoft.Extensions.DependencyInjection; // ✅ for CreateScope
 using Microsoft.Extensions.Hosting;
@@ -11,6 +10,7 @@ namespace CitizenHackathon2025.Infrastructure.Services.Monitoring
 {
     public class SessionJanitor : BackgroundService
     {
+    #nullable enable
         private readonly ILogger<SessionJanitor> _log;
         private readonly IServiceScopeFactory _scopeFactory;   // ✅ instead of injecting the repo
         private readonly TimeSpan _interval = TimeSpan.FromMinutes(10);

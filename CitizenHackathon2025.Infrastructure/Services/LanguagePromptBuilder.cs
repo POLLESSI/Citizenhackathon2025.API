@@ -6,43 +6,74 @@ namespace CitizenHackathon2025.Infrastructure.Services
     {
         public string BuildLanguageInstruction(string responseLanguage)
         {
-            var lang = string.IsNullOrWhiteSpace(responseLanguage)
-                ? "fr-FR"
-                : responseLanguage.Trim();
+            var lang = string.IsNullOrWhiteSpace(responseLanguage) ? "fr-FR" : responseLanguage.Trim();
+
+            if (lang.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+                    Отвечай только на русском языке.
+                    Не переходи на французский или английский язык.
+                    Названия мест и мероприятий копируй точно
+                    из предоставленного контекста.
+                    Не переводи и не выдумывай названия мест.
+                    Используй только расстояния,
+                    явно указанные в контексте.
+                    """;
+            }
+
+            if (lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+                    أجب باللغة العربية فقط.
+                    لا تنتقل إلى الفرنسية أو الإنجليزية.
+                    استخدم فقط الأماكن والمسافات الموجودة
+                    صراحةً في السياق المقدم.
+                    لا تخترع أماكن أو مسافات.
+                    """;
+            }
 
             return lang switch
             {
                 "fr-FR" => "Réponds en français.",
+
                 "fr-BE" => "Réponds en français belge.",
+
                 "en-US" or "en-GB" => "Answer in English.",
-                "nl-NL" => "Antwoord in het Nederlands.",
-                "de-DE" => "Antworte auf Deutsch.",
+
+                "nl-NL" or "nl-BE" => "Antwoord in het Nederlands.",
+
+                "de-DE" or "de-BE" => "Antworte auf Deutsch.",
+
                 "it-IT" => "Rispondi in italiano.",
+
                 "es-ES" => "Responde en español.",
-                "ru-RU" => "Отвечай на русском языке.",
+
                 "zh-CN" => "请用中文回答。",
+
                 "ja-JP" => "日本語で答えてください。",
 
                 "wa-central" => """
-                        Réponds en mode wallon central expérimental.
+                    Responds en mode wallon central experimental em fî.
 
-                        IMPORTANT :
-                        - Les titres doivent être en français.
-                        - N'écris pas "Central Walloon".
-                        - N'écris pas "French clarification".
-                        - Utilise exactement ce format :
+                    IMPORTANT :
+                    - Titles must be in French.
+                    - Do not write "Central Walloon".
+                    - Do not write "French clarification".
+                    - Use exactly this format :
 
-                        1) Wallon central simple :
-                        [phrase courte, prudente, compréhensible, avec seulement quelques mots wallons sûrs]
+                    1) Simple Central Walloon :
+                    [short, cautious, understandable phrase,
+                    with only a few certain Walloon words]
+                    2) French Clarification :
+                    [clear reformulation in standard French]
 
-                        2) Clarification française :
-                        [reformulation claire en français standard]
+                    If you are not sure about Walloon,
+                    write mainly in French.
+                    Never invent Walloon vocabulary.
+                    """,
 
-                        Si tu n'es pas sûr du wallon, écris surtout en français.
-                        N'invente jamais de vocabulaire wallon.
-                        """,
-
-                _ => "Answer in French."
+                _ =>
+                    "Answer in French."
             };
         }
     }

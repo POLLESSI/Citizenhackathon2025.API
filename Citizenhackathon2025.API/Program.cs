@@ -291,7 +291,31 @@ internal class Program
         services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(configuration.GetSection("CrowdAdvisory"));
         services.Configure<DeviceHasherOptions>(configuration.GetSection("DeviceHasher"));
         services.Configure<PipelineOptions>(configuration.GetSection("Pipelines"));
-        services.Configure<CriticalAlertRules>(configuration.GetSection("CriticalAlertRules"));
+        services
+            .AddOptions<CriticalAlertRules>()
+            .Bind(
+                configuration.GetSection(
+                    "CriticalAlertRules"))
+
+            .Validate(
+                rules =>
+                    rules.RequiredDistinctReports >= 4,
+                "CriticalAlertRules:" +
+                "RequiredDistinctReports must be at least 4.")
+
+            .Validate(
+                rules =>
+                    rules.WindowMinutes is >= 1 and <= 30,
+                "CriticalAlertRules:" +
+                "WindowMinutes must be between 1 and 30.")
+
+            .Validate(
+                rules =>
+                    rules.AlertDurationMinutes is >= 1 and <= 60,
+                "CriticalAlertRules:" +
+                "AlertDurationMinutes must be between 1 and 60.")
+
+            .ValidateOnStart();
 
         services.ConfigureHttpJsonOptions(options =>
         {
@@ -745,17 +769,38 @@ internal class Program
         services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
         {
             var configuration = sp.GetRequiredService<IConfiguration>();
+
+            var logger =sp.GetRequiredService<ILogger<MistralAIService>>();
+
             var baseUrl = configuration["MistralAI:ApiBaseUrl"] ?? "http://127.0.0.1:11434/";
 
-            client.BaseAddress = new Uri(baseUrl);
+            var generationTimeout = configuration.GetValue<int?>("MistralAI:GenerationTimeoutSeconds") ?? 900;
 
-            // Optional but recommended to avoid infinite pending requests.
-            var timeoutSeconds = configuration.GetValue<int?>("MistralAI:TimeoutSeconds") ?? 180;
-            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+
+            // Polly is the sole owner of the timeout.
+            client.Timeout = Timeout.InfiniteTimeSpan;
+
+            logger.LogWarning(
+                "[MISTRAL HTTP CONFIG] BaseAddress={BaseAddress}; " +
+                "HttpClientTimeout={HttpClientTimeout}; " +
+                "PollyGenerationTimeoutSeconds={GenerationTimeoutSeconds}",
+                client.BaseAddress,
+                client.Timeout,
+                generationTimeout);
+
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
+
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         })
         .AddHttpMessageHandler(sp =>
         {
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
+
+            var logger = sp.GetRequiredService<ILogger<MistralAIService>>();
+
+            logger.LogCritical("[MISTRAL HANDLER ACTIVE] Using pipelines.Ollama.");
+
             return new ResilienceHandler(pipelines.Ollama);
         });
 
@@ -862,25 +907,32 @@ internal class Program
             client.DefaultRequestHeaders.Add("User-Agent", "CitizenHackathon2025");
         });
 
-        services.AddHttpClient<IGptExternalService, CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.OpenAIGptExternalService>((sp, client) =>
+        services.AddHttpClient<IGptExternalService,CitizenHackathon2025.Infrastructure.ExternalAPIs.OpenAI.OpenAIGptExternalService>((sp, client) =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
+
             var openAiKey = cfg["OpenAI:ApiKey"];
 
             client.BaseAddress = new Uri(cfg["OpenAI:BaseUrl"] ?? "https://api.openai.com");
 
             if (!string.IsNullOrWhiteSpace(openAiKey))
             {
-                client.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", openAiKey);
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue( "Bearer", openAiKey);
             }
 
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "CitizenHackathon2025/1.0");
         })
         .AddHttpMessageHandler(sp =>
         {
             var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-            return new ResilienceHandler(pipelines.Ollama);
+
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("OpenAIHttpClient");
+
+            logger.LogCritical("[OPENAI HANDLER ACTIVE] Using pipelines.OpenAi.");
+
+            // ✅ OpenAI uses its own policy.
+            return new ResilienceHandler(pipelines.OpenAi);
         });
 
         services.AddHttpClient<IOpenWeatherService, OpenWeatherService>();

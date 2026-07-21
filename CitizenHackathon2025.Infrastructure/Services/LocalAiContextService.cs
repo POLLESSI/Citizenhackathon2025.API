@@ -17,11 +17,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly ILocalAiDataRepository _localAiRepo;
         private readonly ILogger<LocalAiContextService> _logger;
 
+        private readonly record struct LocalAiDateRange(
+            DateTime From,
+            DateTime ToExclusive)
+        {
+            public bool IsSingleDay =>
+                ToExclusive == From.AddDays(1);
+
+            public DateTime LastIncludedDate =>
+                ToExclusive.AddDays(-1);
+        }
+
+
         private static readonly LocalAiContextLimits Limits = new();
 
-        public LocalAiContextService(
-            ILocalAiDataRepository localAiRepo,
-            ILogger<LocalAiContextService> logger)
+        public LocalAiContextService(ILocalAiDataRepository localAiRepo, ILogger<LocalAiContextService> logger)
         {
             _localAiRepo = localAiRepo ?? throw new ArgumentNullException(nameof(localAiRepo));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -29,6 +39,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<LocalAiContextDTO> BuildContextAsync(string prompt, double? latitude, double? longitude, CancellationToken ct = default)
         {
+            _logger.LogWarning(
+                "[LOCAL AI LIMITS] RadiusKm={RadiusKm}; MaxPlaces={MaxPlaces}; " +
+                "MaxEvents={MaxEvents}; MaxWeather={MaxWeather}",
+                Limits.RadiusKm,
+                Limits.MaxPlaces,
+                Limits.MaxEvents,
+                Limits.MaxWeather);
             var safePrompt = prompt?.Trim() ?? string.Empty;
             var hasChildren =
                 safePrompt.Contains("enfant", StringComparison.OrdinalIgnoreCase) ||
@@ -41,25 +58,52 @@ namespace CitizenHackathon2025.Infrastructure.Services
             string? locationLabel = null;
             var keywordPlaces = await _localAiRepo.SearchPlacesByKeywordsAsync(safePrompt, limit: 10, ct);
             var radiusKm = NormalizeRadiusKm(Limits.RadiusKm);
-            var targetDate = ResolveTargetDate(safePrompt);
+            var targetDateRange = ResolveTargetDateRange(safePrompt);
+            var dateFrom = targetDateRange.From;
+            var dateToExclusive = targetDateRange.ToExclusive;
             var intent = ResolveIntent(safePrompt);
+            var hasResolvedCoordinates = latitude.HasValue && longitude.HasValue;
             var requestedPlace = keywordPlaces.FirstOrDefault();
 
-            if (requestedPlace is not null)
+            if (!hasResolvedCoordinates && requestedPlace is { } resolvedPlace)
             {
-                lat = requestedPlace.Latitude ?? lat;
-                lng = requestedPlace.Longitude ?? lng;
+                lat = resolvedPlace.Latitude ?? lat;
+                lng = resolvedPlace.Longitude ?? lng;
+                locationLabel = resolvedPlace.Name;
+            }
+            else if (hasResolvedCoordinates)
+            {
+                _logger.LogInformation(
+                    "[LOCAL AI GEO] Keeping coordinates resolved " +
+                    "by the orchestrator. Lat={Lat}; Lng={Lng}",
+                    lat,
+                    lng);
+            }
 
-                locationLabel = requestedPlace.Name;
+            foreach (var keywordPlace in keywordPlaces)
+            {
+                if (!keywordPlace.Latitude.HasValue || !keywordPlace.Longitude.HasValue)
+                {
+                    keywordPlace.DistanceKm = null;
+                    continue;
+                }
+
+                keywordPlace.DistanceKm = HaversineKm(lat, lng, keywordPlace.Latitude.Value, keywordPlace.Longitude.Value);
             }
 
             _logger.LogInformation(
-                "Building local AI context. PromptLength={PromptLength}, Lat={Lat}, Lng={Lng}, RadiusKm={RadiusKm}, TargetDate={TargetDate:yyyy-MM-dd}, Intent={@Intent}",
+                "Building local AI context. " +
+                "PromptLength={PromptLength}, " +
+                "Lat={Lat}, Lng={Lng}, RadiusKm={RadiusKm}, " +
+                "DateFrom={DateFrom:yyyy-MM-dd}, " +
+                "DateToExclusive={DateToExclusive:yyyy-MM-dd}, " +
+                "Intent={@Intent}",
                 safePrompt.Length,
                 lat,
                 lng,
                 radiusKm,
-                targetDate,
+                dateFrom,
+                dateToExclusive,
                 intent);
 
             Task<IEnumerable<LocalAiPlaceContextDTO>> placesTask = intent.NeedPlaces
@@ -67,27 +111,25 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 : Task.FromResult(Enumerable.Empty<LocalAiPlaceContextDTO>());
 
             Task<IEnumerable<LocalAiEventContextDTO>> eventsTask = intent.NeedEvents
-                ? _localAiRepo.GetNearbyEventsAsync(lat, lng, targetDate, radiusKm, ct)
+                ? _localAiRepo.GetNearbyEventsAsync(lat, lng, dateFrom, dateToExclusive, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiEventContextDTO>());
 
             Task<IEnumerable<LocalAiCrowdCalendarContextDTO>> crowdCalendarTask = intent.NeedCrowdCalendar
-                ? _localAiRepo.GetNearbyCrowdCalendarAsync(lat, lng, targetDate, radiusKm, ct)
+                ? _localAiRepo.GetNearbyCrowdCalendarAsync(lat, lng, dateFrom, dateToExclusive, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiCrowdCalendarContextDTO>());
 
             Task<IEnumerable<LocalAiCrowdInfoContextDTO>> crowdInfoTask = intent.NeedCrowdInfo
-                ? _localAiRepo.GetNearbyCrowdInfoAsync(lat, lng, targetDate, radiusKm, ct)
+                ? _localAiRepo.GetNearbyCrowdInfoAsync(lat, lng, dateFrom, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiCrowdInfoContextDTO>());
 
-            Task<IEnumerable<LocalAiTrafficContextDTO>> trafficTask = intent.NeedTraffic
-                ? _localAiRepo.GetNearbyTrafficAsync(lat, lng, targetDate, radiusKm, ct)
+            Task<IEnumerable<LocalAiTrafficContextDTO>> trafficTask = intent.NeedTraffic ? _localAiRepo.GetNearbyTrafficAsync(lat, lng, dateFrom, dateToExclusive, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiTrafficContextDTO>());
 
-            Task<IEnumerable<LocalAiWeatherContextDTO>> weatherTask = intent.NeedWeather
-                ? _localAiRepo.GetNearbyWeatherAsync(lat, lng, targetDate, radiusKm, ct)
+            Task<IEnumerable<LocalAiWeatherContextDTO>> weatherTask = intent.NeedWeather ? _localAiRepo.GetNearbyWeatherAsync(lat, lng, dateFrom, dateToExclusive, radiusKm, ct)
                 : Task.FromResult(Enumerable.Empty<LocalAiWeatherContextDTO>());
 
             Task<IEnumerable<LocalAiCriticalAlertContextDTO>> criticalAlertsTask =
-                 _localAiRepo.GetNearbyCriticalAlertsAsync(lat, lng, radiusKm, ct);
+                _localAiRepo.GetNearbyCriticalAlertsAsync(lat, lng, radiusKm, ct);
 
             await Task.WhenAll(
                 placesTask,
@@ -105,6 +147,23 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .ThenBy(x => x.EventDate ?? DateTime.MaxValue)
                 .Take(Limits.MaxEvents)
                 .ToList();
+
+            _logger.LogWarning("[LOCAL AI EVENTS] " + "DateFrom={DateFrom:yyyy-MM-dd}; " + "DateToExclusive={DateToExclusive:yyyy-MM-dd}; " + "Count={Count}", dateFrom, dateToExclusive, events.Count);
+
+            foreach (var currentEvent in events)
+            {
+                _logger.LogWarning(
+                    "[LOCAL AI EVENT] " +
+                    "Id={Id}; Title={Title}; City={City}; " +
+                    "Date={Date}; DistanceKm={DistanceKm}; " +
+                    "MaxCapacity={MaxCapacity}",
+                    currentEvent.Id,
+                    currentEvent.Title,
+                    currentEvent.City,
+                    currentEvent.EventDate,
+                    currentEvent.DistanceKm,
+                    currentEvent.MaxCapacity);
+            }
 
             var crowdCalendar = (await crowdCalendarTask.ConfigureAwait(false))
                 .Where(IsCrowdCalendarRelevant)
@@ -159,9 +218,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .GroupBy(p => p.Id)
                 .Select(g => g.First());
 
-            var places = DeduplicateNearbyPlaces(
-                    mergedPlaces,
-                    duplicateRadiusKm: 0.1)
+            var places = DeduplicateNearbyPlaces(mergedPlaces, duplicateRadiusKm: 0.1)
                 .OrderBy(p => p.DistanceKm ?? double.MaxValue)
                 .ThenBy(p => p.Name)
                 .Take(Limits.MaxPlaces)
@@ -201,7 +258,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 UserPrompt = safePrompt,
                 Latitude = lat,
                 Longitude = lng,
-                TargetDate = targetDate,
+                // Compatibility with the old code :
+                TargetDate = dateFrom,
+                TargetDateFrom = dateFrom,
+                TargetDateToExclusive = dateToExclusive,
                 Places = places,
                 Events = events,
                 CrowdCalendar = crowdCalendar,
@@ -221,6 +281,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             ArgumentNullException.ThrowIfNull(context);
 
+            var prioritizeCurrentEvents = context.Events.Count > 0 && HasDateSensitiveIntent(context.UserPrompt);
+
             var sb = new StringBuilder(4096);
 
             sb.AppendLine("You are OutZen local assistant.");
@@ -232,38 +294,56 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine();
 
             sb.AppendLine("Priority rules:");
-            sb.AppendLine("1. Prioritize real nearby places from the places dataset.");
-            sb.AppendLine("2. Then use real nearby events if available.");
-            sb.AppendLine("3. Mention planned or observed crowd only if it helps the user choose where or when to go.");
-            sb.AppendLine("4. Mention traffic only if it materially affects access or comfort.");
-            sb.AppendLine("5. Mention weather only if it has a significant practical impact on the outing.");
-            sb.AppendLine("6. Weather is never a point of interest by itself.");
-            sb.AppendLine("7. Never present a raw weather observation as something interesting to see or do.");
-            sb.AppendLine("8. If no real nearby place or event is available, say it clearly.");
-            sb.AppendLine("9. If data is missing, say it clearly.");
+
+            if (prioritizeCurrentEvents)
+            {
+                sb.AppendLine("- Current-date events remain the first priority.");
+                sb.AppendLine("- Use explicitly matched places to locate those events and nearby attractions.");
+            }
+            else
+            {
+                sb.AppendLine("- If the user mentions a place by name, rely on the explicitly matched places.");
+            }
+            sb.AppendLine("5. Use towns and villages only as geographical context.");
+            sb.AppendLine("6. Never invent missing information.");
+
             sb.AppendLine();
 
             sb.AppendLine("Critical safety rules:");
-            sb.AppendLine("1. If a destination is affected by a confirmed Crowd, Weather, Traffic, or Disaster alert, do not recommend it.");
-            sb.AppendLine("2. Propose safer alternatives outside the affected zone.");
-            sb.AppendLine("3. Safety has priority over distance.");
-            sb.AppendLine("4. Alternatives may be up to 20-25 km away, including outside Wallonia if safer.");
-            sb.AppendLine("5. Do not route users toward an alert zone.");
-            sb.AppendLine("6. Never increase crowd concentration near a critical alert.");
-            sb.AppendLine("7. Clearly explain why the original destination is not recommended.");
+            
             sb.AppendLine();
 
             sb.AppendLine("Response style:");
-            sb.AppendLine("- start with the most relevant real nearby place if one exists");
-            sb.AppendLine("- if no place is available, use the most relevant real nearby event");
-            sb.AppendLine("- if none exists, explicitly say that no precise nearby place or event was found in the available data");
-            sb.AppendLine("- add crowd, traffic, or weather only as practical context");
-            sb.AppendLine("- do not turn temperature, rain, wind, or weather measurements into attractions");
-            sb.AppendLine("- if there are several relevant nearby items, mention the closest or most useful ones first");
+
+            if (prioritizeCurrentEvents)
+            {
+                sb.AppendLine("- start with relevant events occurring within the requested date range");
+                sb.AppendLine("- clearly state its name, locality, date and supplied distance");
+                sb.AppendLine("- then add the most relevant permanent attractions");
+                sb.AppendLine("- an event located at distance 0 km must not be omitted");
+            }
+            else
+            {
+                sb.AppendLine("- start with the most relevant concrete attraction");
+                sb.AppendLine("- include relevant nearby events when available");
+            }
+
+            sb.AppendLine("- use generic towns only to locate attractions or events");
+            sb.AppendLine("- keep the answer concise and factual");
+
             sb.AppendLine();
 
             sb.AppendLine($"Question: {context.UserPrompt}");
-            sb.AppendLine($"Date: {context.TargetDate:yyyy-MM-dd}");
+            if (context.TargetDateToExclusive == context.TargetDateFrom.AddDays(1))
+            {
+                sb.AppendLine($"Requested date: " + $"{context.TargetDateFrom:yyyy-MM-dd}");
+            }
+            else
+            {
+                var lastIncludedDate = context.TargetDateToExclusive.AddDays(-1);
+
+                sb.AppendLine($"Requested date range: " + $"{context.TargetDateFrom:yyyy-MM-dd} " + $"through {lastIncludedDate:yyyy-MM-dd} inclusive.");
+            }
             sb.AppendLine($"Coordinates: {context.Latitude:F6}, {context.Longitude:F6}");
             sb.AppendLine();
 
@@ -277,8 +357,17 @@ namespace CitizenHackathon2025.Infrastructure.Services
             AppendUserSafetyConstraints(sb, context);
 
             sb.AppendLine("Final reminder:");
-            sb.AppendLine("- real places first");
-            sb.AppendLine("- real events second");
+            if (prioritizeCurrentEvents)
+            {
+                sb.AppendLine("- current-date events first");
+                sb.AppendLine("- permanent attractions second");
+            }
+            else
+            {
+                sb.AppendLine("- concrete attractions first");
+                sb.AppendLine("- relevant events second");
+            }
+
             sb.AppendLine("- practical constraints third");
             sb.AppendLine("- no invention");
             sb.AppendLine("- no weather-as-attraction");
@@ -303,28 +392,49 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("6. If children are present, avoid unsafe, isolated, overcrowded, road-exposed, or disaster-adjacent places.");
             sb.AppendLine("7. Never increase crowd concentration near a critical alert zone.");
             sb.AppendLine("8. Clearly explain why the original destination is not recommended.");
+            sb.AppendLine("9. Do not route users toward an alert zone.");
             sb.AppendLine();
 
-            sb.AppendLine("Child-safety factuality rules:");
-            sb.AppendLine("- Do not say a place is supervised unless the context explicitly says supervised=true or the type/tag proves it.");
-            sb.AppendLine("- Do not say a place is calm unless the context explicitly says calm, quiet, low crowd, or low risk.");
-            sb.AppendLine("- If the context only says city/village, describe it as a safer fallback area, not as a supervised child-friendly place.");
-            sb.AppendLine("- Prefer wording like: 'zone de repli plus sûre selon les données disponibles'.");
-            sb.AppendLine();
+            var hasConfirmedAlert = context.CriticalAlerts is not null && context.CriticalAlerts.Count > 0;
 
-            sb.AppendLine("Factuality rules for alternatives:");
-            sb.AppendLine("- Do not claim that a place is indoor unless the context explicitly says indoor=true or type/tag indicates an indoor venue.");
-            sb.AppendLine("- Do not claim that a place is child-friendly unless the context explicitly says child-friendly, family, enfant, famille, playground, museum, indoor, supervised, or similar.");
-            sb.AppendLine("- If the context only says city/village, say it is a nearby fallback area, not a guaranteed child-friendly attraction.");
-            sb.AppendLine("- Never invent attractions, parks, museums, castles, indoor facilities, restaurants, or distances.");
-            sb.AppendLine();
+            if (hasConfirmedAlert)
+            {
+                sb.AppendLine("Confirmed safety-alert rules:");
+                sb.AppendLine("- Explain the confirmed alert using only supplied facts.");
+                sb.AppendLine("- Do not recommend a place situated inside the affected area.");
+                sb.AppendLine("- Prefer relevant alternatives outside the affected area.");
+                sb.AppendLine();
+            }
 
-            sb.AppendLine("Answer format:");
-            sb.AppendLine("1. Start with a short safety warning if the requested destination is affected by an alert.");
-            sb.AppendLine("2. Recommend 1 to 3 alternatives only from Safe candidate alternatives.");
-            sb.AppendLine("3. For each alternative, give distance and only facts explicitly present in the context.");
-            sb.AppendLine("4. If indoor or child-friendly is unknown, say it is a safer nearby fallback area, not a guaranteed indoor/child-friendly activity.");
-            sb.AppendLine("5. Do not mention attractions that are not present in the context.");
+            if (context.HasChildren)
+            {
+                sb.AppendLine("Child-related factuality rules:");
+                sb.AppendLine("- Do not say a place is supervised unless the context proves it.");
+                sb.AppendLine("- Do not say a place is child-friendly unless its type or tag proves it.");
+                sb.AppendLine("- If suitability for children is unknown, state it briefly.");
+                sb.AppendLine("- Do not add a long generic warning about children.");
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("Tourism answer format:");
+
+            if (prioritizeCurrentEvents)
+            {
+                sb.AppendLine("- Mention every relevant current-date event first.");
+                sb.AppendLine("- Then add the most useful permanent attractions.");
+                sb.AppendLine("- Recommend 3 to 5 items in total, including events.");
+                sb.AppendLine("- An event occurring at the requested location during the requested period must be item 1.");
+            }
+            else
+            {
+                sb.AppendLine("- Recommend 3 to 5 actual attractions when available.");
+                sb.AppendLine("- Include relevant real events when useful.");
+            }
+
+            sb.AppendLine("- Prefer concrete attractions over generic cities or villages.");
+            sb.AppendLine("- Use cities and villages only to locate events or attractions.");
+            sb.AppendLine("- Mention the exact supplied distance for every item.");
+            sb.AppendLine("- Do not invent opening hours, facilities or attractions.");
             sb.AppendLine();
 
             sb.AppendLine("Places explicitly matched from user request:");
@@ -348,6 +458,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("- Do not require the user to provide coordinates.");
             sb.AppendLine("- Do not invent coordinates, attractions, indoor status, child-friendly status, or distances.");
             sb.AppendLine("- If several places match the keyword, mention the most relevant matches and ask the user to clarify only if necessary.");
+            sb.AppendLine("- If the user mentions a place by name, first rely on 'Places explicitly matched from user request'.");
+
             sb.AppendLine();
 
             return sb.ToString();
@@ -361,27 +473,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         private static double NormalizeRadiusKm(double radiusKm)
             => radiusKm > 0d ? radiusKm : 25d;
-
-        //private static LocalAiPlaceContextDTO MapPlaceToLocalAiPlaceContext(Place p)
-        //{
-        //    return new LocalAiPlaceContextDTO
-        //    {
-        //        Id = p.Id,
-        //        Name = p.Name?.Trim() ?? string.Empty,
-        //        Type = p.Type,
-        //        Indoor = p.Indoor,
-        //        Latitude = (double?)p.Latitude,
-        //        Longitude = (double?)p.Longitude,
-        //        Capacity = p.Capacity,
-        //        Tag = p.Tag,
-        //        ExternalSource = p.ExternalSource,
-        //        ExternalId = p.ExternalId,
-        //        SourceUpdatedAtUtc = p.SourceUpdatedAtUtc,
-        //        Active = true,
-        //        DistanceKm = null
-        //    };
-        //}
-
         private static bool IsPlaceRelevant(LocalAiPlaceContextDTO p)
         {
             if (p is null) return false;
@@ -473,6 +564,26 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             return false;
+        }
+
+        private static bool HasDateSensitiveIntent(string? prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+                return false;
+
+            var normalized =
+                prompt.ToLowerInvariant();
+
+            return
+                normalized.Contains("aujourd") ||
+                normalized.Contains("demain") ||
+                normalized.Contains("cette semaine") ||
+                normalized.Contains("dans la semaine") ||
+                normalized.Contains("ce weekend") ||
+                normalized.Contains("ce week-end") ||
+                normalized.Contains("ce samedi") ||
+                normalized.Contains("ce dimanche") ||
+                normalized.Contains("ce soir");
         }
 
         private static double HaversineKm(double lat1, double lon1, double lat2, double lon2)
@@ -652,19 +763,30 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return;
             }
 
-            sb.AppendLine("Safe candidate alternatives:");
-            sb.AppendLine("Only recommend places from this list.");
+            var hasConfirmedAlert = context.CriticalAlerts is not null && context.CriticalAlerts.Count > 0;
 
-            foreach (var p in context.Places)
+            sb.AppendLine(hasConfirmedAlert ? "Backend-approved alternatives outside confirmed alert areas:" : "Nearby candidate places:");
+
+            foreach (var place in context.Places)
             {
-                sb.AppendLine(
-                    $"- name: {p.Name}; " +
-                    $"distanceKm: {(p.DistanceKm?.ToString("0.0", CultureInfo.InvariantCulture) ?? "unknown")}; " +
-                    $"type: {p.Type ?? "unknown"}; " +
-                    $"indoor: {(p.Indoor == true ? "true" : p.Indoor == false ? "false" : "unknown")}; " +
-                    $"tag: {p.Tag ?? "none"}; " +
-                    $"capacity: {(p.Capacity?.ToString() ?? "unknown")}; " +
-                    $"safetyStatus: backend-filtered-safe");
+                var details =
+                    new List<string>
+                    {
+                        $"name: {place.Name}",
+                        $"distance: {FmtDistance(place.DistanceKm)}"
+                    };
+
+                if (!string.IsNullOrWhiteSpace(place.Type))
+                {
+                    details.Add($"type: {place.Type}");
+                }
+
+                if (place.Indoor.HasValue)
+                {
+                    details.Add(place.Indoor.Value ? "indoor: true" : "indoor: false");
+                }
+
+                sb.AppendLine("- " + string.Join("; ", details) + ".");
             }
 
             sb.AppendLine();
@@ -681,17 +803,47 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return;
             }
 
-            foreach (var e in context.Events)
+            foreach (var currentEvent in context.Events)
             {
+                var details = new List<string>();
+
+                details.Add($"name: " + $"{currentEvent.Title ?? "Unknown event"}");
+
+                if (!string.IsNullOrWhiteSpace(currentEvent.City))
+                {
+                    details.Add($"location: {currentEvent.City}");
+                }
+
+                if (currentEvent.EventDate.HasValue)
+                {
+                    details.Add($"date: " + $"{currentEvent.EventDate.Value:yyyy-MM-dd}");
+                }
+
+                if (currentEvent.StartTime.HasValue)
+                {
+                    var timeText = $"start time: " + $"{FmtTs(currentEvent.StartTime)}";
+
+                    if (currentEvent.EndTime.HasValue)
+                    {
+                        timeText += $"; end time: " + $"{FmtTs(currentEvent.EndTime)}";
+                    }
+
+                    details.Add(timeText);
+                }
+
+                details.Add($"distance: " + $"{FmtDistance(currentEvent.DistanceKm)}");
+
+                if (!string.IsNullOrWhiteSpace(currentEvent.Advice))
+                {
+                    details.Add($"setting: {currentEvent.Advice}");
+                }
+
                 sb.AppendLine(
-                    $"- {e.Title ?? "Unknown event"}, " +
-                    $"{e.City ?? "Unknown city"}, " +
-                    $"{(e.EventDate?.ToString("yyyy-MM-dd") ?? "—")}, " +
-                    $"{FmtTs(e.StartTime)}-{FmtTs(e.EndTime)}, " +
-                    $"crowd {(e.CrowdLevel?.ToString() ?? "—")}, " +
-                    $"capacity {(e.MaxCapacity?.ToString() ?? "—")}, " +
-                    $"{FmtDistance(e.DistanceKm)}, " +
-                    $"advice: {e.Advice ?? "—"}");
+                    "- " +
+                    string.Join(
+                        "; ",
+                        details) +
+                    ".");
             }
 
             sb.AppendLine();
@@ -902,10 +1054,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 {
                     NeedPlaces = true,
                     NeedEvents = true,
-                    NeedCrowdCalendar = true,
-                    NeedCrowdInfo = true,
-                    NeedTraffic = true,
-                    NeedWeather = true
+                    NeedCrowdCalendar = false,
+                    NeedCrowdInfo = false,
+                    NeedTraffic = false,
+                    NeedWeather = false
                 };
             }
 
@@ -920,24 +1072,104 @@ namespace CitizenHackathon2025.Infrastructure.Services
             };
         }
 
-        private static DateTime ResolveTargetDate(string? prompt)
+        private static LocalAiDateRange ResolveTargetDateRange(string? prompt)
         {
-            var now = DateTime.Now;
-            var p = prompt?.ToLowerInvariant() ?? string.Empty;
+            var today = GetBelgiumToday();
 
-            if (p.Contains("ce weekend") || p.Contains("ce week-end"))
+            var normalized = prompt?.Trim().ToLowerInvariant() ?? string.Empty;
+
+            var asksCurrentWeek = normalized.Contains("cette semaine") || normalized.Contains("dans la semaine");
+
+            if (asksCurrentWeek)
             {
-                var daysUntilSaturday = ((int)DayOfWeek.Saturday - (int)now.DayOfWeek + 7) % 7;
-                return now.Date.AddDays(daysUntilSaturday == 0 ? 0 : daysUntilSaturday);
+                var daysUntilNextMonday =
+                    ((int)DayOfWeek.Monday -
+                     (int)today.DayOfWeek +
+                     7) % 7;
+
+                if (daysUntilNextMonday == 0)
+                    daysUntilNextMonday = 7;
+
+                var nextMonday =
+                    today.AddDays(daysUntilNextMonday);
+
+                return new LocalAiDateRange(
+                    From: today,
+                    ToExclusive: nextMonday);
             }
 
-            if (p.Contains("demain"))
-                return now.Date.AddDays(1);
+            var asksWeekend = normalized.Contains("ce weekend") || normalized.Contains("ce week-end");
 
-            if (p.Contains("aujourd"))
-                return now.Date;
+            if (asksWeekend)
+            {
+                DateTime saturday;
 
-            return now.Date;
+                if (today.DayOfWeek == DayOfWeek.Saturday)
+                {
+                    // Nous sommes déjà samedi.
+                    saturday = today;
+                }
+                else if (today.DayOfWeek == DayOfWeek.Sunday)
+                {
+                    // Le week-end actuel a commencé hier.
+                    saturday = today.AddDays(-1);
+                }
+                else
+                {
+                    // Prochain samedi.
+                    var daysUntilSaturday = ((int)DayOfWeek.Saturday - (int)today.DayOfWeek + 7) % 7;
+
+                    saturday = today.AddDays(daysUntilSaturday);
+                }
+
+                return new LocalAiDateRange(From: saturday, ToExclusive: saturday.AddDays(2));
+            }
+
+            if (normalized.Contains("ce samedi"))
+            {
+                var daysUntilSaturday = ((int)DayOfWeek.Saturday - (int)today.DayOfWeek + 7) % 7;
+
+                var saturday = today.AddDays(daysUntilSaturday);
+
+                return new LocalAiDateRange(From: saturday, ToExclusive: saturday.AddDays(1));
+            }
+
+            if (normalized.Contains("ce dimanche"))
+            {
+                var daysUntilSunday = ((int)DayOfWeek.Sunday - (int)today.DayOfWeek + 7) % 7;
+
+                var sunday = today.AddDays(daysUntilSunday);
+
+                return new LocalAiDateRange(From: sunday, ToExclusive: sunday.AddDays(1));
+            }
+
+            if (normalized.Contains("demain"))
+            {
+                var tomorrow = today.AddDays(1);
+
+                return new LocalAiDateRange(From: tomorrow, ToExclusive: tomorrow.AddDays(1));
+            }
+
+            // "today" or the absence of a time indicator.
+            return new LocalAiDateRange(From: today, ToExclusive: today.AddDays(1));
+        }
+
+        private static DateTime GetBelgiumToday()
+        {
+            try
+            {
+                var belgiumTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
+
+                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, belgiumTimeZone).Date;
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return DateTime.Now.Date;
+            }
+            catch (InvalidTimeZoneException)
+            {
+                return DateTime.Now.Date;
+            }
         }
     }
 }

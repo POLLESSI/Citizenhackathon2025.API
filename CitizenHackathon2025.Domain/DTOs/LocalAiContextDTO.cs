@@ -4,8 +4,12 @@
     {
         public string UserPrompt { get; init; } = string.Empty;
         public string? LocationLabel { get; init; }
+        public DateTime TargetDate { get; set; }
 
-        public DateTime TargetDate { get; init; }
+        public DateTime TargetDateFrom { get; set; }
+
+        public DateTime TargetDateToExclusive { get; set; }
+
         public double Latitude { get; init; }
         public double Longitude { get; init; }
 

@@ -2,7 +2,7 @@
 {
     public sealed class CriticalAlertRules
     {
-        public int RequiredDistinctReports { get; init; } = 3;
+        public int RequiredDistinctReports { get; init; } = 4;
 
         public int WindowMinutes { get; init; } = 5;
 

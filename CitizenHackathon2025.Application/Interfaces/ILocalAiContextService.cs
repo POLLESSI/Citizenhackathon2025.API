@@ -4,11 +4,7 @@ namespace CitizenHackathon2025.Application.Interfaces
 {
     public interface ILocalAiContextService
     {
-        Task<LocalAiContextDTO> BuildContextAsync(
-            string prompt,
-            double? latitude,
-            double? longitude,
-            CancellationToken ct = default);
+        Task<LocalAiContextDTO> BuildContextAsync(string prompt, double? latitude, double? longitude, CancellationToken ct = default);
 
         string BuildPrompt(LocalAiContextDTO context);
     }

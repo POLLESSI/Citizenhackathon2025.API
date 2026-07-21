@@ -36,11 +36,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 {
                     new { role = "user", content = prompt }
                 },
-                stream = true,
+                stream = false,
                 keep_alive = "30m",
                 options = new
                 {
-                    temperature = 0.3,
+                    temperature,
                     num_predict = 180,
                     num_ctx = 2048
                 }

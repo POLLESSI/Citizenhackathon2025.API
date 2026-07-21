@@ -1,7 +1,7 @@
 ﻿CREATE TABLE [dbo].[CriticalAlertVote]
 (
 	[Id] BIGINT IDENTITY(1,1) NOT NULL,
-	[AlertKind] TINYINT NOT NULL, -- 1 Crowd, 2 Weather, 3 Traffic
+	[AlertKind] TINYINT NOT NULL, -- 1 Crowd, 2 Weather, 3 Traffic, 4 Disaster
     [ZoneKey] NVARCHAR(64) NOT NULL,
 
     [PlaceId] INT NULL,

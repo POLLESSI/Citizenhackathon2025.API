@@ -44,7 +44,7 @@ GO
 -- Logical uniqueness per day/region/(place) on active lines
 -- (allows historical duplicates if Active=0)
 CREATE UNIQUE INDEX UX_CrowdCalendar_DateRegionPlace_Active
-ON dbo.CrowdCalendar(DateUtc, RegionCode, PlaceId, Active)
+ON dbo.CrowdCalendar(DateUtc, RegionCode, PlaceId)
 WHERE Active = 1;
 
 GO

@@ -2,6 +2,7 @@
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.Extensions.Configuration;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Net.Http.Json;
@@ -45,13 +46,22 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var model = GetModel();
             var temperature = GetTemperature();
 
+            var numPredict = Math.Clamp(_config.GetValue<int?>("MistralAI:NumPredict") ?? 320, 128, 768);
+
+            var numContext = Math.Clamp(
+                _config.GetValue<int?>("MistralAI:NumContext") ?? 4096,
+                2048,
+                8192);
+
             var requestBody = BuildChatRequest(
                 groundedPrompt: groundedPrompt,
                 model: model,
                 temperature: temperature,
                 stream: false,
                 responseLanguage: responseLanguage,
-                languagePromptBuilder: _languagePromptBuilder);
+                languagePromptBuilder: _languagePromptBuilder,
+                numPredict: numPredict,
+                numContext: numContext);
 
             _logger.LogInformation(
                 "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, Endpoint={Endpoint}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
@@ -75,8 +85,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return "No response from Mistral.";
             }
 
-            //var parsedResponse = JsonSerializer.Deserialize<MistralResponse>(rawResponse, JsonOptions);
-
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
@@ -87,35 +95,29 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             response.EnsureSuccessStatusCode();
 
-            MistralResponse? parsedResponse;
+            OllamaChatStreamResponse? parsedResponse;
+
             try
             {
-                parsedResponse = JsonSerializer.Deserialize<MistralResponse>(rawResponse, JsonOptions);
+                parsedResponse = JsonSerializer.Deserialize<OllamaChatStreamResponse>(rawResponse, JsonOptions);
             }
             catch (JsonException ex)
             {
-                _logger.LogError(
-                    ex,
-                    "[OLLAMA][SYNC] Failed to deserialize Ollama response. BodyPreview={BodyPreview}",
-                    Truncate(rawResponse, 1000));
+                _logger.LogError(ex, "[OLLAMA][SYNC] Failed to deserialize Ollama response. " + "BodyPreview={BodyPreview}", Truncate(rawResponse, 1000));
+
                 throw;
             }
 
-            var finalText = parsedResponse?.Message?.Content?.Trim();
+            var finalText = NormalizeGeneratedText(parsedResponse?.Message?.Content);
 
             if (string.IsNullOrWhiteSpace(finalText))
             {
-                _logger.LogWarning(
-                    "[OLLAMA][SYNC] Empty assistant content returned. ElapsedMs={ElapsedMs}",
-                    stopwatch.ElapsedMilliseconds);
+                _logger.LogWarning("[OLLAMA][SYNC] Empty assistant content returned. ElapsedMs={ElapsedMs}", stopwatch.ElapsedMilliseconds);
 
                 return "No response from Mistral.";
             }
 
-            _logger.LogInformation(
-                "[OLLAMA][SYNC] Request completed. FinalLength={FinalLength}, ElapsedMs={ElapsedMs}",
-                finalText.Length,
-                stopwatch.ElapsedMilliseconds);
+            _logger.LogInformation("[OLLAMA][SYNC] Request completed. FinalLength={FinalLength}, ElapsedMs={ElapsedMs}", finalText.Length, stopwatch.ElapsedMilliseconds);
 
             return finalText;
         }
@@ -132,16 +134,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var temperature = GetTemperature();
             //var chatUri = BuildChatUri();
 
+            var numPredict = Math.Clamp(_config.GetValue<int?>("MistralAI:NumPredict") ?? 320, 128, 768);
+
+            var numContext = Math.Clamp(_config.GetValue<int?>("MistralAI:NumContext") ?? 4096, 2048, 8192);
+
             var requestBody = BuildChatRequest(
                 groundedPrompt: groundedPrompt,
                 model: model,
                 temperature: temperature,
                 stream: true,
                 responseLanguage: responseLanguage,
-                languagePromptBuilder: _languagePromptBuilder);
+                languagePromptBuilder: _languagePromptBuilder,
+                numPredict: numPredict,
+                numContext: numContext);
 
-            _logger.LogInformation(
-                "[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, Endpoint={Endpoint}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
+            _logger.LogInformation("[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, Endpoint={Endpoint}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
                 _httpClient.BaseAddress?.ToString() ?? "<null>",
                 OllamaChatEndpoint,
                 model,
@@ -159,10 +166,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 Content = JsonContent.Create(requestBody)
             };
 
-            using var response = await _httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                ct);
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
             _logger.LogInformation(
                 "[OLLAMA][STREAM] Response headers received. StatusCode={StatusCode}, ElapsedMs={ElapsedMs}",
@@ -183,6 +187,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var reader = new StreamReader(stream);
+
+            string? doneReason = null;
+            int? evalCount = null;
+            int? promptEvalCount = null;
+            
+            long? totalDurationNanoseconds = null;
+            long? promptEvalDurationNanoseconds = null;
+            long? evalDurationNanoseconds = null;
 
             while (!reader.EndOfStream)
             {
@@ -214,16 +226,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 var chunkText = envelope.Message?.Content ?? string.Empty;
 
-                if (!string.IsNullOrWhiteSpace(chunkText))
+                if (!string.IsNullOrEmpty(chunkText))
                 {
                     chunkCount++;
 
+                    // Never delete or add a space here.
+                    // The content must be preserved exactly as Ollama sends it.
                     accumulated.Append(chunkText);
-
-                    // Streaming buffering
                     streamBuffer.Append(chunkText);
 
-                    // Smart Flush
                     var shouldFlush =
                         streamBuffer.Length >= 32 ||
                         chunkText.Contains('.') ||
@@ -233,7 +244,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                     if (shouldFlush)
                     {
-                        var bufferedChunk = streamBuffer.ToString();
+                        var bufferedChunk =
+                            streamBuffer.ToString();
 
                         await onChunk(bufferedChunk);
 
@@ -243,12 +255,37 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 if (envelope.Done)
                 {
-                    _logger.LogInformation(
-                        "[OLLAMA][STREAM] Stream completion received. DoneReason={DoneReason}, ChunkCount={ChunkCount}, TotalLength={TotalLength}, ElapsedMs={ElapsedMs}",
-                        envelope.DoneReason,
+                    doneReason =
+                        envelope.DoneReason;
+
+                    evalCount =
+                        envelope.EvalCount;
+
+                    promptEvalCount =
+                        envelope.PromptEvalCount;
+
+                    totalDurationNanoseconds =
+                        envelope.TotalDuration;
+
+                    promptEvalDurationNanoseconds =
+                        envelope.PromptEvalDuration;
+
+                    evalDurationNanoseconds =
+                        envelope.EvalDuration;
+
+                    _logger.LogWarning(
+                        "[OLLAMA][STREAM] Completion received. " +
+                        "DoneReason={DoneReason}; EvalCount={EvalCount}; " +
+                        "PromptEvalCount={PromptEvalCount}; " +
+                        "ChunkCount={ChunkCount}; TotalLength={TotalLength}; " +
+                        "ElapsedMs={ElapsedMs}",
+                        doneReason,
+                        evalCount,
+                        promptEvalCount,
                         chunkCount,
                         accumulated.Length,
                         stopwatch.ElapsedMilliseconds);
+
                     break;
                 }
             }
@@ -260,12 +297,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 streamBuffer.Clear();
             }
 
-            var finalText = accumulated.ToString().Trim();
+            var finalText = NormalizeGeneratedText(accumulated.ToString());
 
             if (string.IsNullOrWhiteSpace(finalText))
             {
                 _logger.LogWarning(
-                    "[OLLAMA][STREAM] Empty final content returned. ChunkCount={ChunkCount}, LineCount={LineCount}, ElapsedMs={ElapsedMs}",
+                    "[OLLAMA][STREAM] Empty final content returned. " +
+                    "ChunkCount={ChunkCount}; LineCount={LineCount}; " +
+                    "ElapsedMs={ElapsedMs}",
                     chunkCount,
                     lineCount,
                     stopwatch.ElapsedMilliseconds);
@@ -273,12 +312,57 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return "No response from Mistral.";
             }
 
+            var wasLimitedByLength = string.Equals(doneReason, "length", StringComparison.OrdinalIgnoreCase);
+
+            if (wasLimitedByLength)
+            {
+                _logger.LogWarning(
+                    "[OLLAMA][STREAM] Output truncated by num_predict. " +
+                    "FinalLength={FinalLength}; EvalCount={EvalCount}; " +
+                    "NumPredict={NumPredict}",
+                    finalText.Length,
+                    evalCount,
+                    numPredict);
+
+                // Honestly report an interruption without making up an ending.
+                finalText = EnsureEllipsis(finalText);
+            }
+            else
+            {
+                // A normally completed response receives at a minimum
+                // a terminal punctuation mark.
+                finalText = EnsureTerminalPunctuation(finalText);
+            }
+
+            var totalSeconds = NanosecondsToSeconds(totalDurationNanoseconds);
+
+            var promptEvalSeconds = NanosecondsToSeconds(promptEvalDurationNanoseconds);
+
+            var evalSeconds = NanosecondsToSeconds(evalDurationNanoseconds);
+
+            double? tokensPerSecond = evalCount.HasValue && evalSeconds.HasValue && evalSeconds.Value > 0d ? evalCount.Value / evalSeconds.Value : null;
+
             _logger.LogInformation(
-                "[OLLAMA][STREAM] Request completed. ChunkCount={ChunkCount}, LineCount={LineCount}, FinalLength={FinalLength}, ElapsedMs={ElapsedMs}",
+                "[OLLAMA][STREAM] Request completed. " +
+                "DoneReason={DoneReason}; " +
+                "EvalCount={EvalCount}; PromptEvalCount={PromptEvalCount}; " +
+                "ChunkCount={ChunkCount}; LineCount={LineCount}; " +
+                "FinalLength={FinalLength}; ElapsedMs={ElapsedMs}; " +
+                "TotalSeconds={TotalSeconds}; " +
+                "PromptEvalSeconds={PromptEvalSeconds}; " +
+                "EvalSeconds={EvalSeconds}; " +
+                "TokensPerSecond={TokensPerSecond}",
+                doneReason,
+                evalCount,
+                promptEvalCount,
                 chunkCount,
                 lineCount,
                 finalText.Length,
-                stopwatch.ElapsedMilliseconds);
+                stopwatch.ElapsedMilliseconds,
+                totalSeconds,
+                promptEvalSeconds,
+                evalSeconds,
+                tokensPerSecond);
 
             return finalText;
         }
@@ -298,34 +382,53 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private float GetTemperature()
             => _config.GetValue<float?>("MistralAI:Temperature") ?? 0.3f;
 
-        private static object BuildChatRequest(string groundedPrompt, string model, float temperature, bool stream, string responseLanguage, ILanguagePromptBuilder languagePromptBuilder)
+        private static object BuildChatRequest(string groundedPrompt, string model, float temperature, bool stream, string responseLanguage, ILanguagePromptBuilder languagePromptBuilder, int numPredict, int numContext)
         {
-            var languageInstruction =
-                languagePromptBuilder.BuildLanguageInstruction(responseLanguage);
+            var languageInstruction = languagePromptBuilder.BuildLanguageInstruction(responseLanguage);
 
             var systemPrompt = $"""
-                    You are OutZen, Belgian intelligent local assistant.
-                    You are reliable, cautious, factual, and you never invent information that is not part of the provided context.
+                            You are OutZen, a Belgian intelligent local assistant.
+                            You are reliable, factual and concise.
+                            Never invent information absent from the supplied context.
 
-                    {languageInstruction}
+                            {languageInstruction}
 
-                    You help users with:
-                    - weather
-                    - traffic
-                    - events
-                    - safety
-                    - crowding
-                    - local suggestions
+                            For tourism questions:
+                            - return at most 5 recommendations in total
+                            - write one numbered recommendation per line
+                            - use exactly this format: "1. Name — distance — short factual description."
+                            - use exactly one ordinary space after each list number
+                            - use exactly one ordinary space around each dash
+                            - never concatenate two words
+                            - never concatenate a value with the next list number
+                            - never output internal backend field names such as: crowd, capacity, advice, distanceKm, tag
+                            - omit unavailable fields instead of writing "—"
+                            - prioritize events occurring within the requested date range
+                            - prefer concrete attractions over generic towns or villages
+                            - use only the supplied distances
+                            - do not create a second list
+                            - finish every numbered item with punctuation
+                            - place "Bonne découverte." on a separate final line
 
-                    If the context does not contain enough information, state it clearly.
-                    The final response language must follow the final output language instruction.
-                    """;
+                            If the supplied context is insufficient, state it clearly.
+
+                            Strict factual candidate rules:
+                            - Recommend only places and events explicitly present in the supplied context.
+                            - Never add a place from general model knowledge.
+                            - Copy every place and event name exactly as supplied.
+                            - Copy every distance exactly as supplied.
+                            - If only two valid candidates exist, return only two.
+                            - Never complete the list with unsupported candidates.
+                            - Do not mention any town, museum, abbey, park or attraction absent from the context.
+                            """;
+
+
+
             var finalUserPrompt = $"""
-                {groundedPrompt}
-
-                Final output language instruction:
-                {languageInstruction}
-                """;
+                                {groundedPrompt}
+                                Final output language instruction:
+                                {languageInstruction}
+                                """;
 
             return new
             {
@@ -340,18 +443,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     new
                     {
                         role = "user",
-                        content = $"""
-                        {groundedPrompt}
-
-                        Final output language instruction:
-                        {languageInstruction}
-                        """
+                        content = finalUserPrompt
                     }
                 },
                 stream,
+                keep_alive = "30m",
                 options = new
                 {
-                    temperature
+                    temperature,
+                    num_predict = numPredict,
+                    num_ctx = numContext
                 }
             };
         }
@@ -371,6 +472,80 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 return normalized;
 
             return normalized[..maxLength] + "...";
+        }
+
+        private static string EnsureTerminalPunctuation(string text)
+        {
+            var value = text?.Trim() ?? string.Empty;
+
+            if (value.Length == 0)
+                return value;
+
+            var lastCharacter = value[^1];
+
+            if (lastCharacter is
+                '.' or
+                '!' or
+                '?' or
+                ':' or
+                ';' or
+                '…')
+            {
+                return value;
+            }
+
+            return value + ".";
+        }
+
+        private static string EnsureEllipsis(string text)
+        {
+            var value = text?.TrimEnd() ?? string.Empty;
+
+            if (value.Length == 0)
+                return value;
+
+            return value.EndsWith("…", StringComparison.Ordinal) ? value : value.TrimEnd('.', ',', ';', ':') + "…";
+        }
+
+        private static double? NanosecondsToSeconds(long? nanoseconds)
+        {
+            if (!nanoseconds.HasValue || nanoseconds.Value <= 0)
+            {
+                return null;
+            }
+
+            return nanoseconds.Value / 1_000_000_000d;
+        }
+        private static string NormalizeGeneratedText(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var value = text
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Trim();
+
+            // Several horizontal spaces become a single space.
+            // Line breaks are preserved.
+            value = Regex.Replace(value, @"[ \t]{2,}", " ");
+
+            // Remove only the spaces around a line break.
+            // of a line break.
+            value = Regex.Replace(value, @"[ \t]*\n[ \t]*", "\n");
+
+            // Separate the numbered items attached to the text:
+            // "extérieur3. Parc" becomes:
+            // "extérieur\n3. Parc"
+            //
+            // The condition (?=\p{L}) prevents confusing
+            // a list number with a decimal number like 2.25.
+            value = Regex.Replace(value, @"(?<!^)(?<!\n)(?<!\d)([1-9]\.)\s*(?=\p{L})", Environment.NewLine + "$1 ");
+
+            // Place the conclusion on its own line.
+            value = Regex.Replace(value, @"(?<!^)(?<!\n)[ \t]*(Enjoy discovering it.\.)$", Environment.NewLine + "$1", RegexOptions.IgnoreCase);
+
+            return value.Trim();
         }
     }
 }

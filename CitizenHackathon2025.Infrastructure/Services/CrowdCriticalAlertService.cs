@@ -13,13 +13,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             _rules = options.Value;
         }
-        private static string BuildZoneKey(double latitude, double longitude)
-        {
-            var latBucket = Math.Round(latitude, 3);
-            var lngBucket = Math.Round(longitude, 3);
-
-            return $"{latBucket:0.000}:{lngBucket:0.000}";
-        }
     }
 }
 

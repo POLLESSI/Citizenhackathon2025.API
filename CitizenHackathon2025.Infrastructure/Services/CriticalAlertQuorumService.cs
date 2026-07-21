@@ -24,41 +24,113 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _logger = logger;
         }
 
-        public async Task<CriticalAlertQuorumResult> RegisterVoteAsync(CriticalAlertKind kind, int? placeId, decimal latitude, decimal longitude, string? deviceId, string? reason, CancellationToken ct = default)
+        public async Task<CriticalAlertQuorumResult>RegisterVoteAsync(CriticalAlertKind kind, int? placeId, decimal latitude, decimal longitude, string? deviceId, string? reason, CancellationToken ct = default)
         {
-            var zoneKey = BuildZoneKey(latitude, longitude);
-
-            await _repo.InsertAsync(new CriticalAlertVote
+            if (string.IsNullOrWhiteSpace(deviceId))
             {
-                AlertKind = (byte)kind,
-                PlaceId = placeId,
-                ZoneKey = zoneKey,
-                DeviceHash = string.IsNullOrWhiteSpace(deviceId) ? null : HashText(deviceId),
-                Latitude = latitude,
-                Longitude = longitude,
-                Reason = reason
-            }, ct);
+                throw new ArgumentException(
+                    "A device identifier is required " +
+                    "for critical alert confirmation.",
+                    nameof(deviceId));
+            }
 
-            var count = await _repo.CountDistinctReportersAsync(
-                kind,
-                zoneKey,
-                _rule.WindowMinutes,
+            var zoneKey =
+                BuildZoneKey(
+                    latitude,
+                    longitude);
+
+            var deviceHash =
+                HashText(deviceId);
+
+            await _repo.InsertAsync(
+                new CriticalAlertVote
+                {
+                    AlertKind =
+                        (byte)kind,
+
+                    PlaceId =
+                        placeId,
+
+                    ZoneKey =
+                        zoneKey,
+
+                    DeviceHash =
+                        deviceHash,
+
+                    Latitude =
+                        latitude,
+
+                    Longitude =
+                        longitude,
+
+                    Reason =
+                        reason
+                },
                 ct);
+
+            var count =
+                await _repo
+                    .CountDistinctReportersAsync(
+                        kind,
+                        zoneKey,
+                        _rule.WindowMinutes,
+                        ct);
+
+            var confirmed =
+                count >=
+                _rule.RequiredDistinctReports;
+
+            _logger.LogInformation(
+                "[CRITICAL QUORUM] " +
+                "Kind={Kind}, " +
+                "PlaceId={PlaceId}, " +
+                "ZoneKey={ZoneKey}, " +
+                "Device={DevicePrefix}, " +
+                "Count={Count}/{Required}, " +
+                "Confirmed={Confirmed}, " +
+                "WindowMinutes={WindowMinutes}",
+                kind,
+                placeId,
+                zoneKey,
+                deviceHash[..Math.Min(
+                    12,
+                    deviceHash.Length)],
+                count,
+                _rule.RequiredDistinctReports,
+                confirmed,
+                _rule.WindowMinutes);
 
             return new CriticalAlertQuorumResult
             {
-                Confirmed = count >= _rule.RequiredDistinctReports,
-                ConfirmationCount = count,
-                RequiredCount = _rule.RequiredDistinctReports,
-                ZoneKey = zoneKey
+                Confirmed =
+                    confirmed,
+
+                ConfirmationCount =
+                    count,
+
+                RequiredCount =
+                    _rule.RequiredDistinctReports,
+
+                ZoneKey =
+                    zoneKey
             };
         }
 
         private static string BuildZoneKey(decimal latitude, decimal longitude)
         {
-            var latBucket = Math.Round(latitude, 3);
-            var lngBucket = Math.Round(longitude, 3);
-            return $"{latBucket:0.000}:{lngBucket:0.000}";
+            var latBucket =
+                Math.Round(
+                    latitude,
+                    3,
+                    MidpointRounding.AwayFromZero);
+
+            var lngBucket =
+                Math.Round(
+                    longitude,
+                    3,
+                    MidpointRounding.AwayFromZero);
+
+            return FormattableString.Invariant($"{latBucket:0.000}:{lngBucket:0.000}");
         }
 
         private static string HashText(string value)

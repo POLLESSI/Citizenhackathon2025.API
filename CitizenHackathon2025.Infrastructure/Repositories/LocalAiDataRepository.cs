@@ -56,12 +56,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 parameters.Add(paramName, $"%{tokens[i]}%");
 
                 whereParts.Add($"""
-            (
-                p.Name LIKE {paramName}
-                OR p.Type LIKE {paramName}
-                OR p.Tag LIKE {paramName}
-            )
-            """);
+                            (
+                                p.Name LIKE {paramName}
+                                OR p.Type LIKE {paramName}
+                                OR p.Tag LIKE {paramName}
+                            )
+                            """);
             }
 
             var sql = $"""
@@ -74,7 +74,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                         CAST(p.Longitude AS FLOAT) AS Longitude,
                         p.Capacity,
                         p.Tag,
-                        CAST(0 AS FLOAT) AS DistanceKm
+                        CAST(NULL AS FLOAT) AS DistanceKm
                     FROM dbo.Place p
                     WHERE p.Active = 1
                       AND ({string.Join(" OR ", whereParts)})
@@ -105,14 +105,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
         }
 
-        public async Task<IEnumerable<LocalAiCrowdCalendarContextDTO>> GetNearbyCrowdCalendarAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiCrowdCalendarContextDTO>>GetNearbyCrowdCalendarAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default)
         {
-            const string sql = @"
+            if (dateToExclusive.Date <= dateFrom.Date)
+            {
+                throw new ArgumentException("dateToExclusive must be greater than dateFrom.");
+            }
+
+            const string sql = """
                             WITH CrowdCalendarBase AS
                             (
                                 SELECT
@@ -131,35 +131,52 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                     Latitude = CAST(cc.Latitude AS float),
                                     Longitude = CAST(cc.Longitude AS float),
                                     cc.Active,
-                                    DistanceKm =
-                                        6371.0 * ACOS(
+                                    DistanceKm = 6371.0 * ACOS(
                                             CASE
                                                 WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(cc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(cc.Latitude AS float))) > 1
+                                                    COS(RADIANS(@Lat))
+                                                    * COS(RADIANS(CAST(cc.Latitude AS float)))
+                                                    * COS(
+                                                        RADIANS(CAST(cc.Longitude AS float))
+                                                        - RADIANS(@Lng))
+                                                    + SIN(RADIANS(@Lat))
+                                                    * SIN(RADIANS(CAST(cc.Latitude AS float)))
+                                                    > 1
                                                 THEN 1
+
                                                 WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(cc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(cc.Latitude AS float))) < -1
+                                                    COS(RADIANS(@Lat))
+                                                    * COS(RADIANS(CAST(cc.Latitude AS float)))
+                                                    * COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng))
+                                                    + SIN(RADIANS(@Lat))
+                                                    * SIN(RADIANS(CAST(cc.Latitude AS float)))
+                                                    < -1
                                                 THEN -1
+
                                                 ELSE
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(cc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(cc.Latitude AS float)))
+                                                    COS(RADIANS(@Lat))
+                                                    * COS(RADIANS(CAST(cc.Latitude AS float)))
+                                                    * COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng))
+                                                    + SIN(RADIANS(@Lat))
+                                                    * SIN(RADIANS(CAST(cc.Latitude AS float)))
                                             END
                                         )
+
                                 FROM dbo.CrowdCalendar cc
+
                                 WHERE cc.Active = 1
-                                    AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
-                                    AND cc.Latitude IS NOT NULL
-                                    AND cc.Longitude IS NOT NULL
-                                    AND (
-                                        NULLIF(LTRIM(RTRIM(cc.EventName)), '') IS NOT NULL
-                                        OR NULLIF(LTRIM(RTRIM(cc.RegionCode)), '') IS NOT NULL
-                                        )
+                                  AND cc.DateUtc >= @DateFrom
+                                  AND cc.DateUtc < @DateToExclusive
+                                  AND cc.Latitude IS NOT NULL
+                                  AND cc.Longitude IS NOT NULL
+                                  AND
+                                  (
+                                      NULLIF(LTRIM(RTRIM(cc.EventName)), '') IS NOT NULL
+
+                                      OR NULLIF(LTRIM(RTRIM(cc.RegionCode)), '') IS NOT NULL
+                                  )
                             )
+
                             SELECT TOP (8)
                                 Id,
                                 DateUtc,
@@ -177,31 +194,38 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Longitude,
                                 DistanceKm,
                                 Active
+
                             FROM CrowdCalendarBase
+
                             WHERE DistanceKm <= @RadiusKm
+
                             ORDER BY
-                                CASE WHEN NULLIF(LTRIM(RTRIM(EventName)), '') IS NOT NULL THEN 0 ELSE 1 END,
+                                CASE
+                                    WHEN NULLIF(LTRIM(RTRIM(EventName)), '') IS NOT NULL
+                                    THEN 0
+                                    ELSE 1
+                                END,
                                 DistanceKm ASC,
                                 ExpectedLevel DESC,
-                                Confidence DESC;";
+                                Confidence DESC;
+                            """;
 
             var parameters = new DynamicParameters();
+
             parameters.Add("@Lat", latitude, DbType.Double);
             parameters.Add("@Lng", longitude, DbType.Double);
-            parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
+            parameters.Add("@DateFrom", dateFrom.Date, DbType.Date);
+            parameters.Add("@DateToExclusive", dateToExclusive.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
             using var connection = await OpenConnectionAsync(ct);
-            return await connection.QueryAsync<LocalAiCrowdCalendarContextDTO>(
-                new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+            return await connection
+                .QueryAsync<LocalAiCrowdCalendarContextDTO>(
+                    new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiCrowdInfoContextDTO>> GetNearbyCrowdInfoAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiCrowdInfoContextDTO>> GetNearbyCrowdInfoAsync(double latitude, double longitude, DateTime targetDate, double radiusKm, CancellationToken ct = default)
         {
             const string sql = @"
                             WITH CrowdInfoBase AS
@@ -263,9 +287,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             FROM CrowdInfoBase
                             WHERE DistanceKm <= @RadiusKm
                                     AND Active = 1   
-                                    AND (
-                                        IsManualCriticalAlert = 0
-                                        OR ExpiresAtUtc > SYSUTCDATETIME()
+                                    AND (IsManualCriticalAlert = 0
+                                    OR ExpiresAtUtc > SYSUTCDATETIME()
                                     )
                             ORDER BY
                                 CASE WHEN CrowdLevel >= 4 THEN 0 ELSE 1 END,
@@ -276,7 +299,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var parameters = new DynamicParameters();
             parameters.Add("@Lat", latitude, DbType.Double);
             parameters.Add("@Lng", longitude, DbType.Double);
-            parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
             using var connection = await OpenConnectionAsync(ct);
@@ -284,54 +306,65 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiEventContextDTO>> GetNearbyEventsAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiEventContextDTO>>GetNearbyEventsAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default)
         {
-            const string sql = @"
-                            WITH EventBase AS
+            if (dateToExclusive.Date <= dateFrom.Date)
+            {
+                throw new ArgumentException("dateToExclusive must be greater than dateFrom.");
+            }
+
+            const string sql = """
+                            DECLARE @Origin geography = geography::Point(@Lat, @Lng, 4326);
+
+                            WITH EventSource AS
+                            (
+                                SELECT e.Id,
+                                    City = COALESCE(NULLIF(LTRIM(RTRIM(p.Name)), ''), N'Localité inconnue'),
+                                    Title = e.Name,
+                                    EventDate = CAST(e.DateEvent AS datetime2),
+                                    StartTime = CAST(NULL AS time),
+                                    EndTime = CAST(NULL AS time),
+                                    CrowdLevel = CAST(NULL AS int),
+                                    MaxCapacity = CAST(e.ExpectedCrowd AS int),
+                                    Advice =
+                                        CASE
+                                            WHEN e.IsOutdoor = 1
+                                                THEN N'Événement en extérieur'
+                                            WHEN e.IsOutdoor = 0
+                                                THEN N'Événement intérieur'
+                                            ELSE N'Type d’événement non précisé'
+                                        END,
+                                    Latitude = CAST(COALESCE(e.Latitude, p.Latitude) AS float),
+                                    Longitude = CAST(COALESCE(e.Longitude, p.Longitude) AS float)
+                                FROM dbo.[Event] e
+                                LEFT JOIN dbo.Place p ON p.Id = e.PlaceId
+                                WHERE e.Active = 1
+                                  AND e.DateEvent >= @DateFrom
+                                  AND e.DateEvent < @DateToExclusive
+                                  AND NULLIF(LTRIM(RTRIM(e.Name)), '') IS NOT NULL
+                            ),
+
+                            EventBase AS
                             (
                                 SELECT
-                                    cc.Id,
-                                    City = cc.RegionCode,
-                                    Title = cc.EventName,
-                                    EventDate = CAST(cc.DateUtc AS datetime2),
-                                    StartTime = cc.StartLocalTime,
-                                    EndTime = cc.EndLocalTime,
-                                    CrowdLevel = CAST(cc.ExpectedLevel AS int),
-                                    MaxCapacity = CAST(cc.Confidence AS int),
-                                    Advice = cc.MessageTemplate,
-                                    Latitude = CAST(cc.Latitude AS float),
-                                    Longitude = CAST(cc.Longitude AS float),
-                                    DistanceKm =
-                                        6371.0 * ACOS(
-                                            CASE
-                                                WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(cc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(cc.Latitude AS float))) > 1
-                                                THEN 1
-                                                WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(cc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(cc.Latitude AS float))) < -1
-                                                THEN -1
-                                                ELSE
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(cc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(cc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(cc.Latitude AS float)))
-                                            END
-                                        )
-                                FROM dbo.CrowdCalendar cc
-                                WHERE cc.Active = 1
-                                  AND cc.DateUtc BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
-                                  AND cc.Latitude IS NOT NULL
-                                  AND cc.Longitude IS NOT NULL
-                                  AND NULLIF(LTRIM(RTRIM(cc.EventName)), '') IS NOT NULL
+                                    Id,
+                                    City,
+                                    Title,
+                                    EventDate,
+                                    StartTime,
+                                    EndTime,
+                                    CrowdLevel,
+                                    MaxCapacity,
+                                    Advice,
+                                    Latitude,
+                                    Longitude,
+
+                                    DistanceKm = @Origin.STDistance(geography::Point(Latitude, Longitude, 4326)) / 1000.0
+
+                                FROM EventSource
+                                WHERE Latitude BETWEEN -90 AND 90 AND Longitude BETWEEN -180 AND 180
                             )
+
                             SELECT TOP (8)
                                 Id,
                                 City,
@@ -345,30 +378,33 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 Latitude,
                                 Longitude,
                                 DistanceKm
+
                             FROM EventBase
+
                             WHERE DistanceKm <= @RadiusKm
+
                             ORDER BY
                                 DistanceKm ASC,
-                                CrowdLevel DESC,
+                                EventDate ASC,
                                 MaxCapacity DESC,
-                                EventDate ASC;";
+                                Title ASC;
+                            """;
 
             var parameters = new DynamicParameters();
+
             parameters.Add("@Lat", latitude, DbType.Double);
             parameters.Add("@Lng", longitude, DbType.Double);
-            parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
+            parameters.Add("@DateFrom", dateFrom.Date, DbType.Date);
+            parameters.Add("@DateToExclusive", dateToExclusive.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
             using var connection = await OpenConnectionAsync(ct);
+
             return await connection.QueryAsync<LocalAiEventContextDTO>(
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(
-            double latitude,
-            double longitude,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiPlaceContextDTO>> GetNearbyPlacesAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default)
         {
             const string sql = @"
                             WITH PlaceBase AS
@@ -440,100 +476,180 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
 
-        public async Task<IEnumerable<LocalAiTrafficContextDTO>> GetNearbyTrafficAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiTrafficContextDTO>>
+    GetNearbyTrafficAsync(
+        double latitude,
+        double longitude,
+        DateTime dateFrom,
+        DateTime dateToExclusive,
+        double radiusKm,
+        CancellationToken ct = default)
         {
-            const string sql = @"
-                            WITH TrafficBase AS
-                            (
-                                SELECT
-                                    tc.Id,
-                                    tc.DateCondition,
-                                    tc.CongestionLevel,
-                                    tc.IncidentType,
-                                    tc.Provider,
-                                    tc.ExternalId,
-                                    tc.Title,
-                                    tc.Road,
-                                    Severity = CAST(tc.Severity AS int),
-                                    Latitude = CAST(tc.Latitude AS float),
-                                    Longitude = CAST(tc.Longitude AS float),
-                                    tc.Active,
-                                    DistanceKm =
-                                        6371.0 * ACOS(
-                                            CASE
-                                                WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(tc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(tc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(tc.Latitude AS float))) > 1
-                                                THEN 1
-                                                WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(tc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(tc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(tc.Latitude AS float))) < -1
-                                                THEN -1
-                                                ELSE
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(tc.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(tc.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(tc.Latitude AS float)))
-                                            END
-                                        )
-                                FROM dbo.TrafficCondition tc
-                                WHERE tc.Active = 1
-                                  AND tc.Latitude IS NOT NULL
-                                  AND tc.Longitude IS NOT NULL
-                                  AND CAST(tc.DateCondition AS date) BETWEEN DATEADD(DAY, -1, @TargetDate) AND DATEADD(DAY, 1, @TargetDate)
-                                  AND (
-                                        NULLIF(LTRIM(RTRIM(tc.Title)), '') IS NOT NULL
-                                        OR NULLIF(LTRIM(RTRIM(tc.IncidentType)), '') IS NOT NULL
-                                        OR NULLIF(LTRIM(RTRIM(tc.Road)), '') IS NOT NULL
-                                        OR ISNULL(tc.Severity, 0) > 0
-                                      )
-                            )
-                            SELECT TOP (5)
-                                Id,
-                                DateCondition,
-                                CongestionLevel,
-                                IncidentType,
-                                Provider,
-                                ExternalId,
-                                Title,
-                                Road,
-                                Severity,
-                                Latitude,
-                                Longitude,
-                                DistanceKm,
-                                Active
-                            FROM TrafficBase
-                            WHERE DistanceKm <= @RadiusKm
-                            ORDER BY
-                                Severity DESC,
-                                DistanceKm ASC,
-                                DateCondition DESC;";
+            if (dateToExclusive.Date <= dateFrom.Date)
+            {
+                throw new ArgumentException(
+                    "dateToExclusive must be greater than dateFrom.");
+            }
 
-            var parameters = new DynamicParameters();
-            parameters.Add("@Lat", latitude, DbType.Double);
-            parameters.Add("@Lng", longitude, DbType.Double);
-            parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
-            parameters.Add("@RadiusKm", radiusKm, DbType.Double);
+            const string sql = """
+        WITH TrafficBase AS
+        (
+            SELECT
+                tc.Id,
+                tc.DateCondition,
+                tc.CongestionLevel,
+                tc.IncidentType,
+                tc.Provider,
+                tc.ExternalId,
+                tc.Title,
+                tc.Road,
 
-            using var connection = await OpenConnectionAsync(ct);
-            return await connection.QueryAsync<LocalAiTrafficContextDTO>(
-                new CommandDefinition(sql, parameters, cancellationToken: ct));
+                Severity =
+                    CAST(tc.Severity AS int),
+
+                Latitude =
+                    CAST(tc.Latitude AS float),
+
+                Longitude =
+                    CAST(tc.Longitude AS float),
+
+                tc.Active,
+
+                DistanceKm =
+                    6371.0 * ACOS(
+                        CASE
+                            WHEN
+                                COS(RADIANS(@Lat))
+                                * COS(RADIANS(CAST(tc.Latitude AS float)))
+                                * COS(
+                                    RADIANS(CAST(tc.Longitude AS float))
+                                    - RADIANS(@Lng))
+                                + SIN(RADIANS(@Lat))
+                                * SIN(RADIANS(CAST(tc.Latitude AS float)))
+                                > 1
+                            THEN 1
+
+                            WHEN
+                                COS(RADIANS(@Lat))
+                                * COS(RADIANS(CAST(tc.Latitude AS float)))
+                                * COS(
+                                    RADIANS(CAST(tc.Longitude AS float))
+                                    - RADIANS(@Lng))
+                                + SIN(RADIANS(@Lat))
+                                * SIN(RADIANS(CAST(tc.Latitude AS float)))
+                                < -1
+                            THEN -1
+
+                            ELSE
+                                COS(RADIANS(@Lat))
+                                * COS(RADIANS(CAST(tc.Latitude AS float)))
+                                * COS(
+                                    RADIANS(CAST(tc.Longitude AS float))
+                                    - RADIANS(@Lng))
+                                + SIN(RADIANS(@Lat))
+                                * SIN(RADIANS(CAST(tc.Latitude AS float)))
+                        END
+                    )
+
+            FROM dbo.TrafficCondition tc
+
+            WHERE tc.Active = 1
+              AND tc.Latitude IS NOT NULL
+              AND tc.Longitude IS NOT NULL
+
+              AND tc.DateCondition >= @DateFrom
+              AND tc.DateCondition < @DateToExclusive
+
+              AND
+              (
+                  NULLIF(
+                      LTRIM(RTRIM(tc.Title)),
+                      '') IS NOT NULL
+
+                  OR NULLIF(
+                      LTRIM(RTRIM(tc.IncidentType)),
+                      '') IS NOT NULL
+
+                  OR NULLIF(
+                      LTRIM(RTRIM(tc.Road)),
+                      '') IS NOT NULL
+
+                  OR ISNULL(tc.Severity, 0) > 0
+              )
+        )
+
+        SELECT TOP (5)
+            Id,
+            DateCondition,
+            CongestionLevel,
+            IncidentType,
+            Provider,
+            ExternalId,
+            Title,
+            Road,
+            Severity,
+            Latitude,
+            Longitude,
+            DistanceKm,
+            Active
+
+        FROM TrafficBase
+
+        WHERE DistanceKm <= @RadiusKm
+
+        ORDER BY
+            Severity DESC,
+            DistanceKm ASC,
+            DateCondition DESC;
+        """;
+
+            var parameters =
+                new DynamicParameters();
+
+            parameters.Add(
+                "@Lat",
+                latitude,
+                DbType.Double);
+
+            parameters.Add(
+                "@Lng",
+                longitude,
+                DbType.Double);
+
+            parameters.Add(
+                "@DateFrom",
+                dateFrom.Date,
+                DbType.Date);
+
+            parameters.Add(
+                "@DateToExclusive",
+                dateToExclusive.Date,
+                DbType.Date);
+
+            parameters.Add(
+                "@RadiusKm",
+                radiusKm,
+                DbType.Double);
+
+            using var connection =
+                await OpenConnectionAsync(ct);
+
+            return await connection
+                .QueryAsync<LocalAiTrafficContextDTO>(
+                    new CommandDefinition(
+                        sql,
+                        parameters,
+                        cancellationToken: ct));
         }
-
-        public async Task<IEnumerable<LocalAiWeatherContextDTO>> GetNearbyWeatherAsync(
-            double latitude,
-            double longitude,
-            DateTime targetDate,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiWeatherContextDTO>>GetNearbyWeatherAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default)
         {
-            const string sql = @"
+            if (dateToExclusive.Date <= dateFrom.Date)
+            {
+                throw new ArgumentException(
+                    "dateToExclusive must be greater than dateFrom.");
+            }
+
+            const string sql = """
                             WITH WeatherBase AS
                             (
                                 SELECT
@@ -554,31 +670,50 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                     WeatherType = CAST(wf.WeatherType AS int),
                                     IsSevere = CAST(wf.IsSevere AS bit),
                                     wf.Active,
-                                    DistanceKm =
-                                        6371.0 * ACOS(
-                                            CASE
-                                                WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(wf.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(wf.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(wf.Latitude AS float))) > 1
-                                                THEN 1
-                                                WHEN
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(wf.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(wf.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(wf.Latitude AS float))) < -1
-                                                THEN -1
-                                                ELSE
-                                                    COS(RADIANS(@Lat)) * COS(RADIANS(CAST(wf.Latitude AS float))) *
-                                                    COS(RADIANS(CAST(wf.Longitude AS float)) - RADIANS(@Lng)) +
-                                                    SIN(RADIANS(@Lat)) * SIN(RADIANS(CAST(wf.Latitude AS float)))
-                                            END
-                                        )
+                                    DistanceKm = 6371.0 * ACOS(
+                                                            CASE
+                                                                WHEN
+                                                                    COS(RADIANS(@Lat))
+                                                                    * COS(RADIANS(CAST(wf.Latitude AS float)))
+                                                                    * COS(
+                                                                        RADIANS(CAST(wf.Longitude AS float))
+                                                                        - RADIANS(@Lng))
+                                                                    + SIN(RADIANS(@Lat))
+                                                                    * SIN(RADIANS(CAST(wf.Latitude AS float)))
+                                                                    > 1
+                                                                THEN 1
+
+                                                                WHEN
+                                                                    COS(RADIANS(@Lat))
+                                                                    * COS(RADIANS(CAST(wf.Latitude AS float)))
+                                                                    * COS(
+                                                                        RADIANS(CAST(wf.Longitude AS float))
+                                                                        - RADIANS(@Lng))
+                                                                    + SIN(RADIANS(@Lat))
+                                                                    * SIN(RADIANS(CAST(wf.Latitude AS float)))
+                                                                    < -1
+                                                                THEN -1
+
+                                                                ELSE
+                                                                    COS(RADIANS(@Lat))
+                                                                    * COS(RADIANS(CAST(wf.Latitude AS float)))
+                                                                    * COS(
+                                                                        RADIANS(CAST(wf.Longitude AS float))
+                                                                        - RADIANS(@Lng))
+                                                                    + SIN(RADIANS(@Lat))
+                                                                    * SIN(RADIANS(CAST(wf.Latitude AS float)))
+                                                            END
+                                                        )
+
                                 FROM dbo.WeatherForecast wf
+
                                 WHERE wf.Active = 1
                                   AND wf.Latitude IS NOT NULL
                                   AND wf.Longitude IS NOT NULL
-                                  AND CAST(wf.DateWeather AS date) BETWEEN @TargetDate AND DATEADD(DAY, 1, @TargetDate)
+                                  AND wf.DateWeather >= @DateFrom
+                                  AND wf.DateWeather < @DateToExclusive
                             )
+
                             SELECT TOP (6)
                                 Id,
                                 DateWeather,
@@ -598,26 +733,29 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                 IsSevere,
                                 DistanceKm,
                                 Active
+
                             FROM WeatherBase
+
                             WHERE DistanceKm <= @RadiusKm
+
                             ORDER BY
                                 DateWeather ASC,
-                                DistanceKm ASC;";
+                                DistanceKm ASC;
+                            """;
+
             var parameters = new DynamicParameters();
+
             parameters.Add("@Lat", latitude, DbType.Double);
             parameters.Add("@Lng", longitude, DbType.Double);
-            parameters.Add("@TargetDate", targetDate.Date, DbType.Date);
+            parameters.Add("@DateFrom", dateFrom.Date, DbType.Date);
+            parameters.Add("@DateToExclusive", dateToExclusive.Date, DbType.Date);
             parameters.Add("@RadiusKm", radiusKm, DbType.Double);
 
             using var connection = await OpenConnectionAsync(ct);
-            return await connection.QueryAsync<LocalAiWeatherContextDTO>(
-                new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+            return await connection.QueryAsync<LocalAiWeatherContextDTO>(new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
-        public async Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(
-            double latitude,
-            double longitude,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default)
         {
             const string sql = @"
                             WITH SuggestionBase AS
@@ -716,11 +854,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                     parameters,
                     cancellationToken: ct));
         }
-        public async Task<IEnumerable<LocalAiCriticalAlertContextDTO>> GetNearbyCriticalAlertsAsync(
-            double latitude,
-            double longitude,
-            double radiusKm,
-            CancellationToken ct = default)
+        public async Task<IEnumerable<LocalAiCriticalAlertContextDTO>> GetNearbyCriticalAlertsAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default)
         {
             const string sql = """
                             DECLARE @UserPoint geography =
