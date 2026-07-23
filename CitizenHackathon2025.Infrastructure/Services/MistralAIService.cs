@@ -36,90 +36,125 @@ namespace CitizenHackathon2025.Infrastructure.Services
         public async Task<string> GenerateFromPromptAsync(string groundedPrompt, string responseLanguage = "fr-FR", CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(groundedPrompt))
+            {
                 throw new ArgumentException("Grounded prompt cannot be null or empty.", nameof(groundedPrompt));
+            }
 
-            _logger.LogInformation("[OLLAMA] PromptLength={Length}", groundedPrompt.Length);
+            var generationTimeoutSeconds = GetGenerationTimeoutSeconds();
 
-            _logger.LogDebug("[OLLAMA] PromptPreview={Preview}", groundedPrompt.Length > 1000 ? groundedPrompt[..1000] : groundedPrompt);
+            using var generationCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
+            generationCts.CancelAfter(TimeSpan.FromSeconds(generationTimeoutSeconds));
+
+            var generationToken = generationCts.Token;
             var stopwatch = Stopwatch.StartNew();
             var model = GetModel();
             var temperature = GetTemperature();
-
             var numPredict = Math.Clamp(_config.GetValue<int?>("MistralAI:NumPredict") ?? 320, 128, 768);
-
-            var numContext = Math.Clamp(
-                _config.GetValue<int?>("MistralAI:NumContext") ?? 4096,
-                2048,
-                8192);
-
-            var requestBody = BuildChatRequest(
-                groundedPrompt: groundedPrompt,
-                model: model,
-                temperature: temperature,
-                stream: false,
-                responseLanguage: responseLanguage,
-                languagePromptBuilder: _languagePromptBuilder,
-                numPredict: numPredict,
-                numContext: numContext);
+            var numContext = Math.Clamp(_config.GetValue<int?>("MistralAI:NumContext") ?? 4096, 2048, 8192);
+            var requestBody =
+                BuildChatRequest(
+                    groundedPrompt: groundedPrompt,
+                    model: model,
+                    temperature: temperature,
+                    stream: false,
+                    responseLanguage: responseLanguage,
+                    languagePromptBuilder:
+                        _languagePromptBuilder,
+                    numPredict: numPredict,
+                    numContext: numContext);
 
             _logger.LogInformation(
-                "[OLLAMA][SYNC] Request started. BaseAddress={BaseAddress}, Endpoint={Endpoint}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
-                _httpClient.BaseAddress?.ToString() ?? "<null>",
+                "[OLLAMA][SYNC] Request started. " +
+                "BaseAddress={BaseAddress}; " +
+                "Endpoint={Endpoint}; Model={Model}; " +
+                "Temperature={Temperature}; " +
+                "PromptLength={PromptLength}; " +
+                "TimeoutSeconds={TimeoutSeconds}",
+                _httpClient.BaseAddress?.ToString()
+                    ?? "<null>",
                 OllamaChatEndpoint,
                 model,
                 temperature,
-                groundedPrompt.Length);
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
-            {
-                Content = JsonContent.Create(requestBody, options: JsonOptions)
-            };
-
-            using var response = await _httpClient.SendAsync(request, ct);
-            var rawResponse = await response.Content.ReadAsStringAsync(ct);
-
-            if (string.IsNullOrWhiteSpace(rawResponse))
-            {
-                _logger.LogWarning("[OLLAMA][SYNC] Empty HTTP body returned.");
-                return "No response from Mistral.";
-            }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning(
-                    "[OLLAMA][SYNC] Non-success response from Ollama. StatusCode={StatusCode}, BodyPreview={BodyPreview}",
-                    (int)response.StatusCode,
-                    Truncate(rawResponse, 500));
-            }
-
-            response.EnsureSuccessStatusCode();
-
-            OllamaChatStreamResponse? parsedResponse;
+                groundedPrompt.Length,
+                generationTimeoutSeconds);
 
             try
             {
-                parsedResponse = JsonSerializer.Deserialize<OllamaChatStreamResponse>(rawResponse, JsonOptions);
+                using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
+                {
+                    Content = JsonContent.Create(requestBody, options: JsonOptions)
+                };
+
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, generationToken).ConfigureAwait(false);
+
+                var rawResponse = await response.Content.ReadAsStringAsync(generationToken).ConfigureAwait(false);
+
+                if (string.IsNullOrWhiteSpace(rawResponse))
+                {
+                    _logger.LogWarning("[OLLAMA][SYNC] Empty HTTP body returned.");
+
+                    return "No response from Mistral.";
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "[OLLAMA][SYNC] Non-success response. " +
+                        "StatusCode={StatusCode}; " +
+                        "BodyPreview={BodyPreview}",
+                        (int)response.StatusCode,
+                        Truncate(
+                            rawResponse,
+                            500));
+                }
+
+                response.EnsureSuccessStatusCode();
+
+                OllamaChatStreamResponse? parsedResponse;
+
+                try
+                {
+                    parsedResponse = JsonSerializer.Deserialize<OllamaChatStreamResponse>(rawResponse, JsonOptions);
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "[OLLAMA][SYNC] Failed to deserialize " +
+                        "Ollama response. " +
+                        "BodyPreview={BodyPreview}",
+                        Truncate(
+                            rawResponse,
+                            1000));
+
+                    throw;
+                }
+
+                var finalText = NormalizeGeneratedText(parsedResponse?.Message?.Content);
+
+                if (string.IsNullOrWhiteSpace(finalText))
+                {
+                    _logger.LogWarning("[OLLAMA][SYNC] Empty assistant content. " + "ElapsedMs={ElapsedMs}", stopwatch.ElapsedMilliseconds);
+
+                    return "No response from Mistral.";
+                }
+
+                _logger.LogInformation(
+                    "[OLLAMA][SYNC] Request completed. " +
+                    "FinalLength={FinalLength}; " +
+                    "ElapsedMs={ElapsedMs}",
+                    finalText.Length,
+                    stopwatch.ElapsedMilliseconds);
+
+                return finalText;
             }
-            catch (JsonException ex)
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested && generationCts.IsCancellationRequested)
             {
-                _logger.LogError(ex, "[OLLAMA][SYNC] Failed to deserialize Ollama response. " + "BodyPreview={BodyPreview}", Truncate(rawResponse, 1000));
+                _logger.LogError(ex, "[OLLAMA][SYNC] Generation timeout. " + "TimeoutSeconds={TimeoutSeconds}; " + "ElapsedMs={ElapsedMs}", generationTimeoutSeconds, stopwatch.ElapsedMilliseconds);
 
-                throw;
+                throw new TimeoutException($"Ollama generation exceeded " + $"{generationTimeoutSeconds} seconds.", ex);
             }
-
-            var finalText = NormalizeGeneratedText(parsedResponse?.Message?.Content);
-
-            if (string.IsNullOrWhiteSpace(finalText))
-            {
-                _logger.LogWarning("[OLLAMA][SYNC] Empty assistant content returned. ElapsedMs={ElapsedMs}", stopwatch.ElapsedMilliseconds);
-
-                return "No response from Mistral.";
-            }
-
-            _logger.LogInformation("[OLLAMA][SYNC] Request completed. FinalLength={FinalLength}, ElapsedMs={ElapsedMs}", finalText.Length, stopwatch.ElapsedMilliseconds);
-
-            return finalText;
         }
 
         public async Task<string> StreamFromPromptAsync(string groundedPrompt, Func<string, Task> onChunk, string responseLanguage = "fr-FR", CancellationToken ct = default)
@@ -127,33 +162,45 @@ namespace CitizenHackathon2025.Infrastructure.Services
             ArgumentNullException.ThrowIfNull(onChunk);
 
             if (string.IsNullOrWhiteSpace(groundedPrompt))
+            {
                 throw new ArgumentException("Grounded prompt cannot be null or empty.", nameof(groundedPrompt));
+            }
 
+            var generationTimeoutSeconds = GetGenerationTimeoutSeconds();
+
+            using var generationCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+            generationCts.CancelAfter(TimeSpan.FromSeconds(generationTimeoutSeconds));
+
+            var generationToken = generationCts.Token;
             var stopwatch = Stopwatch.StartNew();
             var model = GetModel();
             var temperature = GetTemperature();
-            //var chatUri = BuildChatUri();
-
             var numPredict = Math.Clamp(_config.GetValue<int?>("MistralAI:NumPredict") ?? 320, 128, 768);
-
             var numContext = Math.Clamp(_config.GetValue<int?>("MistralAI:NumContext") ?? 4096, 2048, 8192);
 
             var requestBody = BuildChatRequest(
-                groundedPrompt: groundedPrompt,
-                model: model,
-                temperature: temperature,
-                stream: true,
-                responseLanguage: responseLanguage,
-                languagePromptBuilder: _languagePromptBuilder,
-                numPredict: numPredict,
-                numContext: numContext);
+                    groundedPrompt: groundedPrompt,
+                    model: model,
+                    temperature: temperature,
+                    stream: true,
+                    responseLanguage: responseLanguage,
+                    languagePromptBuilder: _languagePromptBuilder,
+                    numPredict: numPredict,
+                    numContext: numContext);
 
-            _logger.LogInformation("[OLLAMA][STREAM] Request started. BaseAddress={BaseAddress}, Endpoint={Endpoint}, Model={Model}, Temperature={Temperature}, PromptLength={PromptLength}",
-                _httpClient.BaseAddress?.ToString() ?? "<null>",
+            _logger.LogWarning(
+                "[OLLAMA][STREAM] Request starting. " +
+                "BaseAddress={BaseAddress}; " +
+                "Endpoint={Endpoint}; Model={Model}; " +
+                "PromptLength={PromptLength}; " +
+                "TimeoutSeconds={TimeoutSeconds}",
+                _httpClient.BaseAddress?.ToString()
+                    ?? "<null>",
                 OllamaChatEndpoint,
                 model,
-                temperature,
-                groundedPrompt.Length);
+                groundedPrompt.Length,
+                generationTimeoutSeconds);
 
             var accumulated = new StringBuilder(4096);
             var streamBuffer = new StringBuilder(256);
@@ -161,123 +208,113 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var chunkCount = 0;
             var lineCount = 0;
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
-            {
-                Content = JsonContent.Create(requestBody)
-            };
-
-            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-
-            _logger.LogInformation(
-                "[OLLAMA][STREAM] Response headers received. StatusCode={StatusCode}, ElapsedMs={ElapsedMs}",
-                (int)response.StatusCode,
-                stopwatch.ElapsedMilliseconds);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorBody = await response.Content.ReadAsStringAsync(ct);
-
-                _logger.LogWarning(
-                    "[OLLAMA][STREAM] Non-success response from Ollama. StatusCode={StatusCode}, BodyPreview={BodyPreview}",
-                    (int)response.StatusCode,
-                    Truncate(errorBody, 500));
-            }
-
-            response.EnsureSuccessStatusCode();
-
-            await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            using var reader = new StreamReader(stream);
-
             string? doneReason = null;
             int? evalCount = null;
             int? promptEvalCount = null;
-            
+
             long? totalDurationNanoseconds = null;
             long? promptEvalDurationNanoseconds = null;
             long? evalDurationNanoseconds = null;
 
-            while (!reader.EndOfStream)
+            try
             {
-                ct.ThrowIfCancellationRequested();
-
-                var line = await reader.ReadLineAsync(ct);
-                lineCount++;
-
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-
-                OllamaChatStreamResponse? envelope;
-                try
+                using var request = new HttpRequestMessage(HttpMethod.Post, OllamaChatEndpoint)
                 {
-                    envelope = JsonSerializer.Deserialize<OllamaChatStreamResponse>(line, JsonOptions);
-                }
-                catch (JsonException ex)
+                    Content = JsonContent.Create(requestBody, options: JsonOptions)
+                };
+
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, generationToken).ConfigureAwait(false);
+
+                _logger.LogInformation("[OLLAMA][STREAM] Response headers received. " + "StatusCode={StatusCode}; " + "ElapsedMs={ElapsedMs}", (int)response.StatusCode, stopwatch.ElapsedMilliseconds);
+
+                if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning(
-                        ex,
-                        "[OLLAMA][STREAM] Failed to deserialize stream line #{LineCount}. LinePreview={LinePreview}",
-                        lineCount,
-                        Truncate(line, 500));
-                    continue;
+                    var errorBody = await response.Content.ReadAsStringAsync(generationToken).ConfigureAwait(false);
+
+                    _logger.LogWarning("[OLLAMA][STREAM] Non-success response. " + "StatusCode={StatusCode}; " + "BodyPreview={BodyPreview}", (int)response.StatusCode, Truncate(errorBody, 500));
                 }
 
-                if (envelope is null)
-                    continue;
+                response.EnsureSuccessStatusCode();
 
-                var chunkText = envelope.Message?.Content ?? string.Empty;
+                await using var stream = await response.Content.ReadAsStreamAsync(generationToken).ConfigureAwait(false);
 
-                if (!string.IsNullOrEmpty(chunkText))
+                using var reader = new StreamReader(stream);
+
+                while (!reader.EndOfStream)
                 {
-                    chunkCount++;
+                    generationToken.ThrowIfCancellationRequested();
 
-                    // Never delete or add a space here.
-                    // The content must be preserved exactly as Ollama sends it.
-                    accumulated.Append(chunkText);
-                    streamBuffer.Append(chunkText);
+                    var line = await reader.ReadLineAsync(generationToken).ConfigureAwait(false);
 
-                    var shouldFlush =
-                        streamBuffer.Length >= 32 ||
-                        chunkText.Contains('.') ||
-                        chunkText.Contains('!') ||
-                        chunkText.Contains('?') ||
-                        chunkText.Contains('\n');
+                    lineCount++;
 
-                    if (shouldFlush)
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
+
+                    OllamaChatStreamResponse? envelope;
+
+                    try
                     {
-                        var bufferedChunk =
-                            streamBuffer.ToString();
-
-                        await onChunk(bufferedChunk);
-
-                        streamBuffer.Clear();
+                        envelope = JsonSerializer.Deserialize<OllamaChatStreamResponse>(line, JsonOptions);
                     }
-                }
+                    catch (JsonException ex)
+                    {
+                        _logger.LogWarning(ex, "[OLLAMA][STREAM] Failed to deserialize " + "line #{LineCount}. " + "LinePreview={LinePreview}", lineCount, Truncate(line, 500));
 
-                if (envelope.Done)
-                {
-                    doneReason =
-                        envelope.DoneReason;
+                        continue;
+                    }
 
-                    evalCount =
-                        envelope.EvalCount;
+                    if (envelope is null)
+                        continue;
 
-                    promptEvalCount =
-                        envelope.PromptEvalCount;
+                    var chunkText = envelope.Message?.Content ?? string.Empty;
 
-                    totalDurationNanoseconds =
-                        envelope.TotalDuration;
+                    if (!string.IsNullOrEmpty(chunkText))
+                    {
+                        chunkCount++;
 
-                    promptEvalDurationNanoseconds =
-                        envelope.PromptEvalDuration;
+                        if (chunkCount == 1)
+                        {
+                            _logger.LogInformation("[OLLAMA][STREAM] First token received. " + "ElapsedMs={ElapsedMs}", stopwatch.ElapsedMilliseconds);
+                        }
 
-                    evalDurationNanoseconds =
-                        envelope.EvalDuration;
+                        accumulated.Append(chunkText);
+                        streamBuffer.Append(chunkText);
+
+                        var shouldFlush = streamBuffer.Length >= 32 || chunkText.Contains('.') || chunkText.Contains('!') || chunkText.Contains('?') || chunkText.Contains('\n');
+
+                        if (shouldFlush)
+                        {
+                            var bufferedChunk = streamBuffer.ToString();
+
+                            await onChunk(bufferedChunk).ConfigureAwait(false);
+
+                            streamBuffer.Clear();
+                        }
+                    }
+
+                    if (!envelope.Done)
+                        continue;
+
+                    doneReason = envelope.DoneReason;
+
+                    evalCount = envelope.EvalCount;
+
+                    promptEvalCount = envelope.PromptEvalCount;
+
+                    totalDurationNanoseconds = envelope.TotalDuration;
+
+                    promptEvalDurationNanoseconds = envelope.PromptEvalDuration;
+
+                    evalDurationNanoseconds = envelope.EvalDuration;
 
                     _logger.LogWarning(
                         "[OLLAMA][STREAM] Completion received. " +
-                        "DoneReason={DoneReason}; EvalCount={EvalCount}; " +
+                        "DoneReason={DoneReason}; " +
+                        "EvalCount={EvalCount}; " +
                         "PromptEvalCount={PromptEvalCount}; " +
-                        "ChunkCount={ChunkCount}; TotalLength={TotalLength}; " +
+                        "ChunkCount={ChunkCount}; " +
+                        "TotalLength={TotalLength}; " +
                         "ElapsedMs={ElapsedMs}",
                         doneReason,
                         evalCount,
@@ -288,26 +325,27 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                     break;
                 }
-            }
 
-            if (streamBuffer.Length > 0)
+                if (streamBuffer.Length > 0)
+                {
+                    await onChunk(streamBuffer.ToString()).ConfigureAwait(false);
+
+                    streamBuffer.Clear();
+                }
+            }
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested && generationCts.IsCancellationRequested)
             {
-                await onChunk(streamBuffer.ToString());
+                _logger.LogError(ex, "[OLLAMA][STREAM] Generation timeout. " + "TimeoutSeconds={TimeoutSeconds}; " + "ElapsedMs={ElapsedMs}; " + "ReceivedChunks={ChunkCount}", generationTimeoutSeconds, stopwatch.ElapsedMilliseconds, chunkCount);
 
-                streamBuffer.Clear();
+                throw new TimeoutException("Ollama generation exceeded " + $"{generationTimeoutSeconds} seconds.", ex);
             }
-
+            // Generation timeout
+            
             var finalText = NormalizeGeneratedText(accumulated.ToString());
 
             if (string.IsNullOrWhiteSpace(finalText))
             {
-                _logger.LogWarning(
-                    "[OLLAMA][STREAM] Empty final content returned. " +
-                    "ChunkCount={ChunkCount}; LineCount={LineCount}; " +
-                    "ElapsedMs={ElapsedMs}",
-                    chunkCount,
-                    lineCount,
-                    stopwatch.ElapsedMilliseconds);
+                _logger.LogWarning("[OLLAMA][STREAM] Empty final content. " + "ChunkCount={ChunkCount}; " + "LineCount={LineCount}; " + "ElapsedMs={ElapsedMs}", chunkCount, lineCount, stopwatch.ElapsedMilliseconds);
 
                 return "No response from Mistral.";
             }
@@ -316,21 +354,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (wasLimitedByLength)
             {
-                _logger.LogWarning(
-                    "[OLLAMA][STREAM] Output truncated by num_predict. " +
-                    "FinalLength={FinalLength}; EvalCount={EvalCount}; " +
-                    "NumPredict={NumPredict}",
-                    finalText.Length,
-                    evalCount,
-                    numPredict);
+                _logger.LogWarning("[OLLAMA][STREAM] Output truncated. " + "FinalLength={FinalLength}; " + "EvalCount={EvalCount}; " + "NumPredict={NumPredict}", finalText.Length, evalCount, numPredict);
 
-                // Honestly report an interruption without making up an ending.
                 finalText = EnsureEllipsis(finalText);
             }
             else
             {
-                // A normally completed response receives at a minimum
-                // a terminal punctuation mark.
                 finalText = EnsureTerminalPunctuation(finalText);
             }
 
@@ -345,9 +374,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _logger.LogInformation(
                 "[OLLAMA][STREAM] Request completed. " +
                 "DoneReason={DoneReason}; " +
-                "EvalCount={EvalCount}; PromptEvalCount={PromptEvalCount}; " +
-                "ChunkCount={ChunkCount}; LineCount={LineCount}; " +
-                "FinalLength={FinalLength}; ElapsedMs={ElapsedMs}; " +
+                "EvalCount={EvalCount}; " +
+                "PromptEvalCount={PromptEvalCount}; " +
+                "ChunkCount={ChunkCount}; " +
+                "LineCount={LineCount}; " +
+                "FinalLength={FinalLength}; " +
+                "ElapsedMs={ElapsedMs}; " +
                 "TotalSeconds={TotalSeconds}; " +
                 "PromptEvalSeconds={PromptEvalSeconds}; " +
                 "EvalSeconds={EvalSeconds}; " +
@@ -381,6 +413,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         private float GetTemperature()
             => _config.GetValue<float?>("MistralAI:Temperature") ?? 0.3f;
+
+        private int GetGenerationTimeoutSeconds()
+        {
+            return Math.Clamp(_config.GetValue<int?>("MistralAI:GenerationTimeoutSeconds") ?? 900, 60, 3600);
+        }
 
         private static object BuildChatRequest(string groundedPrompt, string model, float temperature, bool stream, string responseLanguage, ILanguagePromptBuilder languagePromptBuilder, int numPredict, int numContext)
         {

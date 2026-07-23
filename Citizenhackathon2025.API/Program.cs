@@ -762,46 +762,26 @@ internal class Program
                 ? apiUrl.Replace("/api/chat", "/")
                 : apiUrl.TrimEnd('/') + "/");
 
-            client.Timeout = TimeSpan.FromSeconds(configuration.GetValue<int?>("MistralAI:TimeoutSeconds") ?? 180);
+            client.Timeout = Timeout.InfiniteTimeSpan;
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
         });
 
         services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
         {
             var configuration = sp.GetRequiredService<IConfiguration>();
-
-            var logger =sp.GetRequiredService<ILogger<MistralAIService>>();
-
+            var logger = sp.GetRequiredService<ILogger<MistralAIService>>();
             var baseUrl = configuration["MistralAI:ApiBaseUrl"] ?? "http://127.0.0.1:11434/";
-
-            var generationTimeout = configuration.GetValue<int?>("MistralAI:GenerationTimeoutSeconds") ?? 900;
-
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
 
-            // Polly is the sole owner of the timeout.
+            /*
+             * No HttpClient timeout.
+             * MistralAIService handles it itself
+             * maximum generation time.
+             */
             client.Timeout = Timeout.InfiniteTimeSpan;
-
-            logger.LogWarning(
-                "[MISTRAL HTTP CONFIG] BaseAddress={BaseAddress}; " +
-                "HttpClientTimeout={HttpClientTimeout}; " +
-                "PollyGenerationTimeoutSeconds={GenerationTimeoutSeconds}",
-                client.BaseAddress,
-                client.Timeout,
-                generationTimeout);
-
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
-
             client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-        })
-        .AddHttpMessageHandler(sp =>
-        {
-            var pipelines = sp.GetRequiredService<ResiliencePipelines>();
-
-            var logger = sp.GetRequiredService<ILogger<MistralAIService>>();
-
-            logger.LogCritical("[MISTRAL HANDLER ACTIVE] Using pipelines.Ollama.");
-
-            return new ResilienceHandler(pipelines.Ollama);
+            logger.LogWarning("[MISTRAL HTTP CONFIG] " + "BaseAddress={BaseAddress}; " + "HttpClientTimeout={HttpClientTimeout}; " + "PollyHandler=False", client.BaseAddress, client.Timeout);
         });
 
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
@@ -1057,6 +1037,7 @@ internal class Program
         services.AddScoped<IGptOrchestrator, GptOrchestrator>();
         services.AddScoped<ILanguagePromptBuilder, LanguagePromptBuilder>();
         services.AddScoped<ILocalAiContextService, LocalAiContextService>();
+        services.AddScoped<IPlaceNameResolver, PlaceNameResolver>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IPasswordHasher, Sha512PasswordHasher>();

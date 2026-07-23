@@ -17,15 +17,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly ILocalAiDataRepository _localAiRepo;
         private readonly ILogger<LocalAiContextService> _logger;
 
-        private readonly record struct LocalAiDateRange(
-            DateTime From,
-            DateTime ToExclusive)
+        private readonly record struct LocalAiDateRange(DateTime From, DateTime ToExclusive)
         {
-            public bool IsSingleDay =>
-                ToExclusive == From.AddDays(1);
+            public bool IsSingleDay => ToExclusive == From.AddDays(1);
 
-            public DateTime LastIncludedDate =>
-                ToExclusive.AddDays(-1);
+            public DateTime LastIncludedDate => ToExclusive.AddDays(-1);
         }
 
 
