@@ -1002,6 +1002,7 @@ internal class Program
     {
         services.AddSingleton<INotifierAdmin, NotifierAdmin>();
         services.AddSingleton<ITimeZoneConverter, DefaultTimeZoneConverter>();
+        services.AddSingleton<OutZenDomainGuard>();
         services.AddSingleton<TokenGenerator>();
         services.AddSingleton<IDeviceHasher, DeviceHasher>();
         services.AddSingleton<IGptRequestRegistry, GptRequestRegistry>();

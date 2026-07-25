@@ -1,4 +1,5 @@
-﻿using Azure.Core;
+﻿using Azure;
+using Azure.Core;
 using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Identity.Client;
 using Microsoft.VisualBasic;
 using System.Diagnostics;
 using System.Globalization;
@@ -31,17 +33,19 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly IGptRequestRegistry _gptRequestRegistry;
         private readonly IHostApplicationLifetime _appLifetime;
         private readonly ILogger<GptOrchestrator> _logger;
-        
-        public GptOrchestrator(IServiceScopeFactory scopeFactory, IHubContext<GPTHub, IGptClient> hubContext, IGptRequestRegistry gptRequestRegistry, IHostApplicationLifetime appLifetime, ILogger<GptOrchestrator> logger)
+        private readonly OutZenDomainGuard _domainGuard;
+
+        public GptOrchestrator(IServiceScopeFactory scopeFactory, IHubContext<GPTHub, IGptClient> hubContext, IGptRequestRegistry gptRequestRegistry, IHostApplicationLifetime appLifetime, ILogger<GptOrchestrator> logger, OutZenDomainGuard domainGuard)
         {
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
             _gptRequestRegistry = gptRequestRegistry ?? throw new ArgumentNullException(nameof(gptRequestRegistry));
             _appLifetime = appLifetime ?? throw new ArgumentNullException(nameof(appLifetime));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _domainGuard = domainGuard ?? throw new ArgumentNullException(nameof(domainGuard));
+
             _logger.LogWarning("[GPT GEO PATCH] Version 2026-07-18-v3 loaded: radius=25, maxCandidates=12");
         }
-
         public async Task<GptStartResponseDto> StartMistralRequestAsync(GptPromptRequest request, CancellationToken ct = default)
         {
             ValidateRequest(request);
@@ -136,7 +140,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     interactionId,
                     requestId);
 
-                await MarkCancelledSafeAsync(interactionId,"Generation cancelled.", CancellationToken.None);
+                await MarkCancelledSafeAsync(interactionId, "Generation cancelled.", CancellationToken.None);
 
                 await _hubContext.SendStatus(
                     new GptResponseStatusDto
@@ -285,6 +289,48 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 _gptRequestRegistry.Remove(interaction.Id, requestId);
             }
         }
+
+        private async Task<GptInteractionDTO> CompleteWithGuardMessageAsync(IGptInteractionRepository gptRepository, int interactionId, string requestId, string message, bool pushChunksToHub, CancellationToken ct)
+        {
+            var updated = await gptRepository.UpdateResponseAsync(interactionId, message, ct).ConfigureAwait(false);
+
+            if (!updated)
+                throw new InvalidOperationException($"Failed to persist guarded GPT response for interaction {interactionId}.");
+
+            var persisted = await gptRepository.GetByIdAsync(interactionId)
+                .ConfigureAwait(false);
+
+            if (persisted is null)
+                throw new InvalidOperationException($"GPT interaction {interactionId} not found after guard response.");
+
+            if (pushChunksToHub)
+            {
+                await _hubContext.SendChunk(
+                    new GptResponseChunkDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        Chunk = message,
+                        IsFinal = false
+                    });
+
+                await _hubContext.SendChunk(
+                    new GptResponseChunkDto
+                    {
+                        InteractionId = interactionId,
+                        RequestId = requestId,
+                        Chunk = string.Empty,
+                        IsFinal = true
+                    });
+            }
+
+            _logger.LogWarning(
+                "[GPT DOMAIN GUARD] Request blocked. InteractionId={InteractionId}, RequestId={RequestId}",
+                interactionId,
+                requestId);
+
+            return persisted.MapToGptInteractionDTO();
+        }
         private static void ValidateRequest(GptPromptRequest request)
         {
             if (request is null)
@@ -347,6 +393,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
             var localAiContextService = scope.ServiceProvider.GetRequiredService<ILocalAiContextService>();
             var mistralAiService = scope.ServiceProvider.GetRequiredService<IMistralAIService>();
             var placeRepository = scope.ServiceProvider.GetRequiredService<IPlaceRepository>();
+
+            var inputGuard = _domainGuard.CheckInput(prompt);
+
+            if (!inputGuard.Allowed)
+            {
+                var blockedResponse = inputGuard.Message ?? "I cannot assist with this type of request. OutZen is limited to tourism, cultural, and local recommendations, as well as visitor safety and well-being.";
+
+                return await CompleteWithGuardMessageAsync(
+                    gptRepository,
+                    interactionId,
+                    requestId,
+                    blockedResponse,
+                    pushChunksToHub,
+                    ct).ConfigureAwait(false);
+            }
 
             var swContext = Stopwatch.StartNew();
 
@@ -755,7 +816,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                     IsFinal = false
                                 });
                         },
-                        responseLanguage:responseLanguage, ct: ct).ConfigureAwait(false);
+                        responseLanguage: responseLanguage, ct: ct).ConfigureAwait(false);
                 }
                 else
                 {
@@ -834,6 +895,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
             finalResponse = SanitizeUnsupportedSafetyClaims(finalResponse, hasConfirmedCriticalAlert: localContext.CriticalAlerts.Count > 0);
 
             finalResponse = FilterUnsupportedTourismItems(finalResponse, localContext, responseLanguage);
+
+            var outputGuard = _domainGuard.CheckOutput(finalResponse);
+
+            if (!outputGuard.Allowed)
+            {
+                finalResponse =
+                    outputGuard.Message ??
+                    "La réponse générée a été bloquée car elle sort du domaine autorisé d’OutZen.";
+            }
 
             var updated = await gptRepository.UpdateResponseAsync(interactionId, finalResponse, ct).ConfigureAwait(false);
 
@@ -1183,7 +1253,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     interactionId);
             }
         }
- 
+
         private static GptInteractionCompletedDto ToCompletedDto(GptInteractionDTO dto)
         {
             if (dto is null)
@@ -1489,14 +1559,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
             result = Regex.Replace(result, @"\bрядом\s+с\b", "près de", options);
             // Temporal expressions.
             result = Regex.Replace(result, @"\bсегодня\b", "aujourd'hui", options);
-            result = Regex.Replace(result, @"\bзавтра\b", "demain",options);
+            result = Regex.Replace(result, @"\bзавтра\b", "demain", options);
             result = Regex.Replace(result, @"\b(в\s+эти\s+выходные|на\s+выходных)\b", "ce week-end", options);
             result = Regex.Replace(result, @"\b(на\s+этой\s+неделе|на\s+неделе)\b", "cette semaine", options);
             // Tourist intentions.
             result = Regex.Replace(result, @"что\s+интересного\s+(есть|можно\s+увидеть)?", "quoi faire", options);
             result = Regex.Replace(result, @"что\s+посмотреть", "quoi faire", options);
             result = Regex.Replace(result, @"куда\s+сходить", "quoi faire", options);
-            
+
             return Regex.Replace(result, @"\s+", " ").Trim();
 
         }
