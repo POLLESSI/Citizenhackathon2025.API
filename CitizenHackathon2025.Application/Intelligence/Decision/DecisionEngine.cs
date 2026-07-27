@@ -1,59 +1,71 @@
-﻿using CitizenHackathon2025.Contracts.DTOs;
+﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
+using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Application.Intelligence.Decision
 {
     public sealed class DecisionEngine : IDecisionEngine
     {
-        public Task<DecisionRecommendation> RecommendAsync(DecisionContext context, CancellationToken ct = default)
+        private readonly ILocalCrowdDecisionService _localCrowdDecision;
+        private readonly ILogger<DecisionEngine> _logger;
+
+        public DecisionEngine(ILocalCrowdDecisionService localCrowdDecision, ILogger<DecisionEngine> logger)
+        {
+            _localCrowdDecision = localCrowdDecision
+                ?? throw new ArgumentNullException(nameof(localCrowdDecision));
+
+            _logger = logger
+                ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public async Task<DecisionRecommendation> RecommendAsync(DecisionContext context, CancellationToken ct = default)
         {
             var actions = new List<string>();
 
             if (context.RiskScore >= 85 || context.Severity >= 4)
             {
-                actions.Add("Afficher une alerte critique sur la carte.");
-                actions.Add("Éviter de recommander cette zone aux utilisateurs.");
-                actions.Add("Proposer des alternatives plus sûres.");
-                actions.Add("Demander une validation humaine.");
+                actions.Add("Display a critical alert on the map.");
+                actions.Add("Avoid recommending this area to users.");
+                actions.Add("Suggest safer alternatives.");
+                actions.Add("Request human validation.");
             }
             else if (context.RiskScore >= 65 || context.Severity == 3)
             {
-                actions.Add("Surveiller la zone en temps réel.");
-                actions.Add("Afficher un avertissement aux utilisateurs.");
+                actions.Add("Monitor the area in real-time.");
+                actions.Add("Display a warning to users.");
             }
             else
             {
-                actions.Add("Aucune action critique immédiate.");
+                actions.Add("No immediate critical action required.");
             }
 
             if (context.HasCriticalWeather)
-                actions.Add("Prioriser les alternatives indoor.");
+                actions.Add("Prioritize indoor alternatives.");
 
             if (context.HasTrafficIssue)
-                actions.Add("Éviter les itinéraires traversant la zone affectée.");
+                actions.Add("Avoid routes through the affected area.");
 
-            return Task.FromResult(new DecisionRecommendation
+            return new DecisionRecommendation
             {
                 Priority = ResolvePriority(context.RiskScore, context.Severity),
                 Actions = actions,
                 Message = $"Decision recommendation generated for {context.ZoneName}."
-            });
+            };
         }
 
-        private static string ResolvePriority(int riskScore, byte severity)
-        {
-            if (riskScore >= 85 || severity >= 4) return "Critical";
-            if (riskScore >= 65 || severity == 3) return "High";
-            if (riskScore >= 40 || severity == 2) return "Moderate";
-            return "Normal";
-        }
-
-        public Task<List<DecisionActionDTO>> RecommendActionsAsync(IEnumerable<CrowdAlertCluster> clusters, CancellationToken ct = default)
+        public async Task<List<DecisionActionDTO>> RecommendActionsAsync(IEnumerable<CrowdAlertCluster> clusters, CancellationToken ct = default)
         {
             var actions = new List<DecisionActionDTO>();
 
             foreach (var cluster in clusters)
             {
                 ct.ThrowIfCancellationRequested();
+
+                var localAiDecision = await TryAnalyzeWithLocalAiAsync(cluster, ct);
+
+                var priority = ResolvePriority(cluster.RiskScore, cluster.Severity);
+
+                var localMessage = string.IsNullOrWhiteSpace(localAiDecision?.UserMessage) ? null : localAiDecision.UserMessage.Trim();
 
                 if (cluster.RiskScore >= 85 || cluster.Severity >= 4)
                 {
@@ -64,7 +76,8 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                         Severity = cluster.Severity,
                         Priority = "Critical",
                         ActionType = "AvoidZone",
-                        Message = "Éviter cette zone dans les recommandations utilisateur.",
+                        Message = localMessage
+                            ?? "Avoid this area in user recommendations.",
                         RequiresHumanValidation = true
                     });
 
@@ -75,7 +88,7 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                         Severity = cluster.Severity,
                         Priority = "Critical",
                         ActionType = "SuggestAlternatives",
-                        Message = "Proposer automatiquement des alternatives moins fréquentées à proximité.",
+                        Message = "Automatically suggest less crowded alternatives nearby.",
                         RequiresHumanValidation = false
                     });
 
@@ -86,7 +99,7 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                         Severity = cluster.Severity,
                         Priority = "Critical",
                         ActionType = "NotifyModerator",
-                        Message = "Demander une validation humaine par un modérateur ou administrateur.",
+                        Message = "Request human validation by a moderator or administrator.",
                         RequiresHumanValidation = true
                     });
                 }
@@ -99,7 +112,8 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                         Severity = cluster.Severity,
                         Priority = "High",
                         ActionType = "DisplayWarning",
-                        Message = "Afficher un avertissement discret aux utilisateurs consultant cette zone.",
+                        Message = localMessage
+                            ?? "Display a discreet warning to users viewing this area.",
                         RequiresHumanValidation = false
                     });
 
@@ -110,7 +124,7 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                         Severity = cluster.Severity,
                         Priority = "High",
                         ActionType = "IncreaseMonitoring",
-                        Message = "Renforcer la surveillance de cette zone dans le Command Center.",
+                        Message = "Increase monitoring of this area in the Command Center.",
                         RequiresHumanValidation = false
                     });
                 }
@@ -123,13 +137,62 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                         Severity = cluster.Severity,
                         Priority = "Moderate",
                         ActionType = "Watch",
-                        Message = "Maintenir cette zone sous observation.",
+                        Message = localMessage
+                            ?? "Keep this area under observation.",
                         RequiresHumanValidation = false
                     });
                 }
             }
 
-            return Task.FromResult(actions);
+            return actions;
+        }
+
+        private async Task<LocalCrowdDecisionResult?> TryAnalyzeWithLocalAiAsync(CrowdAlertCluster cluster, CancellationToken ct)
+        {
+            try
+            {
+                var request = new LocalCrowdDecisionRequest
+                {
+                    ZoneName = cluster.ZoneName,
+                    ActiveConnections = cluster.TotalActiveConnections,
+                    UniqueDevices = cluster.TotalUniqueDevices,
+                    BaselineConnections = null,
+                    RiskScore = cluster.RiskScore,
+                    Severity = cluster.Severity,
+                    HasWeatherRisk = false,
+                    HasTrafficRisk = false,
+                    HasKnownEvent = false
+                };
+
+                var result = await _localCrowdDecision.AnalyzeAsync(request, ct);
+
+                if (result is null)
+                    return null;
+
+                _logger.LogInformation("[LOCAL CROWD AI] Zone={ZoneName}, Priority={Priority}, Summary={Summary}", cluster.ZoneName, result.Priority, result.Summary);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[LOCAL CROWD AI] Local analysis failed for zone {ZoneName}. Deterministic decision kept.", cluster.ZoneName);
+
+                return null;
+            }
+        }
+
+        private static string ResolvePriority(int riskScore, byte severity)
+        {
+            if (riskScore >= 85 || severity >= 4)
+                return "Critical";
+
+            if (riskScore >= 65 || severity == 3)
+                return "High";
+
+            if (riskScore >= 40 || severity == 2)
+                return "Moderate";
+
+            return "Normal";
         }
     }
 }

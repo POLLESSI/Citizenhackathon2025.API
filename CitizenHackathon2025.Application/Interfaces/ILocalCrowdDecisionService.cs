@@ -1,17 +1,12 @@
-﻿using CitizenHackathon2025.DTOs.DTOs.Antennas;
+﻿using CitizenHackathon2025.Contracts.DTOs;
 
 namespace CitizenHackathon2025.Application.Interfaces
 {
-    public interface IAntennaZoneSimulationService
+    public interface ILocalCrowdDecisionService
     {
-        Task SimulateAsync(SimulateAntennaZoneRequest request, CancellationToken ct = default);
+        Task<LocalCrowdDecisionResult> AnalyzeAsync(LocalCrowdDecisionRequest request, CancellationToken ct = default);
     }
 }
-
-
-
-
-
 
 
 

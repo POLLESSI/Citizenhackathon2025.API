@@ -439,14 +439,11 @@ internal class Program
         {
             var config = sp.GetRequiredService<IConfiguration>();
 
-            var cs =
-                config.GetConnectionString("default")
-                ?? config.GetConnectionString("DefaultConnection");
+            var cs = config.GetConnectionString("default") ?? config.GetConnectionString("DefaultConnection");
 
             if (string.IsNullOrWhiteSpace(cs))
             {
-                throw new InvalidOperationException(
-                    "SQL ConnectionString missing. Expected ConnectionStrings:default or ConnectionStrings:DefaultConnection.");
+                throw new InvalidOperationException("SQL ConnectionString missing. Expected ConnectionStrings:default or ConnectionStrings:DefaultConnection.");
             }
 
             Console.WriteLine($"[SQL-CONNECTION OK] Length={cs.Length}");
@@ -505,12 +502,9 @@ internal class Program
                     {
                         var path = ctx.HttpContext.Request.Path;
                         var fromQuery = ctx.Request.Query["access_token"];
-                        var fromCookie = ctx.Request.Cookies.TryGetValue(Cookies.JwtTokenName, out var cookie)
-                            ? cookie
-                            : null;
+                        var fromCookie = ctx.Request.Cookies.TryGetValue(Cookies.JwtTokenName, out var cookie) ? cookie : null;
 
-                        if (path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase) &&
-                            !string.IsNullOrWhiteSpace(fromQuery))
+                        if (path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(fromQuery))
                         {
                             ctx.Token = fromQuery;
                         }
@@ -939,39 +933,51 @@ internal class Program
                 "https://geoservices.wallonie.be/arcgis/rest/services/INDUSTRIES_SERVICES/ANTENNES/MapServer/0/");
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
         });
-    }
 
-    private static IHttpClientBuilder AddProtectedHttpClient<TClient, TImplementation>(
-    IServiceCollection services,
-    IConfiguration configuration,
-    string providerName)
-    where TClient : class
-    where TImplementation : class, TClient
-    {
-        var section = configuration.GetSection($"ExternalProviders:{providerName}");
-        var options = section.Get<ExternalProviderOptions>()
-            ?? throw new InvalidOperationException($"Missing ExternalProviders:{providerName}");
-
-        services.Configure<ExternalProviderOptions>(section);
-
-        return services.AddHttpClient<TClient, TImplementation>((sp, client) =>
+        services.AddHttpClient<ILocalCrowdDecisionService, OllamaCrowdDecisionService>((sp, client) =>
         {
-            client.BaseAddress = new Uri(options.BaseUrl);
-            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-            client.MaxResponseContentBufferSize = options.MaxPayloadBytes;
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
-        })
-        .ConfigurePrimaryHttpMessageHandler(() =>
-        {
-            return new SocketsHttpHandler
-            {
-                AllowAutoRedirect = false,
-                MaxConnectionsPerServer = 20,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
-            };
+            var cfg = sp.GetRequiredService<IConfiguration>();
+
+            var baseUrl = cfg["Ollama:BaseUrl"] ?? cfg["MistralAI:ApiBaseUrl"] ?? "http://localhost:11434/";
+
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen-CrowdDecision/1.0");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         });
     }
+
+    //private static IHttpClientBuilder AddProtectedHttpClient<TClient, TImplementation>(
+    //IServiceCollection services,
+    //IConfiguration configuration,
+    //string providerName)
+    //where TClient : class
+    //where TImplementation : class, TClient
+    //{
+    //    var section = configuration.GetSection($"ExternalProviders:{providerName}");
+    //    var options = section.Get<ExternalProviderOptions>()
+    //        ?? throw new InvalidOperationException($"Missing ExternalProviders:{providerName}");
+
+    //    services.Configure<ExternalProviderOptions>(section);
+
+    //    return services.AddHttpClient<TClient, TImplementation>((sp, client) =>
+    //    {
+    //        client.BaseAddress = new Uri(options.BaseUrl);
+    //        client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+    //        client.MaxResponseContentBufferSize = options.MaxPayloadBytes;
+    //        client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
+    //    })
+    //    .ConfigurePrimaryHttpMessageHandler(() =>
+    //    {
+    //        return new SocketsHttpHandler
+    //        {
+    //            AllowAutoRedirect = false,
+    //            MaxConnectionsPerServer = 20,
+    //            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+    //            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
+    //        };
+    //    });
+    //}
     private static void ConfigureRepositories(IServiceCollection services)
     {
         services.AddScoped<IAIRepository, AIRepository>();
