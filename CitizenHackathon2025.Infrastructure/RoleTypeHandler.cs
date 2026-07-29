@@ -2,7 +2,7 @@
 using CitizenHackathon2025.Contracts.Enums;
 using Dapper;
 
-namespace CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers
+namespace CitizenHackathon2025.Infrastructure
 {
     public class RoleTypeHandler : SqlMapper.TypeHandler<UserRole>
     {
@@ -16,9 +16,7 @@ namespace CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers
             if (value == null || value == DBNull.Value)
                 return UserRole.User; // fallback
 
-            return Enum.IsDefined(typeof(UserRole), (int)value)
-                ? (UserRole)(int)value
-                : UserRole.User; // fallback
+            return Enum.IsDefined(typeof(UserRole), (int)value) ? (UserRole)(int)value : UserRole.User; // fallback
         }
     }
 }

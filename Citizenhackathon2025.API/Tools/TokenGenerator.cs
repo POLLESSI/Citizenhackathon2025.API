@@ -74,11 +74,11 @@ namespace CitizenHackathon2025.API.Tools
         }
         public string GenerateTokenFromPrincipal(ClaimsPrincipal principal, int expiresInMinutes = 5)
         {
-            // Sécurité : clé & algo
+            // Security: key & algorithm
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512);
 
-            // Email/Name (fallbacks robustes)
+            // Email/Name (robust fallbacks)
             var email =
                    principal.FindFirstValue(ClaimTypes.Email)
                 ?? principal.FindFirstValue(JwtRegisteredClaimNames.Email)
@@ -86,17 +86,17 @@ namespace CitizenHackathon2025.API.Tools
                 ?? principal.Identity?.Name
                 ?? "unknown@local";
 
-            // Rôles : on récupère tous les rôles présents
+            // Roles: retrieve all existing roles
             var roles = principal.FindAll(ClaimTypes.Role).Select(c => c.Value).Distinct().ToList();
             if (roles.Count == 0)
             {
-                // fallback : cherche un claim "role" custom si besoin
+                // fallback: look for a custom "role" claim if needed   
                 var role = principal.FindFirst("role")?.Value
                            ?? CitizenHackathon2025.Shared.StaticConfig.Constants.Roles.User;
                 roles.Add(role);
             }
 
-            // Base claims (nouveau JTI, scope typés pour le hub)
+            // Base claims (new JTI, typed scopes for the hub)
             var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub,   email),
@@ -108,26 +108,26 @@ namespace CitizenHackathon2025.API.Tools
                 new Claim("scope", "signalr")
             };
 
-            // Ajoute les rôles (en double format si tu utilises un Claims.Role custom)
+            // Add roles (in double format if using a custom Claims.Role)
             foreach (var r in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, r));
                 claims.Add(new Claim(CitizenHackathon2025.Shared.StaticConfig.Constants.Claims.Role, r));
             }
 
-            // (Optionnel) Tu peux recopier d'autres claims utiles du principal ici
-            // ex: NameIdentifier, custom tenant/eventId, etc.
+            // (Optional) You can copy other useful claims from the principal here
+            // e.g., NameIdentifier, custom tenant/eventId, etc.
             var nameId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!string.IsNullOrWhiteSpace(nameId))
                 claims.Add(new Claim(ClaimTypes.NameIdentifier, nameId));
 
-            // TTL court (par défaut 5 min)
+            // TTL short (default 5 min)
             var now = DateTime.UtcNow;
             var exp = now.AddMinutes(Math.Max(1, expiresInMinutes));
 
             var jwt = new JwtSecurityToken(
                 issuer: _issuer,
-                audience: _audience, // peut être null si ValidateAudience=false
+                audience: _audience, // can remain null if ValidateAudience=false
                 claims: claims,
                 notBefore: now,
                 expires: exp,

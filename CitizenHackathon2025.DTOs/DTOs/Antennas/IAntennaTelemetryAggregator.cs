@@ -9,13 +9,7 @@
         /// </summary>
         IReadOnlyList<AntennaSnapshotRow> DequeueCompletedWindows(DateTime utcNow);
 
-        public sealed record AntennaSnapshotRow(
-            int AntennaId,
-            DateTime WindowStartUtc,
-            short WindowSeconds,
-            int ActiveConnections,
-            byte Confidence,
-            byte Source
+        public sealed record AntennaSnapshotRow(int AntennaId, DateTime WindowStartUtc, short WindowSeconds, int ActiveConnections, byte Confidence, byte Source
         );
     }
 }
