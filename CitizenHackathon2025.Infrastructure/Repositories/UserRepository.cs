@@ -4,7 +4,6 @@ using System.Text;
 using Dapper;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Contracts.Enums;
-using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {

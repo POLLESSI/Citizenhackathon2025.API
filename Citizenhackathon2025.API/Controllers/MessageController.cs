@@ -1,8 +1,8 @@
 ﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.DTOs.Requests;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -57,7 +57,7 @@ namespace CitizenHackathon2025.API.Controllers
 
         [HttpPost]
         [Authorize(Policy = Policies.UserPolicy)]
-        public async Task<IActionResult> Post([FromBody] CreateMessageRequest req, CancellationToken ct = default)
+        public async Task<ActionResult<ClientMessageDTO>> Create([FromBody] CreateMessageRequest req, CancellationToken ct)
         {
             var logger = HttpContext.RequestServices.GetRequiredService<ILogger<MessageController>>();
 
@@ -80,22 +80,45 @@ namespace CitizenHackathon2025.API.Controllers
                 var raw = new UserMessage
                 {
                     UserId = userId,
-                    Content = req.Content
+                    Content = req.Content.Trim(),
+
+                    SourceType = string.IsNullOrWhiteSpace(req.SourceType) ? "Other" : req.SourceType.Trim(),
+
+                    SourceId = req.RelatedId,
+
+                    RelatedName = string.IsNullOrWhiteSpace(req.RelatedName) ? null : req.RelatedName.Trim()
                 };
 
-                logger.LogInformation("Before CorrelateAsync");
+                logger.LogInformation(
+                    "Before CorrelateAsync. " +
+                    "RequestedSourceType={SourceType}, " +
+                    "RequestedSourceId={SourceId}, " +
+                    "RequestedRelatedName={RelatedName}",
+                    raw.SourceType,
+                    raw.SourceId,
+                    raw.RelatedName);
+
                 var enriched = await _correlator.CorrelateAsync(raw, ct);
 
-                logger.LogInformation("After CorrelateAsync. SourceType={SourceType}, SourceId={SourceId}, RelatedName={RelatedName}",
-                    enriched.SourceType, enriched.SourceId, enriched.RelatedName);
+                logger.LogInformation(
+                     "After CorrelateAsync. " +
+                     "SourceType={SourceType}, " +
+                     "SourceId={SourceId}, " +
+                     "RelatedName={RelatedName}",
+                     enriched.SourceType,
+                     enriched.SourceId,
+                     enriched.RelatedName);
+
 
                 logger.LogInformation("Before AnalyzeAsync");
+
                 var analysis = await _profanityService.AnalyzeAsync(req.Content, ct);
 
                 logger.LogInformation("After AnalyzeAsync. HasProfanity={HasProfanity}, Score={Score}",
                     analysis.HasProfanity, analysis.Score);
 
                 logger.LogInformation("Before InsertAsync");
+                
                 var saved = await _svc.InsertAsync(enriched, ct);
 
                 logger.LogInformation("After InsertAsync. MessageId={MessageId}", saved.Id);
@@ -116,7 +139,7 @@ namespace CitizenHackathon2025.API.Controllers
                         ct);
                 }
 
-                var dto = saved.MapToClientMessageDTO();
+                ClientMessageDTO dto = saved.MapToClientMessageDTO();
 
                 logger.LogInformation("Before hub broadcast");
                 await _hub.Clients.All.SendAsync("ReceiveMessageUpdate", dto, ct);
@@ -128,7 +151,8 @@ namespace CitizenHackathon2025.API.Controllers
             {
                 logger.LogError(ex, "POST /api/Message failed for user {User}. We aren't on X here.", User.Identity?.Name);
 
-                return StatusCode(500, new
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                new
                 {
                     message = "Failed to create message.",
                     detail = ex.Message,

@@ -35,7 +35,7 @@ using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
 using CitizenHackathon2025.Infrastructure.Background;
-using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
+//using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.Extensions;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB;
 using CitizenHackathon2025.Infrastructure.ExternalAPIs.ODWB.Adapters;
