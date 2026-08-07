@@ -38,7 +38,6 @@ namespace CitizenHackathon2025.Worker.Gpt
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, "[GPT-WORKER] Fatal worker failure.");
-
                 throw;
             }
             finally
@@ -54,7 +53,6 @@ namespace CitizenHackathon2025.Worker.Gpt
             try
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
-
                 var processor = scope.ServiceProvider.GetRequiredService<IGptQueuedRequestProcessor>();
 
                 await processor.ProcessQueuedAsync(workItem, stoppingToken);
@@ -69,38 +67,11 @@ namespace CitizenHackathon2025.Worker.Gpt
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[GPT-WORKER] Unexpected processing " + "failure. " + "InteractionId={InteractionId}, " + "RequestId={RequestId}", workItem.Interaction.Id, workItem.RequestId);
+                _logger.LogError(ex,"[GPT-WORKER] Unexpected processing failure. " + "InteractionId={InteractionId}, " + "RequestId={RequestId}", workItem.Interaction.Id, workItem.RequestId);
             }
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -1,18 +1,19 @@
 ﻿using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
+using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Data;
+using System.Reflection.Metadata;
 using System.Security.Cryptography;
 using System.Text;
-using Dapper;
 
 namespace CitizenHackathon2025.Infrastructure.Repositories
 {
     public sealed class GptInteractionsRepository : IGptInteractionRepository
     {
-#nullable disable
+    #nullable disable
         private readonly IDbConnection _connection;
         private readonly IConfiguration _config;
         private readonly ILogger<GptInteractionsRepository> _logger;
@@ -269,28 +270,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             const string sql = """
                             INSERT INTO dbo.GptInteractions
-                            (
-                                Prompt,
-                                PromptHash,
-                                Response,
-                                CreatedAt,
-                                Active,
-                                Model,
-                                Temperature,
-                                TokenCount
-                            )
+                                (Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount, Latitude, Longitude)
                             OUTPUT INSERTED.*
-                            VALUES
-                            (
-                                @Prompt,
-                                @PromptHash,
-                                @Response,
-                                SYSUTCDATETIME(),
-                                1,
-                                @Model,
-                                @Temperature,
-                                @TokenCount
-                            );
+                            VALUES(@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount, @Latitude, @Longitude);
                             """;
 
             return await _connection.QuerySingleAsync<GPTInteraction>(
@@ -317,10 +299,12 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                     Active = 1,
                                     Model = @Model,
                                     Temperature = @Temperature,
-                                    TokenCount = @TokenCount
+                                    TokenCount = @TokenCount,
+                                    Latitude = COALESCE(@Latitude, Latitude),
+                                    Longitude = COALESCE(@Longitude, Longitude)
                             WHEN NOT MATCHED THEN
-                                INSERT (Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount)
-                                VALUES (@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount);";
+                                INSERT(Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount, Latitude, Longitude)
+                                VALUES(@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount, @Latitude, @Longitude);";
 
             var parameters = new DynamicParameters();
             parameters.Add("@Prompt", interaction.Prompt, DbType.String);
@@ -329,6 +313,8 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@Model", interaction.Model ?? "mistral-small-latest", DbType.String);
             parameters.Add("@Temperature", interaction.Temperature ?? 0.7f, DbType.Single);
             parameters.Add("@TokenCount", interaction.TokenCount, DbType.Int32);
+            parameters.Add("@Latitude", interaction.Latitude, DbType.Double);
+            parameters.Add("@Longitude", interaction.Longitude, DbType.Double);
 
             await _connection.ExecuteAsync(sql, parameters);
         }
@@ -544,6 +530,30 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 safeMessage);
 
             return affected > 0;
+        }
+
+        public async Task<bool> UpdateLocationAsync(int interactionId, double latitude, double longitude, CancellationToken ct = default)
+        {
+            const string sql = """
+                            UPDATE dbo.GptInteractions
+                            SET Latitude = @Latitude,
+                                Longitude = @Longitude
+                            WHERE Id = @InteractionId;
+                            """;
+
+            var command = new CommandDefinition(
+                sql,
+                new
+                {
+                    InteractionId = interactionId,
+                    Latitude = latitude,
+                    Longitude = longitude
+                },
+                cancellationToken: ct);
+
+            var affectedRows = await _connection.ExecuteAsync(command);
+
+            return affectedRows > 0;
         }
     }
 }

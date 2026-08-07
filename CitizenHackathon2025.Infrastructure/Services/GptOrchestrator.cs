@@ -1,6 +1,7 @@
 ﻿using Azure;
 using Azure.Core;
 using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Gpt;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Contracts.Hubs;
@@ -26,7 +27,7 @@ using System.Text.RegularExpressions;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    public sealed class GptOrchestrator : IGptOrchestrator
+    public sealed class GptOrchestrator : IGptOrchestrator, IGptQueuedRequestProcessor
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHubContext<GPTHub, IGptClient> _hubContext;
@@ -34,8 +35,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
         private readonly IHostApplicationLifetime _appLifetime;
         private readonly ILogger<GptOrchestrator> _logger;
         private readonly OutZenDomainGuard _domainGuard;
+        private readonly IGptBackgroundQueue _backgroundQueue;
 
-        public GptOrchestrator(IServiceScopeFactory scopeFactory, IHubContext<GPTHub, IGptClient> hubContext, IGptRequestRegistry gptRequestRegistry, IHostApplicationLifetime appLifetime, ILogger<GptOrchestrator> logger, OutZenDomainGuard domainGuard)
+        public GptOrchestrator(IServiceScopeFactory scopeFactory, IHubContext<GPTHub, IGptClient> hubContext, IGptRequestRegistry gptRequestRegistry, IHostApplicationLifetime appLifetime, IGptBackgroundQueue backgroundQueue, ILogger<GptOrchestrator> logger, OutZenDomainGuard domainGuard)
         {
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
@@ -43,6 +45,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _appLifetime = appLifetime ?? throw new ArgumentNullException(nameof(appLifetime));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _domainGuard = domainGuard ?? throw new ArgumentNullException(nameof(domainGuard));
+            _backgroundQueue = backgroundQueue ?? throw new ArgumentNullException(nameof(backgroundQueue));
 
             _logger.LogWarning("[GPT GEO PATCH] Version 2026-07-18-v3 loaded: radius=25, maxCandidates=12");
         }
@@ -52,32 +55,42 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             var prompt = request.Prompt.Trim();
             var interaction = await CreateInitialInteractionAsync(request, prompt, ct).ConfigureAwait(false);
+            /*
+            * Le traitement background doit survivre
+            * à la fin de la requête HTTP.
+            *
+            * L'arrêt de l'application reste cependant
+            * capable de l'annuler.
+            */
+            var processingCts = CancellationTokenSource.CreateLinkedTokenSource(_appLifetime.ApplicationStopping);
+            var requestId = _gptRequestRegistry.Register(interaction.Id, processingCts);
 
             var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_appLifetime.ApplicationStopping);
-            var requestId = _gptRequestRegistry.Register(interaction.Id, linkedCts);
             var startedAtUtc = DateTime.UtcNow;
 
-            _ = Task.Run(
-                () => RunPipelineAsync(interaction, request, requestId, linkedCts.Token),
-                CancellationToken.None);
+            try
+            {
+                var workItem = new GptWorkItem(Interaction: interaction, Request: request, RequestId: requestId, ProcessingToken: processingCts.Token);
+                await _backgroundQueue.QueueAsync(workItem, ct);
+            }
+            catch
+            {
+                _gptRequestRegistry.Remove(interaction.Id, requestId);
+                throw;
+            }
 
-            _logger.LogInformation(
-                "[GPT-PIPELINE][ASYNC] Accepted. InteractionId={InteractionId}, RequestId={RequestId}, PromptLength={PromptLength}",
-                interaction.Id,
-                requestId,
-                prompt.Length);
+            _logger.LogInformation("[GPT-QUEUE] Accepted. " + "InteractionId={InteractionId}, " + "RequestId={RequestId}, " + "PromptLength={PromptLength}", interaction.Id, requestId, prompt.Length);
 
             return new GptStartResponseDto
             {
                 Accepted = true,
                 InteractionId = interaction.Id,
                 RequestId = requestId,
-                StartedAtUtc = startedAtUtc,
+                StartedAtUtc = DateTime.UtcNow,
                 Status = "accepted",
-                Message = "GPT request accepted and processing started."
+                Message = "GPT request accepted and queued."
             };
         }
-
         public async Task<GptInteractionDTO> RunMistralRequestAsync(GptPromptRequest request, CancellationToken ct = default)
         {
             ValidateRequest(request);
@@ -199,6 +212,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 cancelled);
 
             return Task.FromResult(cancelled);
+        }
+
+        public async Task ProcessQueuedAsync(GptWorkItem workItem, CancellationToken stoppingToken)
+        {
+            ArgumentNullException.ThrowIfNull(workItem);
+
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(workItem.ProcessingToken, stoppingToken);
+
+            await RunPipelineAsync(workItem.Interaction, workItem.Request, workItem.RequestId, linkedCts.Token).ConfigureAwait(false);
         }
 
         private async Task RunPipelineAsync(GPTInteraction interaction, GptPromptRequest request, string requestId, CancellationToken ct)
@@ -466,6 +488,36 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     effectiveLatitude,
                     effectiveLongitude);
             }
+
+            if (effectiveLatitude.HasValue &&
+                effectiveLongitude.HasValue &&
+                double.IsFinite(effectiveLatitude.Value) &&
+                double.IsFinite(effectiveLongitude.Value) &&
+                effectiveLatitude.Value is >= -90 and <= 90 &&
+                effectiveLongitude.Value is >= -180 and <= 180 &&
+                !(effectiveLatitude.Value == 0 &&
+                  effectiveLongitude.Value == 0))
+            {
+                var locationUpdated = await gptRepository.UpdateLocationAsync(
+                                    interactionId,
+                                    effectiveLatitude.Value,
+                                    effectiveLongitude.Value,
+                                    ct)
+                                .ConfigureAwait(false);
+
+                if (!locationUpdated)
+                {
+                    throw new InvalidOperationException($"Failed to persist the geographic position " + $"for GPT interaction {interactionId}.");
+                }
+
+                _logger.LogInformation(
+                    "[GPT GEO] Persisted interaction location. " +
+                    "InteractionId={InteractionId}, Latitude={Latitude}, Longitude={Longitude}",
+                    interactionId,
+                    effectiveLatitude.Value,
+                    effectiveLongitude.Value);
+            }
+
             else if (request.Latitude.HasValue &&
                      request.Longitude.HasValue)
             {
@@ -481,8 +533,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             swContext.Stop();
 
-            _logger.LogInformation(
-                "[GPT-PIPELINE] Local context built. InteractionId={InteractionId}, RequestId={RequestId}, ElapsedMs={ElapsedMs}, Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}, CriticalAlerts={CriticalAlerts}, HasChildren={HasChildren}, BadWeather={BadWeather}",
+            _logger.LogInformation("[GPT-PIPELINE] Local context built. InteractionId={InteractionId}, RequestId={RequestId}, ElapsedMs={ElapsedMs}, Places={Places}, Events={Events}, CrowdCalendar={CrowdCalendar}, CrowdInfo={CrowdInfo}, Traffic={Traffic}, Weather={Weather}, CriticalAlerts={CriticalAlerts}, HasChildren={HasChildren}, BadWeather={BadWeather}",
                 interactionId,
                 requestId,
                 swContext.ElapsedMilliseconds,
@@ -500,8 +551,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 foreach (var alert in localContext.CriticalAlerts)
                 {
-                    _logger.LogWarning(
-                        "[GPT-SAFETY] Confirmed critical alert in AI context. Kind={Kind}, Place={Place}, Severity={Severity}, DistanceKm={DistanceKm}, ExpiresAt={ExpiresAt}",
+                    _logger.LogWarning("[GPT-SAFETY] Confirmed critical alert in AI context. Kind={Kind}, Place={Place}, Severity={Severity}, DistanceKm={DistanceKm}, ExpiresAt={ExpiresAt}",
                         alert.AlertKind,
                         alert.PlaceName,
                         alert.Severity,

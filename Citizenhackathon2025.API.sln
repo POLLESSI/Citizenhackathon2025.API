@@ -21,7 +21,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CitizenHackathon2025.Hubs",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CitizenHackathon2025.Contracts", "..\CitizenHackathon2025.Contracts\CitizenHackathon2025.Contracts.csproj", "{F9653C14-1EE6-6E34-7B1D-DB014BBB64B6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CitizenHackathon2025.Worker.Gpt", "CitizenHackathon2025.Worker.Gpt\CitizenHackathon2025.Worker.Gpt.csproj", "{6A5E625F-2E0F-4E7B-B11B-718607D2C2AE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CitizenHackathon2025.Worker", "CitizenHackathon2025.Worker.Gpt\CitizenHackathon2025.Worker.csproj", "{6A5E625F-2E0F-4E7B-B11B-718607D2C2AE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CitizenHackathon2025.EmergencyIntelligence", "CitizenHackathon2025.EmergencyIntelligence\CitizenHackathon2025.EmergencyIntelligence.csproj", "{13E6631A-FC42-42A4-B248-75566F924BC2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,6 +73,10 @@ Global
 		{6A5E625F-2E0F-4E7B-B11B-718607D2C2AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6A5E625F-2E0F-4E7B-B11B-718607D2C2AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6A5E625F-2E0F-4E7B-B11B-718607D2C2AE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{13E6631A-FC42-42A4-B248-75566F924BC2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{13E6631A-FC42-42A4-B248-75566F924BC2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{13E6631A-FC42-42A4-B248-75566F924BC2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{13E6631A-FC42-42A4-B248-75566F924BC2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

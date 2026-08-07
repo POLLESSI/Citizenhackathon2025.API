@@ -26,10 +26,17 @@ using CitizenHackathon2025.Application.Options;
 using CitizenHackathon2025.Application.Pipeline;
 using CitizenHackathon2025.Application.Services;
 using CitizenHackathon2025.Application.WeatherForecasts.Queries;
+using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Contracts.Enums.CitizenHackathon2025.Contracts.Enums;
 using CitizenHackathon2025.Contracts.Hubs;
 using CitizenHackathon2025.Domain.Abstractions;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
+using CitizenHackathon2025.EmergencyIntelligence.Interfaces;
+using CitizenHackathon2025.EmergencyIntelligence.Records;
+using CitizenHackathon2025.EmergencyIntelligence.Services;
+using CitizenHackathon2025.EmergencyIntelligence.Workers;
 using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
@@ -62,6 +69,7 @@ using CitizenHackathon2025.Shared.Notifications;
 using CitizenHackathon2025.Shared.Options;
 using CitizenHackathon2025.Shared.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
+using CitizenHackathon2025.Worker.Gpt;
 using Dapper;
 using Mapster;
 using MediatR;
@@ -107,7 +115,6 @@ internal class Program
         var env = builder.Environment;
 
         Console.WriteLine($"ENV = {env.EnvironmentName}");
-        Console.WriteLine("TrafficHmacKeyBase64 = " + (configuration["Security:TrafficHmacKeyBase64"] ?? "<null>"));
 
         ConfigureSerilog(builder);
         ConfigureMapster();
@@ -128,7 +135,7 @@ internal class Program
         ConfigureHttpClients(services, configuration);
         ConfigureRepositories(services);
         ConfigureApplicationServices(services);
-        ConfigureHostedServices(services, configuration, env); 
+        ConfigureHostedServices(services, configuration, env);
         ConfigureMediatR(services);
         ConfigureNoSql(services, configuration);
 
@@ -151,16 +158,45 @@ internal class Program
         services.AddInfrastructureServices();
         services.AddOutZenServices();
 
-        // ✅ Last recording: it overwrites any potential bad ones
-        ConfigureDatabase(services, configuration);
+        var hasDbConnectionRegistration = services.Any(descriptor => descriptor.ServiceType == typeof(IDbConnection));
 
-        var app = builder.Build();
+        Console.WriteLine($"IDbConnection registered: " + $"{hasDbConnectionRegistration}");
 
-        await RunStartupChecksAsync(app);
+        try
+        {
+            Console.WriteLine("[BOOT 1/4] builder.Build() beginning.");
 
-        ConfigurePipeline(app);
+            var app = builder.Build();
 
-        app.Run();
+            Console.WriteLine("[BOOT 2/4] builder.Build() completed.");
+
+            await RunStartupChecksAsync(app);
+
+            Console.WriteLine("[BOOT 3/4] startup checks completed.");
+
+            ConfigurePipeline(app);
+
+            Console.WriteLine("[BOOT 4/4] HTTP pipeline configured.");
+
+            await app.RunAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("========== FATAL STARTUP ERROR ==========");
+
+            Console.Error.WriteLine(ex.ToString());
+
+            Console.Error.WriteLine("=========================================");
+
+            Log.Fatal(ex, "CitizenHackathon2025 API startup failed.");
+
+            throw;
+        }
+        finally
+        {
+            Log.CloseAndFlush();
+        }
     }
 
     private static void ConfigureSerilog(WebApplicationBuilder builder)
@@ -291,27 +327,17 @@ internal class Program
         services.Configure<MorningCrowdAdvisoryHostedService.AdvisoryOptions>(configuration.GetSection("CrowdAdvisory"));
         services.Configure<DeviceHasherOptions>(configuration.GetSection("DeviceHasher"));
         services.Configure<PipelineOptions>(configuration.GetSection("Pipelines"));
-        services
-            .AddOptions<CriticalAlertRules>()
-            .Bind(
-                configuration.GetSection(
-                    "CriticalAlertRules"))
+        services.AddOptions<CriticalAlertRules>().Bind(configuration.GetSection("CriticalAlertRules"))
 
-            .Validate(
-                rules =>
-                    rules.RequiredDistinctReports >= 4,
+            .Validate(rules =>rules.RequiredDistinctReports >= 4,
                 "CriticalAlertRules:" +
                 "RequiredDistinctReports must be at least 4.")
 
-            .Validate(
-                rules =>
-                    rules.WindowMinutes is >= 1 and <= 30,
+            .Validate(rules => rules.WindowMinutes is >= 1 and <= 30,
                 "CriticalAlertRules:" +
                 "WindowMinutes must be between 1 and 30.")
 
-            .Validate(
-                rules =>
-                    rules.AlertDurationMinutes is >= 1 and <= 60,
+            .Validate(rules => rules.AlertDurationMinutes is >= 1 and <= 60,
                 "CriticalAlertRules:" +
                 "AlertDurationMinutes must be between 1 and 60.")
 
@@ -319,8 +345,7 @@ internal class Program
 
         services.ConfigureHttpJsonOptions(options =>
         {
-            options.SerializerOptions.Converters.Add(
-                new JsonStringEnumConverter());
+            options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
 
         services.AddOptions<CitizenHackathon2025.Shared.Options.SecurityOptions>()
@@ -386,6 +411,7 @@ internal class Program
                     ex);
             }
         });
+        services.AddSingleton(TimeProvider.System);
     }
 
     private static void ConfigureSecrets(IServiceCollection services, IConfiguration configuration)
@@ -433,27 +459,20 @@ internal class Program
 
     private static void ConfigureDatabase(IServiceCollection services, IConfiguration configuration)
     {
-        services.AddSingleton<DbConnectionFactory>();
+        var connectionString = configuration.GetConnectionString("default") ?? configuration.GetConnectionString("DefaultConnection");
 
-        services.AddScoped<IDbConnection>(sp =>
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
-            var config = sp.GetRequiredService<IConfiguration>();
+            throw new InvalidOperationException("SQL connection string missing. Expected " + "'ConnectionStrings:default' or " + "'ConnectionStrings:DefaultConnection'.");
+        }
 
-            var cs = config.GetConnectionString("default") ?? config.GetConnectionString("DefaultConnection");
-
-            if (string.IsNullOrWhiteSpace(cs))
-            {
-                throw new InvalidOperationException("SQL ConnectionString missing. Expected ConnectionStrings:default or ConnectionStrings:DefaultConnection.");
-            }
-
-            Console.WriteLine($"[SQL-CONNECTION OK] Length={cs.Length}");
-
-            return new SqlConnection(cs);
-        });
-
+        services.AddSingleton<DbConnectionFactory>();
+        services.AddScoped<IDbConnection>(_ => new SqlConnection(connectionString));
         services.AddScoped<DatabaseService>();
 
         SqlMapper.AddTypeHandler(new RoleTypeHandler());
+
+        Console.WriteLine("SQL connection configured: True");
     }
     private static void ConfigureAuthentication(IServiceCollection services, IConfiguration configuration, IWebHostEnvironment env)
     {
@@ -778,6 +797,11 @@ internal class Program
             logger.LogWarning("[MISTRAL HTTP CONFIG] " + "BaseAddress={BaseAddress}; " + "HttpClientTimeout={HttpClientTimeout}; " + "PollyHandler=False", client.BaseAddress, client.Timeout);
         });
 
+        services.AddHttpClient<INationalCrisisCenterAlertSource, NationalCrisisCenterAlertSource>();
+
+        services.AddTransient<IEmergencyAlertSource>(serviceProvider =>
+            serviceProvider.GetRequiredService<INationalCrisisCenterAlertSource>());
+
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
@@ -1013,6 +1037,7 @@ internal class Program
         services.AddSingleton<IDeviceHasher, DeviceHasher>();
         services.AddSingleton<IGptRequestRegistry, GptRequestRegistry>();
         services.AddSingleton<ICspViolationStore, CspViolationStore>();
+        services.AddSingleton<EmergencyAlertHubBroadcaster>();
 
         services.AddMemoryCache();
         services.AddScoped<MemoryCacheService>();
@@ -1040,7 +1065,10 @@ internal class Program
         services.AddScoped<CitizenSuggestionService>();
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IEventReadService, EventReadService>();
+        services.AddScoped<IEmergencyAlertSyncOrchestrator, EmergencyAlertSyncOrchestrator>();
         services.AddScoped<IGeoService, GeoService>();
+        services.AddSingleton<IGptBackgroundQueue, GptBackgroundQueue>();
+        services.AddScoped<IGptQueuedRequestProcessor, GptOrchestrator>();
         services.AddScoped<IGptOrchestrator, GptOrchestrator>();
         services.AddScoped<ILanguagePromptBuilder, LanguagePromptBuilder>();
         services.AddScoped<ILocalAiContextService, LocalAiContextService>();
@@ -1105,6 +1133,8 @@ internal class Program
     private static void ConfigureHostedServices(IServiceCollection services, IConfiguration configuration, IWebHostEnvironment env)
     {
         services.AddHostedService<CrowdSafetyAlertDetectorHostedService>();
+        services.AddHostedService<EmergencyAlertSyncWorker>();
+        services.AddHostedService<GptWorker>();
 
         if (!env.IsDevelopment())
         {
@@ -1125,7 +1155,6 @@ internal class Program
         services.AddHostedService<OdwbTrafficCollector>();
         services.AddHostedService<SessionJanitor>();
         services.AddHostedService<WallonieEnPocheSyncWorker>();
-        //services.AddHostedService<WeatherService>();
         services.AddHostedService<WeatherForecastCleanupHostedService>();
         services.AddHostedService<WeatherForecastCollectorHostedService>();
         services.AddHostedService<TrafficConditionCollectorHostedService>();
@@ -1148,14 +1177,20 @@ internal class Program
 
     private static async Task RunStartupChecksAsync(WebApplication app)
     {
+        Console.WriteLine("[STARTUP 1/6] Startup checks beginning.");
+
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            Console.Error.WriteLine($"UNHANDLED: {e.ExceptionObject}");
+        {
+            Console.Error.WriteLine($"[UNHANDLED] {e.ExceptionObject}");
+        };
 
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
-            Console.Error.WriteLine($"UNOBSERVED: {e.Exception}");
+            Console.Error.WriteLine($"[UNOBSERVED] {e.Exception}");
             e.SetObserved();
         };
+
+        Console.WriteLine("[STARTUP 2/6] Resolving critical services.");
 
         using (var scope = app.Services.CreateScope())
         {
@@ -1165,17 +1200,54 @@ internal class Program
             _ = scope.ServiceProvider.GetRequiredService<CitizenSuggestionService>();
         }
 
+        Console.WriteLine("[STARTUP 3/6] Critical services resolved.");
+
         using (var scope = app.Services.CreateScope())
         {
-            var env = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
-            var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DbInit");
-            var conn = scope.ServiceProvider.GetRequiredService<IDbConnection>();
+            var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DbInit");
+            var connection = scope.ServiceProvider.GetRequiredService<IDbConnection>();
 
-            if (conn.State != ConnectionState.Open)
-                conn.Open();
+            Console.WriteLine("[STARTUP 4/6] Opening SQL connection.");
 
-            await DbInit.RunOnceAsync(conn, env.ContentRootPath, log);
+            try
+            {
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("[STARTUP SQL OPEN ERROR]");
+                Console.Error.WriteLine(ex.ToString());
+
+                throw;
+            }
+
+            Console.WriteLine("[STARTUP 5/6] SQL opened; DbInit beginning.");
+
+            try
+            {
+                await DbInit.RunOnceAsync(connection, environment.ContentRootPath, logger).WaitAsync(TimeSpan.FromSeconds(60));
+            }
+            catch (TimeoutException ex)
+            {
+                Console.Error.WriteLine("[STARTUP DBINIT TIMEOUT]");
+                Console.Error.WriteLine(ex.ToString());
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("[STARTUP DBINIT ERROR]");
+                Console.Error.WriteLine(ex.ToString());
+
+                throw;
+            }
         }
+
+        Console.WriteLine("[STARTUP 6/6] Startup checks completed.");
     }
 
     private static void ConfigurePipeline(WebApplication app)
@@ -1325,6 +1397,7 @@ internal class Program
         hubs.MapHub<CrowdInfoAntennaHub>(CrowdInfoAntennaHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdInfoAntennaConnectionHub>(CrowdInfoAntennaConnectionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<CrowdSafetyHub>(CrowdSafetyHubMethods.HubPath).RequireAuthorization("CrowdSafetyPolicy");
+        hubs.MapHub<EmergencyAlertHub>(EmergencyAlertHubMethods.HubPath).RequireAuthorization().RequireRateLimiting("signalr");
         hubs.MapHub<SuggestionHub>(SuggestionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<TrafficHub>(TrafficConditionHubMethods.HubPath).RequireAuthorization();
         hubs.MapHub<GPTHub>(GptInteractionHubMethods.HubPath, options =>
@@ -1350,26 +1423,117 @@ internal class Program
     private static void MapEndpoints(WebApplication app)
     {
         app.MapGet("/trafficcondition/latest",
-            async (IMediator mediator, CancellationToken ct) =>
+            async (IMediator mediator, CancellationToken cancellationToken) =>
             {
-                var list = await mediator.Send(new GetLatestTrafficConditionQuery(), ct);
-                return (list is null || list.Count == 0) ? Results.NotFound() : Results.Ok(list);
+                var list = await mediator.Send(new GetLatestTrafficConditionQuery(), cancellationToken);
+
+                return list is null || list.Count == 0 ? Results.NotFound() : Results.Ok(list);
             });
 
-        app.MapGet("/auth/hub-token", (HttpContext ctx, TokenGenerator tokenGenerator) =>
+        app.MapGet("/auth/hub-token", (HttpContext context, TokenGenerator tokenGenerator) =>
+            {
+                if (context.User?.Identity?.IsAuthenticated != true)
+                {
+                    return Results.Unauthorized();
+                }
+
+                var token = tokenGenerator.GenerateTokenFromPrincipal(context.User,expiresInMinutes: 5);
+
+                return Results.Ok(new
+                {
+                    token
+                });
+            })
+            .RequireAuthorization();
+
+        if (app.Environment.IsDevelopment())
         {
-            if (ctx.User?.Identity?.IsAuthenticated != true)
-                return Results.Unauthorized();
+            app.MapGet("/_diag/emergency/source",
+                    async (INationalCrisisCenterAlertSource source, CancellationToken cancellationToken) =>
+                    {
+                        var cursor = new EmergencyAlertCursor(
+                                ETag: null,
+                                LastModifiedUtc: null,
+                                ContinuationToken: null,
+                                LastSuccessfulFetchUtc: null);
 
-            var token = tokenGenerator.GenerateTokenFromPrincipal(ctx.User, expiresInMinutes: 5);
+                        var batch = await source.FetchAsync(cursor, cancellationToken);
 
-            return Results.Ok(new
+                        return Results.Ok(new
+                        {
+                            SourceCode = source.SourceCode,
+                            AlertCount = batch.Alerts.Count,
+                            FetchedAtUtc = batch.FetchedAtUtc,
+                            ETag = batch.ETag,
+                            LastModifiedUtc = batch.LastModifiedUtc,
+                            IsRemoteProviderConfigured = false
+                        });
+                    })
+                .AllowAnonymous();
+
+            app.MapPost("/_diag/emergency/sync",
+                async (IEmergencyAlertSyncOrchestrator orchestrator, CancellationToken cancellationToken) =>
+                {
+                    await orchestrator.SynchronizeAllAsync(cancellationToken);
+
+                    return Results.Ok(new
+                    {
+                        Success = true,
+
+                        SynchronizedAtUtc = DateTimeOffset.UtcNow
+                    });
+                })
+                .AllowAnonymous();
+
+            app.MapPost("/_diag/emergency/hub-test",
+        async (EmergencyAlertHubBroadcaster broadcaster) =>
+        {
+            var alert = new EmergencyAlertSignalRDTO
             {
-                token
-            });
-        })
-        .RequireAuthorization();
+                Id = Guid.NewGuid(),
 
+                SourceCode = "BE-NCCN",
+
+                ExternalId = $"TEST-{Guid.NewGuid():N}",
+
+                HazardType = EmergencyHazardType.Flood,
+
+                Severity = EmergencySeverity.Severe,
+
+                Urgency = EmergencyUrgency.Immediate,
+
+                Certainty = EmergencyCertainty.Observed,
+
+                Status = EmergencyAlertStatus.Active,
+
+                InformationKind = SafetyInformationKind.ActiveEmergency,
+
+                Headline = "TEST OutZen Emergency Intelligence",
+
+                Description = "Alerte de diagnostic SignalR.",
+
+                Instructions = "Aucune action réelle requise.",
+
+                EffectiveFromUtc = DateTimeOffset.UtcNow,
+
+                LastUpdatedAtUtc = DateTimeOffset.UtcNow,
+
+                ProvinceCode = "BE-WAL",
+
+                IsOfficial = false
+            };
+
+            await broadcaster.PublishUpsertedAsync(alert);
+
+            return Results.Ok(
+                new
+                {
+                    success = true,
+                    alert.Id
+                });
+        })
+    .RequireAuthorization();
+        }
         app.MapGet("/", () => "OK");
     }
 }

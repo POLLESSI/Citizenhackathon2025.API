@@ -191,7 +191,8 @@ namespace CitizenHackathon2025.Application.Extensions
 ;       // GPTInteraction → DTO
         public static GptInteractionDTO MapToGptInteractionDTO(this GPTInteraction entity)
         {
-            if (entity is null) return null!;
+            if (entity is null)
+                return null!;
 
             return new GptInteractionDTO
             {
@@ -200,24 +201,34 @@ namespace CitizenHackathon2025.Application.Extensions
                 Response = entity.Response ?? string.Empty,
                 PromptHash = entity.PromptHash ?? string.Empty,
                 CreatedAt = entity.CreatedAt,
-                Active = entity.Active,
+                Active =entity.Active,
 
-                // Map context not stored in database :
+                /*
+                 * Contextual relationships are not
+                 * still persisted in GptInteractions.
+                 */
                 EventId = null,
                 CrowdInfoId = null,
                 PlaceId = null,
                 TrafficConditionId = null,
                 WeatherForecastId = null,
-                Latitude = null,
-                Longitude = null,
-                SourceType = null,
+
+                /*
+                 * These two values are now stored
+                 * in dbo.GptInteractions.
+                 */
+                Latitude = entity.Latitude,
+                Longitude = entity.Longitude,
+                SourceType = entity.SourceType,
                 CrowdLevel = null
             };
         }
 
-        public static GPTInteraction MapToGptInteraction(this GptInteractionDTO dto)
+        public static GPTInteraction MapToGptInteraction(
+    this GptInteractionDTO dto)
         {
-            if (dto is null) return null!;
+            if (dto is null)
+                return null!;
 
             return new GPTInteraction
             {
@@ -226,8 +237,10 @@ namespace CitizenHackathon2025.Application.Extensions
                 Response = dto.Response,
                 PromptHash = string.IsNullOrWhiteSpace(dto.PromptHash) ? null! : dto.PromptHash,
                 CreatedAt = dto.CreatedAt == default ? DateTime.UtcNow : dto.CreatedAt,
-                Active = dto.Active
-                // Context fields are NOT mapped to the entity
+                Active = dto.Active,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                SourceType = dto.SourceType
             };
         }
 
@@ -235,15 +248,23 @@ namespace CitizenHackathon2025.Application.Extensions
         // DTO -> Entity partial update)
         public static GPTInteraction UpdateFrom(this GPTInteraction entity, GptInteractionDTO dto)
         {
-            if (entity is null || dto is null) return entity!;
+            if (entity is null || dto is null)
+                return entity!;
+
             entity.Prompt = dto.Prompt;
             entity.Response = dto.Response;
             if (!string.IsNullOrWhiteSpace(dto.PromptHash))
+            {
                 entity.PromptHash = dto.PromptHash;
-            // CreatedAt: generally immutable (audit)
+            }
             entity.Active = dto.Active;
+            entity.Latitude = dto.Latitude;
+            entity.Longitude = dto.Longitude;
+            entity.SourceType = dto.SourceType;
+
             return entity;
         }
+
         // Entity -> DTO (UserMessage -> ClientMessageDTO)
         public static ClientMessageDTO MapToClientMessageDTO(this UserMessage m)
         {
