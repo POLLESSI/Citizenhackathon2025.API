@@ -136,6 +136,11 @@ internal class Program
         ConfigureRepositories(services);
         ConfigureApplicationServices(services);
         ConfigureHostedServices(services, configuration, env);
+        var gptWorkerRegistered = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService) && descriptor.ImplementationType == typeof(GptWorker));
+
+        Console.WriteLine(
+            $"GptWorker registered: {gptWorkerRegistered}");
         ConfigureMediatR(services);
         ConfigureNoSql(services, configuration);
 
@@ -1159,6 +1164,8 @@ internal class Program
         services.AddHostedService<WeatherForecastCollectorHostedService>();
         services.AddHostedService<TrafficConditionCollectorHostedService>();
     }
+
+
 
     private static void ConfigureMediatR(IServiceCollection services)
     {

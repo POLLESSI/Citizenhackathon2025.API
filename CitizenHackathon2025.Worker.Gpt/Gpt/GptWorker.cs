@@ -21,6 +21,8 @@ namespace CitizenHackathon2025.Worker.Gpt
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            Console.WriteLine("[GPT-WORKER] ExecuteAsync entered.");
+
             _logger.LogInformation("[GPT-WORKER] Started.");
 
             try
@@ -28,6 +30,7 @@ namespace CitizenHackathon2025.Worker.Gpt
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     var workItem = await _queue.DequeueAsync(stoppingToken);
+
                     await ProcessAsync(workItem, stoppingToken);
                 }
             }
@@ -42,32 +45,36 @@ namespace CitizenHackathon2025.Worker.Gpt
             }
             finally
             {
+                Console.WriteLine("[GPT-WORKER] ExecuteAsync stopped.");
+
                 _logger.LogInformation("[GPT-WORKER] Stopped.");
             }
         }
 
         private async Task ProcessAsync(GptWorkItem workItem, CancellationToken stoppingToken)
         {
+            Console.WriteLine($"[GPT-WORKER] Processing started. " + $"InteractionId={workItem.Interaction.Id}, " + $"RequestId={workItem.RequestId}");
+
             _logger.LogInformation("[GPT-WORKER] Processing started. " + "InteractionId={InteractionId}, " + "RequestId={RequestId}", workItem.Interaction.Id, workItem.RequestId);
 
             try
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var processor = scope.ServiceProvider.GetRequiredService<IGptQueuedRequestProcessor>();
-
                 await processor.ProcessQueuedAsync(workItem, stoppingToken);
+
+                Console.WriteLine($"[GPT-WORKER] Processing finished. " + $"InteractionId={workItem.Interaction.Id}, " + $"RequestId={workItem.RequestId}");
 
                 _logger.LogInformation("[GPT-WORKER] Processing finished. " + "InteractionId={InteractionId}, " + "RequestId={RequestId}", workItem.Interaction.Id, workItem.RequestId);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                _logger.LogInformation("[GPT-WORKER] Processing interrupted " + "because application is stopping. " + "InteractionId={InteractionId}", workItem.Interaction.Id);
-
+                _logger.LogInformation("[GPT-WORKER] Processing interrupted because application is stopping. " + "InteractionId={InteractionId}", workItem.Interaction.Id);
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,"[GPT-WORKER] Unexpected processing failure. " + "InteractionId={InteractionId}, " + "RequestId={RequestId}", workItem.Interaction.Id, workItem.RequestId);
+                _logger.LogError(ex, "[GPT-WORKER] Unexpected processing failure. " + "InteractionId={InteractionId}, " + "RequestId={RequestId}", workItem.Interaction.Id, workItem.RequestId);
             }
         }
     }

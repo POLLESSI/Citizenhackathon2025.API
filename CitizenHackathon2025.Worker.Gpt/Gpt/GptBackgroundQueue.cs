@@ -19,16 +19,13 @@ namespace CitizenHackathon2025.Worker.Gpt
                 throw new ArgumentOutOfRangeException(nameof(capacity));
             }
 
-            var options = new BoundedChannelOptions(capacity)
+            var options =
+            new BoundedChannelOptions(capacity)
             {
-                FullMode =
-                    BoundedChannelFullMode.Wait,
-
+                FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
                 SingleWriter = false,
-
-                AllowSynchronousContinuations =
-                    false
+                AllowSynchronousContinuations = false
             };
 
             _queue = Channel.CreateBounded<GptWorkItem>(options);
