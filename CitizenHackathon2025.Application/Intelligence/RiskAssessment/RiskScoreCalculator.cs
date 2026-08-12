@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Contracts.Enums;
 
 namespace CitizenHackathon2025.Application.Intelligence.RiskAssessment
 {
@@ -53,6 +54,20 @@ namespace CitizenHackathon2025.Application.Intelligence.RiskAssessment
                     _ => "Normal situation."
                 }
             };
+        }
+
+        private static int ApplyOfficialAlertFloor(int currentScore, EmergencySeverity severity, EmergencyUrgency urgency)
+        {
+            var floor = severity switch
+            {
+                EmergencySeverity.Extreme => 95,
+                EmergencySeverity.Severe => urgency == EmergencyUrgency.Immediate ? 90 : 85,
+                EmergencySeverity.Moderate => 65,
+                EmergencySeverity.Minor => 40,
+                _ => currentScore
+            };
+
+            return Math.Max(currentScore, floor);
         }
     }
 }

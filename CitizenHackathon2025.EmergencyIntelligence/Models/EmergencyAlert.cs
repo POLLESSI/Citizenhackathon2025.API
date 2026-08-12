@@ -71,6 +71,8 @@ namespace CitizenHackathon2025.EmergencyIntelligence.Models
         public DateTimeOffset CreatedAtUtc { get; set; }
 
         public DateTimeOffset UpdatedAtUtc { get; set; }
+        public IReadOnlyList<string> ReferencedExternalIds { get; set; } = Array.Empty<string>();
+        public bool IsActive { get; set; }
     }
 }
 

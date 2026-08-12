@@ -35,13 +35,13 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             });
 
         public Task<IEnumerable<RefreshToken>> GetActiveByEmailAsync(string email)
-    => _connection.QueryAsync<RefreshToken>(@"
-                                        SELECT *
-                                        FROM [RefreshTokens]
-                                        WHERE Email = @Email
-                                          AND Status = @Active
-                                          AND ExpiryDate > SYSUTCDATETIME()
-                                        ORDER BY CreatedAt DESC",
+            => _connection.QueryAsync<RefreshToken>(@"
+                                                SELECT *
+                                                FROM [RefreshTokens]
+                                                WHERE Email = @Email
+                                                  AND Status = @Active
+                                                  AND ExpiryDate > SYSUTCDATETIME()
+                                                ORDER BY CreatedAt DESC",
         new { Email = email, Active = (int)RefreshTokenStatus.Active });
 
         // hash/salt writing (without clear token)

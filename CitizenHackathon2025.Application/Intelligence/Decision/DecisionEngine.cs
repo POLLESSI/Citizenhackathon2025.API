@@ -18,18 +18,69 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                 ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<DecisionRecommendation> RecommendAsync(DecisionContext context, CancellationToken ct = default)
+        public Task<DecisionRecommendation> RecommendAsync(DecisionContext context, CancellationToken ct = default)
         {
+            ArgumentNullException.ThrowIfNull(context);
+
+            ct.ThrowIfCancellationRequested();
+
             var actions = new List<string>();
 
-            if (context.RiskScore >= 85 || context.Severity >= 4)
+            var effectiveRiskScore = context.RiskScore;
+
+            var effectiveSeverity = context.Severity;
+
+
+            // =====================================================
+            // OFFICIAL EMERGENCY OVERRIDE
+            // =====================================================
+
+            if (context.HasOfficialEmergencyRisk)
+            {
+                /*
+                 * An official alert does not merely add a few
+                 * points to the heuristic score.
+                 *
+                 * It imposes a minimum risk level.
+                 */
+                effectiveRiskScore = ApplyOfficialAlertFloor(
+                        currentScore: context.RiskScore,
+                        officialSeverity: context.OfficialEmergencySeverity,
+                        immediate: context.IsOfficialEmergencyImmediate);
+
+                effectiveSeverity = Math.Max(context.Severity, context.OfficialEmergencySeverity);
+
+
+                actions.Add(!string.IsNullOrWhiteSpace(context.EmergencySourceCode)
+                    ? $"Official emergency alert active " + $"({context.EmergencySourceCode})." : "Official emergency alert active.");
+
+                /*
+                 * Preserve the official wording.
+                 *
+                 * OutZen may present it but must not reinterpret
+                 * it as its own instruction.
+                 */
+                if (!string.IsNullOrWhiteSpace(context.OfficialInstruction))
+                {
+                    actions.Add($"Official instruction: " + $"{context.OfficialInstruction}");
+                }
+                actions.Add("Do not recommend destinations inside " + "the affected official alert zone.");
+                actions.Add("Do not route users through the " + "affected official alert zone.");
+            }
+
+
+            // =====================================================
+            // GLOBAL DETERMINISTIC DECISION
+            // =====================================================
+
+            if (effectiveRiskScore >= 85 || effectiveSeverity >= 4)
             {
                 actions.Add("Display a critical alert on the map.");
                 actions.Add("Avoid recommending this area to users.");
                 actions.Add("Suggest safer alternatives.");
                 actions.Add("Request human validation.");
             }
-            else if (context.RiskScore >= 65 || context.Severity == 3)
+            else if (effectiveRiskScore >= 65 || effectiveSeverity == 3)
             {
                 actions.Add("Monitor the area in real-time.");
                 actions.Add("Display a warning to users.");
@@ -39,18 +90,37 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                 actions.Add("No immediate critical action required.");
             }
 
+
+            // =====================================================
+            // CONTEXTUAL COMPLEMENTS
+            // =====================================================
+
             if (context.HasCriticalWeather)
+            {
                 actions.Add("Prioritize indoor alternatives.");
+            }
+
 
             if (context.HasTrafficIssue)
-                actions.Add("Avoid routes through the affected area.");
-
-            return new DecisionRecommendation
             {
-                Priority = ResolvePriority(context.RiskScore, context.Severity),
-                Actions = actions,
-                Message = $"Decision recommendation generated for {context.ZoneName}."
-            };
+                actions.Add("Avoid routes through the affected area.");
+            }
+
+
+            return Task.FromResult(
+                new DecisionRecommendation
+                {
+                    Priority = ResolvePriority(effectiveRiskScore, effectiveSeverity),
+                    EffectiveRiskScore = effectiveRiskScore,
+                    EffectiveSeverity = effectiveSeverity,
+                    Actions = actions,
+                    Message =
+                        context.HasOfficialEmergencyRisk
+                            ? $"Official emergency-aware decision " +
+                              $"generated for {context.ZoneName}."
+                            : $"Decision recommendation generated " +
+                              $"for {context.ZoneName}."
+                });
         }
 
         public async Task<List<DecisionActionDTO>> RecommendActionsAsync(IEnumerable<CrowdAlertCluster> clusters, CancellationToken ct = default)
@@ -62,8 +132,6 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
                 ct.ThrowIfCancellationRequested();
 
                 var localAiDecision = await TryAnalyzeWithLocalAiAsync(cluster, ct);
-
-                var priority = ResolvePriority(cluster.RiskScore, cluster.Severity);
 
                 var localMessage = string.IsNullOrWhiteSpace(localAiDecision?.UserMessage) ? null : localAiDecision.UserMessage.Trim();
 
@@ -181,6 +249,19 @@ namespace CitizenHackathon2025.Application.Intelligence.Decision
             }
         }
 
+        private static int ApplyOfficialAlertFloor(int currentScore, byte officialSeverity, bool immediate)
+        {
+            var minimumScore = officialSeverity switch
+                {
+                    >= 4 => 95,
+                    3 => immediate ? 90 : 85,
+                    2 => 65,
+                    1 => 40,
+                    _ => currentScore
+                };
+
+            return Math.Max(currentScore, minimumScore);
+        }
         private static string ResolvePriority(int riskScore, byte severity)
         {
             if (riskScore >= 85 || severity >= 4)

@@ -47,6 +47,7 @@
     <ProjectReference Include="..\CitizenHackathon2025.Domain\CitizenHackathon2025.Domain.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.DTOs\CitizenHackathon2025.DTOs.csproj" />
     <ProjectReference Include="..\CitizenHackathon2025.Shared\CitizenHackathon2025.Shared.csproj" />
+    <ProjectReference Include="..\CitizenHackathon2025.EmergencyIntelligence\CitizenHackathon2025.EmergencyIntelligence.csproj" />
   </ItemGroup>
 
   <ItemGroup>

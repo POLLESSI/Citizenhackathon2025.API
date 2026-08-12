@@ -68,12 +68,8 @@
 	<TrimmerRootAssembly Include="Serilog.Sinks.Async" />
   </ItemGroup>
   <ItemGroup>
-	<Compile Remove="Services\**" />
 	<Compile Remove="Tests\**\*.cs" />
-	<Content Remove="Services\**" />
 	<Content Remove="Tests\**\*" />
-	<EmbeddedResource Remove="Services\**" />
-	<None Remove="Services\**" />
 	<None Remove="Tests\**\*" />
   </ItemGroup>
 

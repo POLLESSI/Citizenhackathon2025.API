@@ -432,7 +432,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             var swContext = Stopwatch.StartNew();
-
             var contextPrompt = NormalizeMultilingualPromptForContext(prompt);
 
             _logger.LogInformation(
@@ -442,68 +441,114 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 contextPrompt);
 
             var placeNameResolver = scope.ServiceProvider.GetRequiredService<IPlaceNameResolver>();
-
-            var requestedName = ExtractPlaceNameFromPrompt(contextPrompt);
-
+            var nearMeIntent = IsNearMePrompt(contextPrompt);
+            var requestedName = nearMeIntent ? null : ExtractPlaceNameFromPrompt(contextPrompt);
             var places = await placeRepository.GetActivePlacesAsync(ct);
-
             var responseLanguage = ResolveResponseLanguage(prompt, request.LanguageCode);
 
-            Place? originPlace = await placeNameResolver.ResolveAsync(prompt, responseLanguage, ct);
+            Place? originPlace = null;
 
-            if (originPlace is null)
+            // A specifically requested location must be given priority
+            // over the user's GPS location.
+            //
+            // Examples:
+            // "à Charleroi"
+            // "autour de Bruxelles"
+            //
+            // However, "près de moi" must use the GPS.
+            if (!nearMeIntent)
             {
-                originPlace = ResolvePlaceFromPrompt(contextPrompt, places);
-            }
+                originPlace = await placeNameResolver.ResolveAsync(
+                    prompt,
+                    responseLanguage,
+                    ct);
 
-            if (originPlace is null && !string.IsNullOrWhiteSpace(requestedName))
-            {
-                originPlace = await placeRepository.FindByNameLikeAsync(requestedName, ct);
+                if (originPlace is null)
+                {
+                    originPlace = ResolvePlaceFromPrompt(contextPrompt, places);
+                }
+
+                if (originPlace is null && !string.IsNullOrWhiteSpace(requestedName))
+                {
+                    originPlace = await placeRepository.FindByNameLikeAsync(requestedName, ct);
+                }
             }
 
             _logger.LogWarning(
-                        "[GPT GEO DIAGNOSTIC] " +
-                        "ContextPrompt={ContextPrompt}; " +
-                        "RequestedName={RequestedName}; " +
-                        "OriginPlace={OriginPlace}; " +
-                        "OriginLat={OriginLat}; " +
-                        "OriginLng={OriginLng}",
-                        contextPrompt,
-                        requestedName,
-                        originPlace?.Name,
-                        originPlace?.Latitude,
-                        originPlace?.Longitude);
+                "[GPT GEO DIAGNOSTIC] " +
+                "NearMe={NearMe}; " +
+                "ContextPrompt={ContextPrompt}; " +
+                "RequestedName={RequestedName}; " +
+                "OriginPlace={OriginPlace}; " +
+                "RequestLat={RequestLat}; " +
+                "RequestLng={RequestLng}",
+                nearMeIntent,
+                contextPrompt,
+                requestedName,
+                originPlace?.Name,
+                request.Latitude,
+                request.Longitude);
+
+            // For a "near me" search",
+            // no silent fallback to Charleroi.
+            if (nearMeIntent && !HasValidCoordinates(request.Latitude, request.Longitude))
+            {
+                const string locationRequiredMessage =
+                    "Je n’ai pas reçu votre position actuelle. " +
+                    "Autorisez la géolocalisation puis réessayez votre demande « près de moi ».";
+
+                return await CompleteWithGuardMessageAsync(
+                        gptRepository,
+                        interactionId,
+                        requestId,
+                        locationRequiredMessage,
+                        pushChunksToHub,
+                        ct)
+                    .ConfigureAwait(false);
+            }
 
             double? effectiveLatitude = null;
             double? effectiveLongitude = null;
 
+            // 1. A specifically requested location wins.
             if (originPlace is not null)
             {
                 effectiveLatitude = (double)originPlace.Latitude;
+
                 effectiveLongitude = (double)originPlace.Longitude;
 
                 _logger.LogInformation(
-                    "Origin resolved from SQL : {Name} ({Lat},{Lng})",
+                    "[GPT GEO] Origin resolved from SQL. " +
+                    "Name={Name}; Lat={Lat}; Lng={Lng}",
                     originPlace.Name,
                     effectiveLatitude,
                     effectiveLongitude);
             }
 
-            if (effectiveLatitude.HasValue &&
-                effectiveLongitude.HasValue &&
-                double.IsFinite(effectiveLatitude.Value) &&
-                double.IsFinite(effectiveLongitude.Value) &&
-                effectiveLatitude.Value is >= -90 and <= 90 &&
-                effectiveLongitude.Value is >= -180 and <= 180 &&
-                !(effectiveLatitude.Value == 0 &&
-                  effectiveLongitude.Value == 0))
+            // 2. Otherwise, use the client's GPS.
+            else if (HasValidCoordinates(request.Latitude, request.Longitude))
+            {
+                effectiveLatitude = request.Latitude!.Value;
+
+                effectiveLongitude = request.Longitude!.Value;
+
+                _logger.LogInformation(
+                    "[GPT GEO] Origin resolved from client GPS. " +
+                    "Lat={Lat}; Lng={Lng}",
+                    effectiveLatitude,
+                    effectiveLongitude);
+            }
+
+            // 3. Once the origin is actually determined,
+            // save it regardless of its source.
+            if (HasValidCoordinates(effectiveLatitude, effectiveLongitude))
             {
                 var locationUpdated = await gptRepository.UpdateLocationAsync(
-                                    interactionId,
-                                    effectiveLatitude.Value,
-                                    effectiveLongitude.Value,
-                                    ct)
-                                .ConfigureAwait(false);
+                        interactionId,
+                        effectiveLatitude!.Value,
+                        effectiveLongitude!.Value,
+                        ct)
+                    .ConfigureAwait(false);
 
                 if (!locationUpdated)
                 {
@@ -512,22 +557,29 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 _logger.LogInformation(
                     "[GPT GEO] Persisted interaction location. " +
-                    "InteractionId={InteractionId}, Latitude={Latitude}, Longitude={Longitude}",
+                    "InteractionId={InteractionId}; " +
+                    "Latitude={Latitude}; " +
+                    "Longitude={Longitude}",
                     interactionId,
                     effectiveLatitude.Value,
                     effectiveLongitude.Value);
             }
 
-            else if (request.Latitude.HasValue &&
-                     request.Longitude.HasValue)
-            {
-                effectiveLatitude = request.Latitude.Value;
-                effectiveLongitude = request.Longitude.Value;
-
-                _logger.LogInformation("Origin resolved from client GPS");
-
-                _logger.LogInformation("Prompt reçu {Elapsed}", sw.Elapsed);
-            }
+            _logger.LogInformation(
+                "[GPT GEO] Final origin. " +
+                "NearMe={NearMe}; " +
+                "Source={Source}; " +
+                "Lat={Lat}; Lng={Lng}",
+                nearMeIntent,
+                originPlace is not null
+                    ? "ExplicitPlace"
+                    : HasValidCoordinates(
+                        effectiveLatitude,
+                        effectiveLongitude)
+                        ? "ClientGps"
+                        : "None",
+                effectiveLatitude,
+                effectiveLongitude);
 
             var localContext = await localAiContextService.BuildContextAsync(contextPrompt, effectiveLatitude, effectiveLongitude, ct).ConfigureAwait(false);
 
@@ -1372,6 +1424,55 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             return null;
+        }
+
+        private static bool IsNearMePrompt(string? prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+                return false;
+
+            var normalized = prompt
+                    .Replace("’", "'")
+                    .Trim()
+                    .ToLowerInvariant();
+
+            return
+                Regex.IsMatch(
+                    normalized,
+                    @"\b(près|pres|proche)\s+de\s+moi\b",
+                    RegexOptions.CultureInvariant) ||
+
+                Regex.IsMatch(
+                    normalized,
+                    @"\bautour\s+de\s+moi\b",
+                    RegexOptions.CultureInvariant) ||
+
+                Regex.IsMatch(
+                    normalized,
+                    @"\baux\s+alentours\s+de\s+(moi|ma position)\b",
+                    RegexOptions.CultureInvariant) ||
+
+                Regex.IsMatch(
+                    normalized,
+                    @"\bprès\s+d'ici\b",
+                    RegexOptions.CultureInvariant) ||
+
+                normalized.Contains(
+                    "autour de ma position",
+                    StringComparison.Ordinal);
+        }
+
+        private static bool HasValidCoordinates(double? latitude, double? longitude)
+        {
+            return
+                latitude.HasValue &&
+                longitude.HasValue &&
+                double.IsFinite(latitude.Value) &&
+                double.IsFinite(longitude.Value) &&
+                latitude.Value is >= -90d and <= 90d &&
+                longitude.Value is >= -180d and <= 180d &&
+                !(latitude.Value == 0d &&
+                  longitude.Value == 0d);
         }
 
         private static Place? ResolvePlaceFromPrompt(string prompt, IReadOnlyList<Place> places)

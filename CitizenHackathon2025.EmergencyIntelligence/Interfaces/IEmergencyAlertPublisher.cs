@@ -1,0 +1,12 @@
+﻿using CitizenHackathon2025.EmergencyIntelligence.Models;
+
+namespace CitizenHackathon2025.EmergencyIntelligence.Interfaces
+{
+    public interface IEmergencyAlertPublisher
+    {
+        Task PublishUpsertedAsync(EmergencyAlert alert, CancellationToken ct = default);
+        Task PublishCancelledAsync(EmergencyAlert alert, CancellationToken ct = default);
+        Task PublishExpiredAsync(EmergencyAlert alert, CancellationToken ct = default);
+    }
+}
+

@@ -2,6 +2,7 @@
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Domain.Models;
+using CitizenHackathon2025.Domain.ViewModels;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Linq;
@@ -169,6 +170,39 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .Take(Limits.MaxCrowdCalendar)
                 .ToList();
 
+            _logger.LogWarning(
+                "[LOCAL AI TEMPORAL] " +
+                "DateSensitive={DateSensitive}; " +
+                "DateFrom={DateFrom:yyyy-MM-dd}; " +
+                "DateToExclusive={DateToExclusive:yyyy-MM-dd}; " +
+                "Events={Events}; " +
+                "CrowdCalendar={CrowdCalendar}",
+                HasDateSensitiveIntent(safePrompt),
+                dateFrom,
+                dateToExclusive,
+                events.Count,
+                crowdCalendar.Count);
+
+            foreach (var currentCalendarEvent in crowdCalendar)
+            {
+                _logger.LogWarning(
+                    "[LOCAL AI CALENDAR] " +
+                    "Id={Id}; " +
+                    "EventName={EventName}; " +
+                    "Region={Region}; " +
+                    "Date={Date}; " +
+                    "DistanceKm={DistanceKm}; " +
+                    "ExpectedLevel={ExpectedLevel}; " +
+                    "Confidence={Confidence}",
+                    currentCalendarEvent.Id,
+                    currentCalendarEvent.EventName,
+                    currentCalendarEvent.RegionCode,
+                    currentCalendarEvent.DateUtc,
+                    currentCalendarEvent.DistanceKm,
+                    currentCalendarEvent.ExpectedLevel,
+                    currentCalendarEvent.Confidence);
+            }
+
             var crowdInfo = (await crowdInfoTask.ConfigureAwait(false))
                 .Where(IsCrowdInfoRelevant)
                 .OrderByDescending(x => x.Timestamp ?? DateTime.MinValue)
@@ -277,8 +311,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             ArgumentNullException.ThrowIfNull(context);
 
-            var prioritizeCurrentEvents = context.Events.Count > 0 && HasDateSensitiveIntent(context.UserPrompt);
-
+            var hasDateSensitiveIntent = HasDateSensitiveIntent(context.UserPrompt);
+            var hasRealEvents = context.Events is { Count: > 0 };
+            var hasCrowdCalendarEvents = context.CrowdCalendar is { Count: > 0 };
+            var hasTemporalResults = hasRealEvents || hasCrowdCalendarEvents;
+            var prioritizeCurrentEvents = hasDateSensitiveIntent && hasTemporalResults;
+            var dateSensitiveWithoutResults = hasDateSensitiveIntent && !hasTemporalResults;
             var sb = new StringBuilder(4096);
 
             sb.AppendLine("You are OutZen local assistant.");
@@ -286,22 +324,32 @@ namespace CitizenHackathon2025.Infrastructure.Services
             sb.AppendLine("Do not invent places, visits, events, traffic, weather, or crowd data.");
             sb.AppendLine("Do not choose the response language here.");
             sb.AppendLine("The response language is controlled by the system message.");
-            sb.AppendLine("Be concise, concrete, and useful.");
+            sb.AppendLine("Be concrete and useful.");
+            sb.AppendLine("For date-sensitive questions, completeness of relevant dated results has priority over brevity.");
             sb.AppendLine();
 
             sb.AppendLine("Priority rules:");
 
             if (prioritizeCurrentEvents)
             {
-                sb.AppendLine("- Current-date events remain the first priority.");
-                sb.AppendLine("- Use explicitly matched places to locate those events and nearby attractions.");
+                sb.AppendLine("- The requested date range is authoritative.");
+                sb.AppendLine("- Real events occurring within that date range come first.");
+                sb.AppendLine("- Relevant planned CrowdCalendar entries within that date range also have temporal priority.");
+                sb.AppendLine("- Permanent attractions may be proposed only after the temporal results.");
+            }
+            else if (dateSensitiveWithoutResults)
+            {
+                sb.AppendLine("- The user explicitly requested a date or date range.");
+                sb.AppendLine("- No real Event or CrowdCalendar result was found for that requested period.");
+                sb.AppendLine("- State this clearly before proposing permanent attractions.");
+                sb.AppendLine("- Never present a permanent attraction as an event occurring during the requested period.");
             }
             else
             {
                 sb.AppendLine("- If the user mentions a place by name, rely on the explicitly matched places.");
             }
-            sb.AppendLine("5. Use towns and villages only as geographical context.");
-            sb.AppendLine("6. Never invent missing information.");
+            sb.AppendLine("- Use towns and villages only as geographical context.");
+            sb.AppendLine("- Never invent missing information.");
 
             sb.AppendLine();
 
@@ -314,9 +362,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
             if (prioritizeCurrentEvents)
             {
                 sb.AppendLine("- start with relevant events occurring within the requested date range");
-                sb.AppendLine("- clearly state its name, locality, date and supplied distance");
+                sb.AppendLine("- clearly state their name, locality, date and supplied distance");
+                sb.AppendLine("- include relevant CrowdCalendar entries when they represent a named planned event");
                 sb.AppendLine("- then add the most relevant permanent attractions");
                 sb.AppendLine("- an event located at distance 0 km must not be omitted");
+            }
+            else if (dateSensitiveWithoutResults)
+            {
+                sb.AppendLine("- first state that OutZen found no dated event or planned calendar entry for the requested period");
+                sb.AppendLine("- then offer permanent attractions only as fallback ideas");
+                sb.AppendLine("- clearly distinguish permanent attractions from weekend events");
             }
             else
             {
@@ -353,10 +408,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
             AppendUserSafetyConstraints(sb, context);
 
             sb.AppendLine("Final reminder:");
+
             if (prioritizeCurrentEvents)
             {
-                sb.AppendLine("- current-date events first");
+                sb.AppendLine("- dated Event/CrowdCalendar results first");
                 sb.AppendLine("- permanent attractions second");
+            }
+            else if (dateSensitiveWithoutResults)
+            {
+                sb.AppendLine("- explicitly say that no dated result was found for the requested period");
+                sb.AppendLine("- permanent attractions are fallback suggestions only");
             }
             else
             {
@@ -416,14 +477,22 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             if (prioritizeCurrentEvents)
             {
-                sb.AppendLine("- Mention every relevant current-date event first.");
-                sb.AppendLine("- Then add the most useful permanent attractions.");
-                sb.AppendLine("- Recommend 3 to 5 items in total, including events.");
+                sb.AppendLine("- Mention every relevant dated Event present in the supplied context.");
+                sb.AppendLine("- Mention every relevant named CrowdCalendar entry present in the supplied context for the requested period.");
+                sb.AppendLine("- Do not omit a relevant dated result merely to keep the answer short.");
+                sb.AppendLine("- Do not apply an arbitrary 3-item or 5-item limit to dated results.");
+                sb.AppendLine("- After all relevant dated results, add up to 5 useful permanent attractions if appropriate.");
                 sb.AppendLine("- An event occurring at the requested location during the requested period must be item 1.");
+            }
+            else if (dateSensitiveWithoutResults)
+            {
+                sb.AppendLine("- Explicitly state that no dated Event or CrowdCalendar entry was found for the requested period.");
+                sb.AppendLine("- Permanent attractions may then be proposed as alternatives.");
+                sb.AppendLine("- Do not imply that those permanent attractions are special events for the requested period.");
             }
             else
             {
-                sb.AppendLine("- Recommend 3 to 5 actual attractions when available.");
+                sb.AppendLine("- Recommend up to 8 relevant actual attractions when available.");
                 sb.AppendLine("- Include relevant real events when useful.");
             }
 
@@ -567,8 +636,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(prompt))
                 return false;
 
-            var normalized =
-                prompt.ToLowerInvariant();
+            var normalized = prompt.ToLowerInvariant();
 
             return
                 normalized.Contains("aujourd") ||
@@ -577,6 +645,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 normalized.Contains("dans la semaine") ||
                 normalized.Contains("ce weekend") ||
                 normalized.Contains("ce week-end") ||
+                normalized.Contains("ce week end") ||
                 normalized.Contains("ce samedi") ||
                 normalized.Contains("ce dimanche") ||
                 normalized.Contains("ce soir");
@@ -847,6 +916,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         private static void AppendCrowdCalendar(StringBuilder sb, LocalAiContextDTO context)
         {
+            
             sb.AppendLine("Planned crowd-sensitive events:");
 
             if (context.CrowdCalendar is null || context.CrowdCalendar.Count == 0)
@@ -858,16 +928,17 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             foreach (var e in context.CrowdCalendar)
             {
+                var dateText = e.DateUtc.HasValue ? $"{e.DateUtc.Value:yyyy-MM-dd} ({e.DateUtc.Value.DayOfWeek})" : "—";
+                
                 sb.AppendLine(
                     $"- {e.EventName ?? "Unknown event"}, " +
                     $"{e.RegionCode ?? "Unknown region"}, " +
-                    $"{(e.DateUtc?.ToString("yyyy-MM-dd") ?? "—")}, " +
+                    $"{dateText}, " +
                     $"{FmtTs(e.StartLocalTime)}-{FmtTs(e.EndLocalTime)}, " +
                     $"level {(e.ExpectedLevel?.ToString() ?? "—")}, " +
                     $"confidence {(e.Confidence?.ToString() ?? "—")}%, " +
                     $"{FmtDistance(e.DistanceKm)}");
             }
-
             sb.AppendLine();
         }
 
@@ -1020,12 +1091,21 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 p.Contains("foule") || p.Contains("monde") || p.Contains("affluence") ||
                 p.Contains("crowd");
 
+            var asksDateSensitive = HasDateSensitiveIntent(p);
+
             var asksEvent =
-                p.Contains("événement") || p.Contains("evenement") ||
-                p.Contains("activité") || p.Contains("activite") ||
-                p.Contains("concert") || p.Contains("sortie") ||
-                p.Contains("intéressant") || p.Contains("interessant") ||
-                p.Contains("quoi faire") || p.Contains("à voir") || p.Contains("a voir");
+                asksDateSensitive ||
+                p.Contains("événement") ||
+                p.Contains("evenement") ||
+                p.Contains("activité") ||
+                p.Contains("activite") ||
+                p.Contains("concert") ||
+                p.Contains("sortie") ||
+                p.Contains("intéressant") ||
+                p.Contains("interessant") ||
+                p.Contains("quoi faire") ||
+                p.Contains("à voir") ||
+                p.Contains("a voir");
 
             var asksPlaces =
                 asksEvent ||
@@ -1061,7 +1141,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 NeedPlaces = asksPlaces,
                 NeedEvents = asksEvent,
-                NeedCrowdCalendar = asksEvent || asksCrowd,
+                NeedCrowdCalendar = asksDateSensitive |asksEvent || asksCrowd,
                 NeedCrowdInfo = asksCrowd || asksEvent,
                 NeedTraffic = asksTraffic,
                 NeedWeather = asksWeather || asksEvent

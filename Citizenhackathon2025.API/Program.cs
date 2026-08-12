@@ -8,6 +8,7 @@ using CitizenHackathon2025.API.Hubs;
 using CitizenHackathon2025.API.Hubs.Serilog.Sinks;
 using CitizenHackathon2025.API.Middlewares;
 using CitizenHackathon2025.API.Options;
+using CitizenHackathon2025.API.Services;
 using CitizenHackathon2025.API.Tools;
 using CitizenHackathon2025.Application.Behaviors;
 using CitizenHackathon2025.Application.CQRS.Queries;
@@ -36,6 +37,7 @@ using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.EmergencyIntelligence.Interfaces;
 using CitizenHackathon2025.EmergencyIntelligence.Records;
 using CitizenHackathon2025.EmergencyIntelligence.Services;
+using CitizenHackathon2025.EmergencyIntelligence.Sources.BeAlert;
 using CitizenHackathon2025.EmergencyIntelligence.Workers;
 using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
@@ -319,11 +321,13 @@ internal class Program
 
     private static void ConfigureOptions(IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<BeAlertCapOptions>(configuration.GetSection(BeAlertCapOptions.SectionName));
         services.Configure<OpenAIOptions>(configuration.GetSection("OpenAI"));
         services.Configure<CitizenHackathon2025.Shared.Options.OpenWeatherOptions>(configuration.GetSection("OpenWeather"));
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.Configure<SessionJanitorOptions>(configuration.GetSection("Sessions:Janitor"));
         services.Configure<TrafficApiOptions>(configuration.GetSection("ExternalProviders:ODWB"));
+        services.Configure<BeAlertCapOptions>(configuration.GetSection(BeAlertCapOptions.SectionName));
         services.Configure<CitizenHackathon2025.API.Options.AntennaCleanupOptions>(configuration.GetSection("AntennaCleanup"));
         services.Configure<AntennaArchiveRetentionOptions>(configuration.GetSection("AntennaArchiveRetention"));
         services.AddHostedService<AntennaConnectionCleanupWorker>();
@@ -802,10 +806,27 @@ internal class Program
             logger.LogWarning("[MISTRAL HTTP CONFIG] " + "BaseAddress={BaseAddress}; " + "HttpClientTimeout={HttpClientTimeout}; " + "PollyHandler=False", client.BaseAddress, client.Timeout);
         });
 
+        services.AddHttpClient<IBeAlertCapSource, BeAlertCapSource>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<BeAlertCapOptions>>().Value;
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("OutZen-EmergencyIntelligence/1.0");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
+        });
+        services.AddTransient<IEmergencyAlertSource>(sp => sp.GetRequiredService<IBeAlertCapSource>());
+
         services.AddHttpClient<INationalCrisisCenterAlertSource, NationalCrisisCenterAlertSource>();
 
-        services.AddTransient<IEmergencyAlertSource>(serviceProvider =>
-            serviceProvider.GetRequiredService<INationalCrisisCenterAlertSource>());
+        services.AddHttpClient<IBeAlertCapSource, BeAlertCapSource>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<BeAlertCapOptions>>().Value;
+
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen-BEAlert/1.0");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
+        });
+
+        services.AddTransient<IEmergencyAlertSource>(sp => sp.GetRequiredService<IBeAlertCapSource>());
 
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
         {
@@ -1018,6 +1039,8 @@ internal class Program
         services.AddScoped<ICrowdSafetyAlertRepository, CrowdSafetyAlertRepository>();
         services.AddScoped<ICrowdCalendarRepository, CrowdCalendarRepository>();
         services.AddScoped<IDisasterAlertRepository, DisasterAlertRepository>();
+        services.AddScoped<IEmergencyAlertRepository, EmergencyAlertRepository>();
+        services.AddScoped<IEmergencyAlertPublisher, SignalREmergencyAlertPublisher>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
         services.AddScoped<ILocalAiDataRepository, LocalAiDataRepository>();
@@ -1043,6 +1066,7 @@ internal class Program
         services.AddSingleton<IGptRequestRegistry, GptRequestRegistry>();
         services.AddSingleton<ICspViolationStore, CspViolationStore>();
         services.AddSingleton<EmergencyAlertHubBroadcaster>();
+        services.AddSingleton<IEmergencyAlertNormalizer, BeAlertCapNormalizer>();
 
         services.AddMemoryCache();
         services.AddScoped<MemoryCacheService>();
@@ -1057,6 +1081,7 @@ internal class Program
         services.AddScoped<IReplayService, ReplayService>();
         services.AddScoped<IDigitalTwin, DigitalTwin>();
         services.AddScoped<IDecisionEngine, DecisionEngine>();
+        services.AddScoped<OfficialEmergencyRiskContextService>();
         services.AddScoped<IPredictionEngine, PredictionEngine>();
         services.AddScoped<IRiskScoreCalculator, RiskScoreCalculator>();
         services.AddScoped<ICriticalAlertQuorumService, CriticalAlertQuorumService>();
@@ -1456,26 +1481,50 @@ internal class Program
         if (app.Environment.IsDevelopment())
         {
             app.MapGet("/_diag/emergency/source",
-                    async (INationalCrisisCenterAlertSource source, CancellationToken cancellationToken) =>
+                async (INationalCrisisCenterAlertSource source, CancellationToken cancellationToken) =>
+                {
+                    var cursor = new EmergencyAlertCursor(
+                            ETag: null,
+                            LastModifiedUtc: null,
+                            ContinuationToken: null,
+                            LastSuccessfulFetchUtc: null);
+
+                    var batch = await source.FetchAsync(cursor, cancellationToken);
+
+                    return Results.Ok(new
                     {
-                        var cursor = new EmergencyAlertCursor(
-                                ETag: null,
-                                LastModifiedUtc: null,
-                                ContinuationToken: null,
-                                LastSuccessfulFetchUtc: null);
+                        SourceCode = source.SourceCode,
+                        AlertCount = batch.Alerts.Count,
+                        FetchedAtUtc = batch.FetchedAtUtc,
+                        ETag = batch.ETag,
+                        LastModifiedUtc = batch.LastModifiedUtc,
+                        IsRemoteProviderConfigured = false
+                    });
+                })
+            .AllowAnonymous();
 
-                        var batch = await source.FetchAsync(cursor, cancellationToken);
+            app.MapGet("/_diag/emergency/source/be-alert",
+                async (IBeAlertCapSource source, CancellationToken ct) =>
+                {
+                    var cursor = new EmergencyAlertCursor(
+                        ETag: null,
+                        LastModifiedUtc: null,
+                        ContinuationToken: null,
+                        LastSuccessfulFetchUtc: null);
 
-                        return Results.Ok(new
+                    var batch = await source.FetchAsync(cursor,ct);
+
+                    return Results.Ok(
+                        new
                         {
-                            SourceCode = source.SourceCode,
+                            source.SourceCode,
                             AlertCount = batch.Alerts.Count,
-                            FetchedAtUtc = batch.FetchedAtUtc,
-                            ETag = batch.ETag,
-                            LastModifiedUtc = batch.LastModifiedUtc,
-                            IsRemoteProviderConfigured = false
-                        });
-                    })
+                            batch.FetchedAtUtc,
+                            batch.ETag,
+                            batch.LastModifiedUtc
+                        }
+                    );
+                })
                 .AllowAnonymous();
 
             app.MapPost("/_diag/emergency/sync",
@@ -1493,53 +1542,54 @@ internal class Program
                 .AllowAnonymous();
 
             app.MapPost("/_diag/emergency/hub-test",
-        async (EmergencyAlertHubBroadcaster broadcaster) =>
-        {
-            var alert = new EmergencyAlertSignalRDTO
-            {
-                Id = Guid.NewGuid(),
-
-                SourceCode = "BE-NCCN",
-
-                ExternalId = $"TEST-{Guid.NewGuid():N}",
-
-                HazardType = EmergencyHazardType.Flood,
-
-                Severity = EmergencySeverity.Severe,
-
-                Urgency = EmergencyUrgency.Immediate,
-
-                Certainty = EmergencyCertainty.Observed,
-
-                Status = EmergencyAlertStatus.Active,
-
-                InformationKind = SafetyInformationKind.ActiveEmergency,
-
-                Headline = "TEST OutZen Emergency Intelligence",
-
-                Description = "Alerte de diagnostic SignalR.",
-
-                Instructions = "Aucune action réelle requise.",
-
-                EffectiveFromUtc = DateTimeOffset.UtcNow,
-
-                LastUpdatedAtUtc = DateTimeOffset.UtcNow,
-
-                ProvinceCode = "BE-WAL",
-
-                IsOfficial = false
-            };
-
-            await broadcaster.PublishUpsertedAsync(alert);
-
-            return Results.Ok(
-                new
+                async (EmergencyAlertHubBroadcaster broadcaster) =>
                 {
-                    success = true,
-                    alert.Id
-                });
-        })
-    .RequireAuthorization();
+                    var alert = new EmergencyAlertSignalRDTO
+                    {
+                        Id = Guid.NewGuid(),
+
+                        SourceCode = "BE-NCCN",
+
+                        ExternalId = $"TEST-{Guid.NewGuid():N}",
+
+                        HazardType = EmergencyHazardType.Flood,
+
+                        Severity = EmergencySeverity.Severe,
+
+                        Urgency = EmergencyUrgency.Immediate,
+
+                        Certainty = EmergencyCertainty.Observed,
+
+                        Status = EmergencyAlertStatus.Active,
+
+                        InformationKind = SafetyInformationKind.ActiveEmergency,
+
+                        Headline = "TEST OutZen Emergency Intelligence",
+
+                        Description = "Alerte de diagnostic SignalR.",
+
+                        Instructions = "Aucune action réelle requise.",
+
+                        EffectiveFromUtc = DateTimeOffset.UtcNow,
+
+                        LastUpdatedAtUtc = DateTimeOffset.UtcNow,
+
+                        ProvinceCode = "BE-WAL",
+
+                        IsOfficial = false
+                    };
+
+                    await broadcaster.PublishUpsertedAsync(alert);
+
+                    return Results.Ok(
+                        new
+                        {
+                            success = true,
+                            alert.Id
+                        }
+                    );
+                })
+            .RequireAuthorization();
         }
         app.MapGet("/", () => "OK");
     }
