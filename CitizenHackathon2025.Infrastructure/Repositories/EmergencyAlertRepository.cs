@@ -36,20 +36,32 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             try
             {
+                // =====================================================
+                // FIND EXISTING ALERT WITH SAME SOURCE + EXTERNAL ID
+                // =====================================================
+
                 var existing = await FindForUpdateAsync(connection, transaction, alert.SourceCode, alert.ExternalId, cancellationToken);
+
                 /*
-                 * Exact same CAP payload:
-                 * nothing to update and nothing to broadcast.
+                 * Exact same CAP payload + same status:
+                 *
+                 * nothing changed, so:
+                 * - no SQL update,
+                 * - no lifecycle operation,
+                 * - no SignalR broadcast.
                  */
                 if (existing is not null && string.Equals(existing.PayloadHash, alert.PayloadHash, StringComparison.OrdinalIgnoreCase) && existing.Status.Equals(alert.Status))
                 {
                     transaction.Commit();
+
                     return new EmergencyAlertApplyResult(StoredAlert: existing, Changed: false, IsActive: existing.IsActive, RemovedAlerts: Array.Empty<EmergencyAlertRemoval>());
                 }
-                /*
-                 * Same SourceCode + ExternalId:
-                 * preserve the OutZen Id.
-                 */
+
+
+                // =====================================================
+                // PRESERVE OUTZEN ID FOR SAME EXTERNAL ALERT
+                // =====================================================
+
                 if (existing is not null)
                 {
                     alert.Id = existing.Id;
@@ -69,41 +81,110 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
                 alert.UpdatedAtUtc = now;
 
+                // =====================================================
+                // DETERMINE STATE OF THE INCOMING ROW FIRST
+                // =====================================================
+
+                var isActive = IsActiveStatus(alert) && (!alert.ExpiresAtUtc.HasValue || alert.ExpiresAtUtc.Value > now);
+
+                /*
+                 * A CAP Cancel is never considered active.
+                 *
+                 * IsActiveStatus() already makes this false because
+                 * the Status is Cancelled/Canceled, but keeping the
+                 * resulting value here makes the intended lifecycle
+                 * explicit.
+                 */
+                alert.IsActive = isActive;
+
                 var removed = new List<EmergencyAlertRemoval>();
 
-                // =================================================
+                // =====================================================
+                // IMPORTANT:
+                // PERSIST THE INCOMING ALERT FIRST
+                // =====================================================
+
+                /*
+                 * dbo.EmergencyAlert.SupersededById is a self-reference:
+                 *
+                 *   SupersededById
+                 *        ↓
+                 *   EmergencyAlert.Id
+                 *
+                 * Therefore the new alert MUST already exist before an
+                 * older alert may receive:
+                 *
+                 *   SupersededById = alert.Id
+                 *
+                 * This is what fixes:
+                 *
+                 * FK_EmergencyAlert_SupersededBy
+                 */
+                await UpsertRowAsync(connection, transaction, alert, cancellationToken);
+
+                // =====================================================
                 // CAP UPDATE / SUPERSESSION
-                // =================================================
+                // =====================================================
 
                 if (IsActiveStatus(alert) && alert.ReferencedExternalIds.Count > 0)
                 {
                     foreach (var referenceId in alert.ReferencedExternalIds)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
+
+                        if (string.IsNullOrWhiteSpace(referenceId))
+                        {
+                            continue;
+                        }
+
+                        /*
+                         * Defensive protection:
+                         * malformed CAP data must never supersede itself.
+                         */
+                        if (string.Equals(referenceId, alert.ExternalId, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
                         var previous = await FindForUpdateAsync(connection, transaction, alert.SourceCode, referenceId, cancellationToken);
 
                         if (previous is null || !previous.IsActive)
                         {
                             continue;
                         }
+
                         await DeactivateAsync(connection, transaction, previous.Id, supersededById: alert.Id, newStatus: null, cancellationToken);
 
                         previous.IsActive = false;
                         previous.UpdatedAtUtc = now;
-
                         removed.Add(new EmergencyAlertRemoval(previous, EmergencyAlertRemovalReason.Superseded));
                     }
                 }
 
-                // =================================================
-                // CAP CANCEL
-                // =================================================
 
-                if (IsCancelledStatus(alert))
+                // =====================================================
+                // CAP CANCEL
+                // =====================================================
+
+                if (IsCancelledStatus(alert) && alert.ReferencedExternalIds.Count > 0)
                 {
                     foreach (var referenceId in alert.ReferencedExternalIds)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
+
+                        if (string.IsNullOrWhiteSpace(referenceId))
+                        {
+                            continue;
+                        }
+
+                        /*
+                         * Same defensive protection here.
+                         */
+                        if (string.Equals(referenceId, alert.ExternalId, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
                         var previous = await FindForUpdateAsync(connection, transaction, alert.SourceCode, referenceId, cancellationToken);
 
                         if (previous is null || !previous.IsActive)
@@ -120,9 +201,11 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                         removed.Add(new EmergencyAlertRemoval(previous, EmergencyAlertRemovalReason.Cancelled));
                     }
                 }
-                var isActive = IsActiveStatus(alert) && (!alert.ExpiresAtUtc.HasValue || alert.ExpiresAtUtc.Value > now);
-                alert.IsActive = isActive;
-                await UpsertRowAsync(connection, transaction, alert, cancellationToken);
+
+                // =====================================================
+                // COMMIT
+                // =====================================================
+
                 transaction.Commit();
 
                 return new EmergencyAlertApplyResult(StoredAlert: alert, Changed: true, IsActive: isActive, RemovedAlerts: removed);
@@ -130,6 +213,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             catch
             {
                 transaction.Rollback();
+
                 throw;
             }
         }

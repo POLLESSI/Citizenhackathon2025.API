@@ -24,9 +24,12 @@ namespace CitizenHackathon2025.API.Services
                 Description = alert.Description,
                 Instructions = alert.Instructions,
                 EffectiveFromUtc = alert.EffectiveFromUtc,
+                ExpiresAtUtc = alert.ExpiresAtUtc,
                 LastUpdatedAtUtc = alert.LastUpdatedAtUtc,
                 ProvinceCode = alert.ProvinceCode,
                 MunicipalityCode = alert.MunicipalityCode,
+                RadiusMeters = alert.RadiusMeters,
+                OfficialInformationUri = alert.OfficialInformationUri?.ToString(),
                 IsOfficial = alert.IsOfficial
             };
         }

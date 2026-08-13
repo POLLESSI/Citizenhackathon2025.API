@@ -809,17 +809,6 @@ internal class Program
         services.AddHttpClient<IBeAlertCapSource, BeAlertCapSource>((sp, client) =>
         {
             var options = sp.GetRequiredService<IOptions<BeAlertCapOptions>>().Value;
-            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("OutZen-EmergencyIntelligence/1.0");
-            client.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
-        });
-        services.AddTransient<IEmergencyAlertSource>(sp => sp.GetRequiredService<IBeAlertCapSource>());
-
-        services.AddHttpClient<INationalCrisisCenterAlertSource, NationalCrisisCenterAlertSource>();
-
-        services.AddHttpClient<IBeAlertCapSource, BeAlertCapSource>((sp, client) =>
-        {
-            var options = sp.GetRequiredService<IOptions<BeAlertCapOptions>>().Value;
 
             client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen-BEAlert/1.0");
@@ -828,9 +817,14 @@ internal class Program
 
         services.AddTransient<IEmergencyAlertSource>(sp => sp.GetRequiredService<IBeAlertCapSource>());
 
+        services.AddHttpClient<INationalCrisisCenterAlertSource, NationalCrisisCenterAlertSource>();
+
+        services.AddTransient<IEmergencyAlertSource>(sp => sp.GetRequiredService<INationalCrisisCenterAlertSource>());
+
         services.AddHttpClient<ITrafficApiService, TrafficAPIService>((sp, client) =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
+
             var baseUrl = cfg["TrafficApi:BaseUrl"];
 
             if (!string.IsNullOrWhiteSpace(baseUrl))
@@ -1541,41 +1535,357 @@ internal class Program
                 })
                 .AllowAnonymous();
 
+            app.MapPost("/_diag/emergency/persistence-test",
+                async (IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
+               {
+                   var now = DateTimeOffset.UtcNow;
+                   var externalId = $"OUTZEN-DIAG-{Guid.NewGuid():N}";
+
+
+                   var alert = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                       {
+                           Id = Guid.NewGuid(),
+
+                           SourceCode = "OUTZEN-DIAG",
+
+                           ExternalId = externalId,
+
+                           ExternalReferenceId = null,
+
+                           ReferencedExternalIds = Array.Empty<string>(),
+
+                           CorrelationKey = $"OUTZEN-DIAG:{externalId}",
+
+                           /*
+                            * HazardType is not important for
+                            * this repository test.
+                            */
+                           HazardType = default,
+                           Severity = EmergencySeverity.Severe,
+                           Urgency = EmergencyUrgency.Immediate,
+                           Certainty = EmergencyCertainty.Observed,
+                           Status = EmergencyAlertStatus.Active,
+                           InformationKind = SafetyInformationKind.ActiveEmergency,
+                           Headline = "OutZen emergency persistence test",
+                           Description = "Diagnostic emergency alert used " + "to validate SQL persistence and SignalR.",
+                           Instructions = "Diagnostic only.",
+                           Language = "fr-BE",
+                           SentAtUtc = now,
+                           EffectiveFromUtc = now,
+                           ExpiresAtUtc = now.AddMinutes(10),
+                           LastUpdatedAtUtc = now,
+                           Area = null,
+                           RadiusMeters = null,
+                           ProvinceCode = null,
+                           MunicipalityCode = null,
+                           OfficialInformationUri = null,
+
+                           /*
+                            * IMPORTANT:
+                            * this is NOT an official alert.
+                            */
+                           IsOfficial = false,
+                           IsMachineVerified = false,
+                           IsActive = true,
+                           PayloadHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(externalId))),
+                           RawPayloadStorageKey = null,
+                           CreatedAtUtc = now,
+                           UpdatedAtUtc = now
+                       };
+
+                   var result = await repository.ApplyAsync(alert, cancellationToken);
+
+                   if (result.Changed && result.IsActive)
+                   {
+                       await publisher.PublishUpsertedAsync(result.StoredAlert, cancellationToken);
+                   }
+
+
+                   return Results.Ok(
+                       new
+                       {
+                           success = true,
+                           result.StoredAlert.Id,
+                           result.StoredAlert.SourceCode,
+                           result.StoredAlert.ExternalId,
+                           result.Changed,
+                           result.IsActive,
+                           RemovedCount = result.RemovedAlerts.Count
+                       });
+               })
+            .AllowAnonymous();
+
+            app.MapPost("/_diag/emergency/lifecycle-test",
+                async (IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
+                {
+                    var now = DateTimeOffset.UtcNow;
+                    var runId = Guid.NewGuid().ToString("N");
+                    var sourceCode = "OUTZEN-LIFECYCLE-DIAG";
+                    var externalIdA = $"LIFECYCLE-{runId}-A";
+                    var externalIdB = $"LIFECYCLE-{runId}-B";
+                    var externalIdC = $"LIFECYCLE-{runId}-C";
+
+                    static string ComputeHash(string value)
+                    {
+                        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+                    }
+
+                    static EmergencyAlertStatus ResolveCancelledStatus()
+                    {
+                        if (Enum.TryParse<EmergencyAlertStatus>("Cancelled", ignoreCase: true, out var cancelled))
+                        {
+                            return cancelled;
+                        }
+
+                        if (Enum.TryParse<EmergencyAlertStatus>("Canceled", ignoreCase: true, out var canceled))
+                        {
+                            return canceled;
+                        }
+
+                        throw new InvalidOperationException("EmergencyAlertStatus does not contain " + "'Cancelled' or 'Canceled'.");
+                    }
+
+                    // =====================================================
+                    // A - INITIAL ACTIVE ALERT
+                    // =====================================================
+
+                    var alertA = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                        {
+                            Id = Guid.NewGuid(),
+                            SourceCode = sourceCode,
+                            ExternalId = externalIdA,
+                            ExternalReferenceId = null,
+                            ReferencedExternalIds = Array.Empty<string>(),
+                            CorrelationKey = $"OUTZEN-LIFECYCLE:{runId}",
+                            HazardType = default,
+                            Severity = EmergencySeverity.Severe,
+                            Urgency = EmergencyUrgency.Immediate,
+                            Certainty = EmergencyCertainty.Observed,
+                            Status = EmergencyAlertStatus.Active,
+                            InformationKind = SafetyInformationKind.ActiveEmergency,
+                            Headline = "Lifecycle diagnostic A",
+                            Description = "Initial diagnostic emergency alert.",
+                            Instructions = "Diagnostic only.",
+                            Language = "fr-BE",
+                            SentAtUtc = now,
+                            EffectiveFromUtc = now,
+                            ExpiresAtUtc = now.AddMinutes(30),
+                            LastUpdatedAtUtc = now,
+                            Area = null,
+                            RadiusMeters = null,
+                            ProvinceCode = null,
+                            MunicipalityCode = null,
+                            OfficialInformationUri = null,
+                            IsOfficial = false,
+                            IsMachineVerified = false,
+                            IsActive = true,
+                            PayloadHash = ComputeHash($"A:{runId}"),
+                            RawPayloadStorageKey = null,
+                            CreatedAtUtc = now,
+                            UpdatedAtUtc = now
+                        };
+
+                    var resultA = await repository.ApplyAsync(alertA, cancellationToken);
+
+                    if (resultA.Changed && resultA.IsActive)
+                    {
+                        await publisher.PublishUpsertedAsync(resultA.StoredAlert, cancellationToken);
+                    }
+
+                    // =====================================================
+                    // B - UPDATE THAT REFERENCES A
+                    // =====================================================
+
+                    var updateTime = DateTimeOffset.UtcNow;
+
+                    var alertB = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                        {
+                            Id = Guid.NewGuid(),
+                            SourceCode = sourceCode,
+                            ExternalId = externalIdB,
+                            ExternalReferenceId = externalIdA,
+                            ReferencedExternalIds = new[] {externalIdA},
+                            CorrelationKey = $"OUTZEN-LIFECYCLE:{runId}",
+                            HazardType = default,
+                            Severity = EmergencySeverity.Severe,
+                            Urgency = EmergencyUrgency.Immediate,
+                            Certainty = EmergencyCertainty.Observed,
+                            Status = EmergencyAlertStatus.Active,
+                            InformationKind = SafetyInformationKind.ActiveEmergency,
+                            Headline = "Lifecycle diagnostic B",
+                            Description = "Updated diagnostic emergency alert.",
+                            Instructions = "Updated diagnostic instruction.",
+                            Language = "fr-BE",
+                            SentAtUtc = updateTime,
+                            EffectiveFromUtc = updateTime,
+                            ExpiresAtUtc = updateTime.AddMinutes(30),
+                            LastUpdatedAtUtc = updateTime,
+                            Area = null,
+                            RadiusMeters = null,
+                            ProvinceCode = null,
+                            MunicipalityCode = null,
+                            OfficialInformationUri = null,
+                            IsOfficial = false,
+                            IsMachineVerified = false,
+                            IsActive = true,
+                            PayloadHash = ComputeHash($"B:{runId}"),
+                            RawPayloadStorageKey = null,
+                            CreatedAtUtc = updateTime,
+                            UpdatedAtUtc = updateTime
+                        };
+
+                    var resultB = await repository.ApplyAsync(alertB, cancellationToken);
+
+                    foreach (var removed in resultB.RemovedAlerts)
+                    {
+                        switch (removed.Reason)
+                        {
+                            case EmergencyAlertRemovalReason.Cancelled:
+                                await publisher.PublishCancelledAsync(removed.Alert, cancellationToken);
+                                break;
+
+                            case EmergencyAlertRemovalReason.Expired:
+                                await publisher.PublishExpiredAsync(removed.Alert, cancellationToken);
+                                break;
+
+                            case EmergencyAlertRemovalReason.Superseded:
+                                /*
+                                 * No "cancelled" semantic here.
+                                 *
+                                 * The incoming B upsert follows immediately and
+                                 * the REST snapshot remains the source of truth.
+                                 */
+                                break;
+                        }
+                    }
+
+                    if (resultB.Changed && resultB.IsActive)
+                    {
+                        await publisher.PublishUpsertedAsync(resultB.StoredAlert, cancellationToken);
+                    }
+
+                    // =====================================================
+                    // C - CANCEL THAT REFERENCES B
+                    // =====================================================
+
+                    var cancelTime = DateTimeOffset.UtcNow;
+                    var cancelledStatus = ResolveCancelledStatus();
+
+                    var alertC = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                        {
+                            Id = Guid.NewGuid(),
+                            SourceCode = sourceCode,
+                            ExternalId = externalIdC,
+                            ExternalReferenceId = externalIdB,
+                            ReferencedExternalIds = new[] {externalIdB},
+                            CorrelationKey = $"OUTZEN-LIFECYCLE:{runId}",
+                            HazardType = default,
+                            Severity = EmergencySeverity.Severe,
+                            Urgency = EmergencyUrgency.Immediate,
+                            Certainty = EmergencyCertainty.Observed,
+                            Status = cancelledStatus,
+                            InformationKind = SafetyInformationKind.ActiveEmergency,
+                            Headline = "Lifecycle diagnostic C",
+                            Description = "Cancellation of diagnostic alert B.",
+                            Instructions = "Diagnostic cancellation only.",
+                            Language = "fr-BE",
+                            SentAtUtc = cancelTime,
+                            EffectiveFromUtc = cancelTime,
+                            ExpiresAtUtc = null,
+                            LastUpdatedAtUtc = cancelTime,
+                            Area = null,
+                            RadiusMeters = null,
+                            ProvinceCode = null,
+                            MunicipalityCode = null,
+                            OfficialInformationUri = null,
+                            IsOfficial = false,
+                            IsMachineVerified = false,
+                            IsActive = false,
+                            PayloadHash = ComputeHash($"C:{runId}"),
+                            RawPayloadStorageKey = null,
+                            CreatedAtUtc = cancelTime,
+                            UpdatedAtUtc = cancelTime
+                        };
+
+                    var resultC = await repository.ApplyAsync(alertC, cancellationToken);
+
+                    foreach (var removed in resultC.RemovedAlerts)
+                    {
+                        await publisher.PublishCancelledAsync(removed.Alert, cancellationToken);
+                    }
+
+                    // =====================================================
+                    // FINAL ACTIVE SNAPSHOT
+                    // =====================================================
+
+                    var activeAfterLifecycle = await repository.GetActiveAsync(cancellationToken);
+
+                    var activeForThisRun = activeAfterLifecycle
+                            .Where(x => string.Equals(x.SourceCode, sourceCode, StringComparison.OrdinalIgnoreCase)
+                                && string.Equals(x.CorrelationKey, $"OUTZEN-LIFECYCLE:{runId}", StringComparison.Ordinal))
+                            .Select(x => new {x.Id, x.ExternalId, x.Status, x.IsActive})
+                            .ToArray();
+
+                    return Results.Ok(
+                        new
+                        {
+                            success = true, runId, sourceCode,
+
+                            alert =
+                                new
+                                {
+                                    resultA.StoredAlert.Id,
+                                    ExternalId = externalIdA,
+                                    resultA.Changed,
+                                    resultA.IsActive,
+                                    RemovedCount = resultA.RemovedAlerts.Count
+                                },
+
+                            update =
+                                new
+                                {
+                                    resultB.StoredAlert.Id,
+                                    ExternalId = externalIdB,
+                                    resultB.Changed,
+                                    resultB.IsActive,
+                                    RemovedCount = resultB.RemovedAlerts.Count
+                                },
+
+                            cancel =
+                                new
+                                {
+                                    resultC.StoredAlert.Id,
+                                    ExternalId = externalIdC,
+                                    resultC.Changed,
+                                    resultC.IsActive,
+                                    RemovedCount = resultC.RemovedAlerts.Count
+                                },
+
+                            activeForThisRun
+                        });
+                })
+                .AllowAnonymous();
+
             app.MapPost("/_diag/emergency/hub-test",
                 async (EmergencyAlertHubBroadcaster broadcaster) =>
                 {
                     var alert = new EmergencyAlertSignalRDTO
                     {
                         Id = Guid.NewGuid(),
-
                         SourceCode = "BE-NCCN",
-
                         ExternalId = $"TEST-{Guid.NewGuid():N}",
-
                         HazardType = EmergencyHazardType.Flood,
-
                         Severity = EmergencySeverity.Severe,
-
                         Urgency = EmergencyUrgency.Immediate,
-
                         Certainty = EmergencyCertainty.Observed,
-
                         Status = EmergencyAlertStatus.Active,
-
                         InformationKind = SafetyInformationKind.ActiveEmergency,
-
                         Headline = "TEST OutZen Emergency Intelligence",
-
                         Description = "Alerte de diagnostic SignalR.",
-
                         Instructions = "Aucune action réelle requise.",
-
                         EffectiveFromUtc = DateTimeOffset.UtcNow,
-
                         LastUpdatedAtUtc = DateTimeOffset.UtcNow,
-
                         ProvinceCode = "BE-WAL",
-
                         IsOfficial = false
                     };
 
@@ -1591,6 +1901,343 @@ internal class Program
                 })
             .RequireAuthorization();
         }
+
+        app.MapPost("/_diag/emergency/official-sim",async (double latitude, double longitude, double radiusMeters, IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
+        {
+            if (latitude is < -90 or > 90)
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "Latitude must be between -90 and 90."
+                    });
+            }
+
+            if (longitude is < -180 or > 180)
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "Longitude must be between -180 and 180."
+                    });
+            }
+
+            if (radiusMeters is <= 0 or > 100_000)
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "RadiusMeters must be between 0 and 100000."
+                    });
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var runId = Guid.NewGuid().ToString("N");
+            var externalId = $"OFFICIAL-SIM-{runId}";
+
+            /*
+             * WGS84:
+             *
+             * X = longitude
+             * Y = latitude
+             */
+            var geometryFactory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+
+            GeoAPI.Geometries.IPoint centerPoint = geometryFactory.CreatePoint(new GeoAPI.Geometries.Coordinate(longitude, latitude));
+            NetTopologySuite.Geometries.Geometry center = (NetTopologySuite.Geometries.Geometry) centerPoint;
+
+            var payloadHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"OUTZEN-OFFICIAL-SIM|" + $"{externalId}|" + $"{latitude:R}|" + $"{longitude:R}|" + $"{radiusMeters:R}")));
+            var alert = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                {
+                    Id = Guid.NewGuid(),
+                    SourceCode = "OUTZEN-OFFICIAL-SIM",
+                    ExternalId = externalId,
+                    ExternalReferenceId = null,
+                    ReferencedExternalIds = Array.Empty<string>(),
+                    CorrelationKey = $"OUTZEN-OFFICIAL-SIM:{runId}",
+                    HazardType = EmergencyHazardType.Flood,
+                    Severity = EmergencySeverity.Severe,
+                    Urgency = EmergencyUrgency.Immediate,
+                    Certainty = EmergencyCertainty.Observed,
+                    Status = EmergencyAlertStatus.Active,
+                    InformationKind = SafetyInformationKind.ActiveEmergency,
+                    Headline = "SIMULATION — Official OutZen Alert",
+                    Description = "Simulation Emergency Intelligence " + "intended to validate the chain " + "SQL, décision, SignalR and Blazor.",
+                    Instructions = "SIMULATION ONLY — " + "temporarily avoid the area " + "during the test.",
+                    Language = "fr-BE",
+                    SentAtUtc = now,
+                    EffectiveFromUtc = now,
+                    ExpiresAtUtc = now.AddMinutes(20),
+                    LastUpdatedAtUtc = now,
+
+                    /*
+                     * Circle representation expected by
+                     * OfficialEmergencyRiskContextService.
+                     */
+                    Area = center,
+                    RadiusMeters = radiusMeters,
+                    ProvinceCode = null,
+                    MunicipalityCode = null,
+                    OfficialInformationUri = null,
+
+                    /*
+                     * This deliberately exercises the
+                     * OFFICIAL branch of the decision engine.
+                     *
+                     * SourceCode clearly identifies it as SIM.
+                     */
+                    IsOfficial = true,
+                    IsMachineVerified = false,
+                    PayloadHash = payloadHash,
+                    RawPayloadStorageKey = null,
+                    IsActive = true,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now
+                };
+
+            var result = await repository.ApplyAsync(alert, cancellationToken);
+
+            if (result.Changed && result.IsActive)
+            {
+                await publisher.PublishUpsertedAsync(result.StoredAlert, cancellationToken);
+            }
+
+            return Results.Ok(
+                new
+                {
+                    success = true,
+                    result.StoredAlert.Id,
+                    result.StoredAlert.ExternalId,
+
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    RadiusMeters =radiusMeters,
+
+                    result.StoredAlert.IsOfficial,
+                    result.StoredAlert.Severity,
+                    result.StoredAlert.Urgency,
+                    result.StoredAlert.ExpiresAtUtc
+                });
+        })
+        .RequireAuthorization();
+
+        app.MapPost("/_diag/emergency/official-sim/cancel", async (string externalId,IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(externalId))
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "externalId is required."
+                    });
+            }
+
+            EmergencyAlertStatus cancelledStatus;
+
+            if (!Enum.TryParse("Cancelled", ignoreCase: true, out cancelledStatus) && !Enum.TryParse("Canceled", ignoreCase: true, out cancelledStatus))
+            {
+                return Results.Problem(
+                    "EmergencyAlertStatus does not contain " +
+                    "Cancelled or Canceled.");
+            }
+
+
+            var now =
+                DateTimeOffset.UtcNow;
+
+            var cancelId =
+                Guid.NewGuid()
+                    .ToString("N");
+
+
+            var payloadHash =
+                Convert.ToHexString(
+                    System.Security.Cryptography
+                        .SHA256
+                        .HashData(
+                            System.Text.Encoding.UTF8
+                                .GetBytes(
+                                    $"OUTZEN-OFFICIAL-SIM-CANCEL|" +
+                                    $"{externalId}|" +
+                                    $"{cancelId}")));
+
+
+            var cancel =
+                new CitizenHackathon2025
+                    .EmergencyIntelligence
+                    .Models
+                    .EmergencyAlert
+                {
+                    Id =
+                        Guid.NewGuid(),
+
+                    SourceCode =
+                        "OUTZEN-OFFICIAL-SIM",
+
+                    ExternalId =
+                        $"OFFICIAL-SIM-CANCEL-{cancelId}",
+
+                    ExternalReferenceId =
+                        externalId,
+
+                    ReferencedExternalIds =
+                        new[]
+                        {
+                            externalId
+                        },
+
+                    CorrelationKey =
+                        $"OUTZEN-OFFICIAL-SIM-CANCEL:" +
+                        $"{externalId}",
+
+
+                    HazardType =
+                        EmergencyHazardType.Flood,
+
+                    Severity =
+                        EmergencySeverity.Severe,
+
+                    Urgency =
+                        EmergencyUrgency.Immediate,
+
+                    Certainty =
+                        EmergencyCertainty.Observed,
+
+                    Status =
+                        cancelledStatus,
+
+                    InformationKind =
+                        SafetyInformationKind
+                            .ActiveEmergency,
+
+
+                    Headline =
+                        "SIMULATION — Fin d'alerte",
+
+                    Description =
+                        "Annulation de l'alerte officielle " +
+                        "simulée OutZen.",
+
+                    Instructions =
+                        "Simulation terminée.",
+
+                    Language =
+                        "fr-BE",
+
+
+                    SentAtUtc =
+                        now,
+
+                    EffectiveFromUtc =
+                        now,
+
+                    ExpiresAtUtc =
+                        null,
+
+                    LastUpdatedAtUtc =
+                        now,
+
+
+                    Area =
+                        null,
+
+                    RadiusMeters =
+                        null,
+
+                    ProvinceCode =
+                        null,
+
+                    MunicipalityCode =
+                        null,
+
+                    OfficialInformationUri =
+                        null,
+
+
+                    IsOfficial =
+                        true,
+
+                    IsMachineVerified =
+                        false,
+
+                    PayloadHash =
+                        payloadHash,
+
+                    RawPayloadStorageKey =
+                        null,
+
+                    IsActive =
+                        false,
+
+                    CreatedAtUtc =
+                        now,
+
+                    UpdatedAtUtc =
+                        now
+                };
+
+
+            var result =
+                await repository.ApplyAsync(
+                    cancel,
+                    cancellationToken);
+
+
+            foreach (var removed
+                     in result.RemovedAlerts)
+            {
+                switch (removed.Reason)
+                {
+                    case EmergencyAlertRemovalReason.Cancelled:
+
+                        await publisher
+                            .PublishCancelledAsync(
+                                removed.Alert,
+                                cancellationToken);
+
+                        break;
+
+
+                    case EmergencyAlertRemovalReason.Expired:
+
+                        await publisher
+                            .PublishExpiredAsync(
+                                removed.Alert,
+                                cancellationToken);
+
+                        break;
+
+
+                    case EmergencyAlertRemovalReason.Superseded:
+
+                        /*
+                         * Not a cancellation.
+                         */
+                        break;
+                }
+            }
+
+
+            return Results.Ok(
+                new
+                {
+                    success = true,
+
+                    CancelMessageId =
+                        result.StoredAlert.Id,
+
+                    CancelExternalId =
+                        result.StoredAlert.ExternalId,
+
+                    ReferencedExternalId =
+                        externalId,
+
+                    RemovedCount =
+                        result.RemovedAlerts.Count
+                });
+        })
+        .RequireAuthorization();
+
         app.MapGet("/", () => "OK");
     }
 }
