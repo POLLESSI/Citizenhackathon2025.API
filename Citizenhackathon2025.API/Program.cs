@@ -1909,16 +1909,81 @@ internal class Program
                 return Results.BadRequest(
                     new
                     {
-                        error = "Latitude must be between -90 and 90."
+                        error =
+                            "Latitude must be between -90 and 90."
                     });
             }
+
 
             if (longitude is < -180 or > 180)
             {
                 return Results.BadRequest(
                     new
                     {
-                        error = "Longitude must be between -180 and 180."
+                        error =
+                            "Longitude must be between -180 and 180."
+                    });
+            }
+
+
+            /*
+             * Diagnostic simulation endpoint:
+             * intentionally limited to the Belgium /
+             * OutZen operational bounding box.
+             *
+             * This also catches the common mistake:
+             *
+             * latitude  = 5.5667
+             * longitude = 50.6333
+             *
+             * instead of:
+             *
+             * latitude  = 50.6333
+             * longitude = 5.5667
+             */
+            const double minBelgiumLatitude =
+                49.45;
+
+            const double maxBelgiumLatitude =
+                51.60;
+
+            const double minBelgiumLongitude =
+                2.30;
+
+            const double maxBelgiumLongitude =
+                6.60;
+
+
+            if (
+                latitude < minBelgiumLatitude
+                ||
+                latitude > maxBelgiumLatitude
+                ||
+                longitude < minBelgiumLongitude
+                ||
+                longitude > maxBelgiumLongitude)
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error =
+                            "Official simulation coordinates " +
+                            "must currently be inside the " +
+                            "OutZen Belgium bounding box.",
+
+                        hint =
+                            "Parameters are latitude first, " +
+                            "longitude second. " +
+                            "Example for Liège: " +
+                            "latitude=50.6333, " +
+                            "longitude=5.5667.",
+
+                        received =
+                            new
+                            {
+                                latitude,
+                                longitude
+                            }
                     });
             }
 

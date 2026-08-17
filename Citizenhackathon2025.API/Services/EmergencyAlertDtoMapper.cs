@@ -28,6 +28,7 @@ namespace CitizenHackathon2025.API.Services
                 LastUpdatedAtUtc = alert.LastUpdatedAtUtc,
                 ProvinceCode = alert.ProvinceCode,
                 MunicipalityCode = alert.MunicipalityCode,
+                AreaGeoJson = EmergencyAlertGeoJsonSerializer.Serialize(alert.Area),
                 RadiusMeters = alert.RadiusMeters,
                 OfficialInformationUri = alert.OfficialInformationUri?.ToString(),
                 IsOfficial = alert.IsOfficial
