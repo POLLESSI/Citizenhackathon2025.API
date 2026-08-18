@@ -15,6 +15,13 @@ namespace CitizenHackathon2025.API.Services
                 SourceCode = alert.SourceCode,
                 ExternalId = alert.ExternalId,
                 HazardType = alert.HazardType,
+                /*
+                 * Stable textual representation for UI.
+                 *
+                 * JavaScript never has to know the
+                 * numeric enum values.
+                 */
+                HazardCode = alert.HazardType.ToString(),
                 Severity = alert.Severity,
                 Urgency = alert.Urgency,
                 Certainty = alert.Certainty,

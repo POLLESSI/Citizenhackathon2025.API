@@ -14,51 +14,23 @@ namespace CitizenHackathon2025.API.Services
             _broadcaster = broadcaster ?? throw new ArgumentNullException(nameof(broadcaster));
         }
 
-        public Task PublishUpsertedAsync(EmergencyAlert alert, CancellationToken ct = default)
+        public Task PublishUpsertedAsync(EmergencyAlert alert, CancellationToken cancellationToken = default)
         {
-            return _broadcaster.PublishUpsertedAsync(ToDto(alert), ct);
+            ArgumentNullException.ThrowIfNull(alert);
+
+            var dto = EmergencyAlertDtoMapper.ToSignalRDto(alert);
+
+            return _broadcaster.PublishUpsertedAsync(dto, cancellationToken);
         }
 
         public Task PublishCancelledAsync(EmergencyAlert alert, CancellationToken ct = default)
         {
-            return _broadcaster.PublishCancelledAsync(
-                alert.Id,
-                alert.SourceCode,
-                alert.ExternalId,
-                ct);
+            return _broadcaster.PublishCancelledAsync(alert.Id, alert.SourceCode, alert.ExternalId, ct);
         }
 
         public Task PublishExpiredAsync(EmergencyAlert alert, CancellationToken ct = default)
         {
-            return _broadcaster.PublishExpiredAsync(
-                alert.Id,
-                alert.SourceCode,
-                alert.ExternalId,
-                ct);
-        }
-
-        private static EmergencyAlertSignalRDTO ToDto(EmergencyAlert alert)
-        {
-            return new EmergencyAlertSignalRDTO
-            {
-                Id = alert.Id,
-                SourceCode = alert.SourceCode,
-                ExternalId = alert.ExternalId,
-                HazardType = alert.HazardType,
-                Severity = alert.Severity,
-                Urgency = alert.Urgency,
-                Certainty = alert.Certainty,
-                Status = alert.Status,
-                InformationKind = alert.InformationKind,
-                Headline = alert.Headline,
-                Description = alert.Description,
-                Instructions = alert.Instructions,
-                EffectiveFromUtc = alert.EffectiveFromUtc,
-                LastUpdatedAtUtc = alert.LastUpdatedAtUtc,
-                ProvinceCode = alert.ProvinceCode,
-                MunicipalityCode = alert.MunicipalityCode,
-                IsOfficial = alert.IsOfficial
-            };
+            return _broadcaster.PublishExpiredAsync(alert.Id, alert.SourceCode, alert.ExternalId, ct);
         }
     }
 }

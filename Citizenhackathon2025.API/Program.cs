@@ -1545,15 +1545,10 @@ internal class Program
                    var alert = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
                        {
                            Id = Guid.NewGuid(),
-
                            SourceCode = "OUTZEN-DIAG",
-
                            ExternalId = externalId,
-
                            ExternalReferenceId = null,
-
                            ReferencedExternalIds = Array.Empty<string>(),
-
                            CorrelationKey = $"OUTZEN-DIAG:{externalId}",
 
                            /*
@@ -1697,7 +1692,6 @@ internal class Program
                     // =====================================================
 
                     var updateTime = DateTimeOffset.UtcNow;
-
                     var alertB = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
                         {
                             Id = Guid.NewGuid(),
@@ -1941,17 +1935,10 @@ internal class Program
              * latitude  = 50.6333
              * longitude = 5.5667
              */
-            const double minBelgiumLatitude =
-                49.45;
-
-            const double maxBelgiumLatitude =
-                51.60;
-
-            const double minBelgiumLongitude =
-                2.30;
-
-            const double maxBelgiumLongitude =
-                6.60;
+            const double minBelgiumLatitude = 49.45;
+            const double maxBelgiumLatitude = 51.60;
+            const double minBelgiumLongitude = 2.30;
+            const double maxBelgiumLongitude = 6.60;
 
 
             if (
@@ -2101,174 +2088,66 @@ internal class Program
 
             if (!Enum.TryParse("Cancelled", ignoreCase: true, out cancelledStatus) && !Enum.TryParse("Canceled", ignoreCase: true, out cancelledStatus))
             {
-                return Results.Problem(
-                    "EmergencyAlertStatus does not contain " +
-                    "Cancelled or Canceled.");
+                return Results.Problem("EmergencyAlertStatus does not contain " + "Cancelled or Canceled.");
             }
 
-
-            var now =
-                DateTimeOffset.UtcNow;
-
-            var cancelId =
-                Guid.NewGuid()
-                    .ToString("N");
-
-
-            var payloadHash =
-                Convert.ToHexString(
-                    System.Security.Cryptography
-                        .SHA256
-                        .HashData(
-                            System.Text.Encoding.UTF8
-                                .GetBytes(
-                                    $"OUTZEN-OFFICIAL-SIM-CANCEL|" +
-                                    $"{externalId}|" +
-                                    $"{cancelId}")));
-
-
-            var cancel =
-                new CitizenHackathon2025
-                    .EmergencyIntelligence
-                    .Models
-                    .EmergencyAlert
+            var now = DateTimeOffset.UtcNow;
+            var cancelId = Guid.NewGuid().ToString("N");
+            var payloadHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"OUTZEN-OFFICIAL-SIM-CANCEL|" + $"{externalId}|" + $"{cancelId}")));
+            var cancel = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
                 {
-                    Id =
-                        Guid.NewGuid(),
-
-                    SourceCode =
-                        "OUTZEN-OFFICIAL-SIM",
-
-                    ExternalId =
-                        $"OFFICIAL-SIM-CANCEL-{cancelId}",
-
-                    ExternalReferenceId =
-                        externalId,
-
-                    ReferencedExternalIds =
-                        new[]
-                        {
-                            externalId
-                        },
-
-                    CorrelationKey =
-                        $"OUTZEN-OFFICIAL-SIM-CANCEL:" +
-                        $"{externalId}",
-
-
-                    HazardType =
-                        EmergencyHazardType.Flood,
-
-                    Severity =
-                        EmergencySeverity.Severe,
-
-                    Urgency =
-                        EmergencyUrgency.Immediate,
-
-                    Certainty =
-                        EmergencyCertainty.Observed,
-
-                    Status =
-                        cancelledStatus,
-
-                    InformationKind =
-                        SafetyInformationKind
-                            .ActiveEmergency,
-
-
-                    Headline =
-                        "SIMULATION — Fin d'alerte",
-
-                    Description =
-                        "Annulation de l'alerte officielle " +
-                        "simulée OutZen.",
-
-                    Instructions =
-                        "Simulation terminée.",
-
-                    Language =
-                        "fr-BE",
-
-
-                    SentAtUtc =
-                        now,
-
-                    EffectiveFromUtc =
-                        now,
-
-                    ExpiresAtUtc =
-                        null,
-
-                    LastUpdatedAtUtc =
-                        now,
-
-
-                    Area =
-                        null,
-
-                    RadiusMeters =
-                        null,
-
-                    ProvinceCode =
-                        null,
-
-                    MunicipalityCode =
-                        null,
-
-                    OfficialInformationUri =
-                        null,
-
-
-                    IsOfficial =
-                        true,
-
-                    IsMachineVerified =
-                        false,
-
-                    PayloadHash =
-                        payloadHash,
-
-                    RawPayloadStorageKey =
-                        null,
-
-                    IsActive =
-                        false,
-
-                    CreatedAtUtc =
-                        now,
-
-                    UpdatedAtUtc =
-                        now
+                    Id = Guid.NewGuid(),
+                    SourceCode = "OUTZEN-OFFICIAL-SIM",
+                    ExternalId = $"OFFICIAL-SIM-CANCEL-{cancelId}",
+                    ExternalReferenceId = externalId,
+                    ReferencedExternalIds = new[] {externalId},
+                    CorrelationKey = $"OUTZEN-OFFICIAL-SIM-CANCEL:" + $"{externalId}",
+                    HazardType = EmergencyHazardType.Flood,
+                    Severity = EmergencySeverity.Severe,
+                    Urgency = EmergencyUrgency.Immediate,
+                    Certainty = EmergencyCertainty.Observed,
+                    Status = cancelledStatus,
+                    InformationKind = SafetyInformationKind.ActiveEmergency,
+                    Headline = "SIMULATION — Fin d'alerte",
+                    Description = "Annulation de l'alerte officielle " + "simulée OutZen.",
+                    Instructions = "Simulation terminée.",
+                    Language = "fr-BE",
+                    SentAtUtc = now,
+                    EffectiveFromUtc = now,
+                    ExpiresAtUtc = null,
+                    LastUpdatedAtUtc = now,
+                    Area = null,
+                    RadiusMeters = null,
+                    ProvinceCode = null,
+                    MunicipalityCode = null,
+                    OfficialInformationUri = null,
+                    IsOfficial = true,
+                    IsMachineVerified = false,
+                    PayloadHash = payloadHash,
+                    RawPayloadStorageKey = null,
+                    IsActive = false,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now
                 };
 
 
-            var result =
-                await repository.ApplyAsync(
-                    cancel,
-                    cancellationToken);
+            var result = await repository.ApplyAsync(cancel, cancellationToken);
 
 
-            foreach (var removed
-                     in result.RemovedAlerts)
+            foreach (var removed in result.RemovedAlerts)
             {
                 switch (removed.Reason)
                 {
                     case EmergencyAlertRemovalReason.Cancelled:
 
-                        await publisher
-                            .PublishCancelledAsync(
-                                removed.Alert,
-                                cancellationToken);
+                        await publisher.PublishCancelledAsync(removed.Alert, cancellationToken);
 
                         break;
 
 
                     case EmergencyAlertRemovalReason.Expired:
 
-                        await publisher
-                            .PublishExpiredAsync(
-                                removed.Alert,
-                                cancellationToken);
+                        await publisher.PublishExpiredAsync(removed.Alert, cancellationToken);
 
                         break;
 
@@ -2287,19 +2166,403 @@ internal class Program
                 new
                 {
                     success = true,
-
-                    CancelMessageId =
-                        result.StoredAlert.Id,
-
-                    CancelExternalId =
-                        result.StoredAlert.ExternalId,
-
-                    ReferencedExternalId =
-                        externalId,
-
-                    RemovedCount =
-                        result.RemovedAlerts.Count
+                    CancelMessageId = result.StoredAlert.Id,
+                    CancelExternalId = result.StoredAlert.ExternalId,
+                    ReferencedExternalId = externalId,
+                    RemovedCount = result.RemovedAlerts.Count
                 });
+        })
+        .RequireAuthorization();
+
+        app.MapPost("/_diag/emergency/be-alert-advisory-sim", async (IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var runId = Guid.NewGuid().ToString("N");
+            var externalId = $"BE-ALERT-ADVISORY-SIM-{runId}";
+
+            static TEnum ResolveEnum<TEnum>(params string[] candidates) where TEnum : struct, Enum
+            {
+                foreach (var candidate in candidates)
+                {
+                    if (Enum.TryParse<TEnum>(candidate, ignoreCase: true, out var value))
+                    {
+                        return value;
+                    }
+                }
+                return default;
+            }
+
+            static string ComputeHash(string value)
+            {
+                return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+            }
+
+
+            var alert = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                {
+                    Id = Guid.NewGuid(),
+                    SourceCode = "BE-ALERT-SIM",
+                    ExternalId = externalId,
+                    ExternalReferenceId = null,
+                    ReferencedExternalIds = Array.Empty<string>(),
+                    CorrelationKey = $"BE-ALERT-SIM:ADVISORY:{runId}",
+
+                    /*
+                     * This is public-safety information,
+                     * not a critical geographic incident.
+                     */
+                    HazardType = default,
+                    Severity = ResolveEnum<EmergencySeverity>("Moderate"),
+                    Urgency = ResolveEnum<EmergencyUrgency>("Expected"),
+                    Certainty = ResolveEnum<EmergencyCertainty>("Likely"),
+                    Status = EmergencyAlertStatus.Active,
+                    InformationKind = SafetyInformationKind.ActiveEmergency,
+
+                    Headline = "SIMULATION BE-Alert — " + "Information au public",
+
+                    Description = "Message de simulation destiné " + "à tester l'affichage temporaire " + "d'une consigne BE-Alert dans OutZen.",
+
+                    Instructions =
+                        "SIMULATION — En l'absence de " +
+                        "danger grave ou imminent, ne " +
+                        "saturez pas les lignes d'urgence. " +
+                        "Pour les situations liées aux " +
+                        "intempéries ne nécessitant pas " +
+                        "une intervention médicale urgente, " +
+                        "suivez les consignes communiquées " +
+                        "par les autorités, notamment via " +
+                        "le 1722 lorsqu'il est applicable.",
+
+                    Language = "fr-BE",
+
+                    SentAtUtc = now,
+                    EffectiveFromUtc = now,
+                    ExpiresAtUtc = now.AddMinutes(10),
+                    LastUpdatedAtUtc = now,
+
+                    /*
+                     * Deliberately no map geometry.
+                     *
+                     * This message MUST NOT create
+                     * an emergency map marker.
+                     */
+                    Area = null,
+                    RadiusMeters = null,
+                    ProvinceCode = null,
+                    MunicipalityCode = null,
+                    OfficialInformationUri = null,
+
+                    /*
+                     * true only to exercise the official
+                     * branch of OutZen.
+                     *
+                     * SourceCode + headline clearly state
+                     * that this is a simulation.
+                     */
+                    IsOfficial = true,
+                    IsMachineVerified = false,
+                    PayloadHash = ComputeHash($"BE-ALERT-ADVISORY-SIM|" + $"{externalId}"),
+                    RawPayloadStorageKey = null,
+                    IsActive = true,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now
+                };
+
+
+            var result = await repository.ApplyAsync(alert, cancellationToken);
+
+            if (result.Changed && result.IsActive)
+            {
+                await publisher.PublishUpsertedAsync(result.StoredAlert, cancellationToken);
+            }
+
+
+            return Results.Ok(
+                new
+                {
+                    success = true,
+
+                    result.StoredAlert.Id,
+                    result.StoredAlert.ExternalId,
+                    result.StoredAlert.SourceCode,
+                    result.StoredAlert.Severity,
+                    result.StoredAlert.Urgency,
+
+                    HasGeometry = result.StoredAlert.Area is not null,
+
+                    result.StoredAlert.ExpiresAtUtc
+                });
+        })
+        .RequireAuthorization();
+
+        app.MapPost("/_diag/emergency/be-alert-critical-sim", async (double latitude, double longitude, double radiusMeters, string hazardType, IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
+        {
+            if (!Enum.TryParse<EmergencyHazardType>(hazardType, ignoreCase: true, out var parsedHazardType))
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = $"Unknown emergency hazard type " + $"'{hazardType}'.",
+
+                        allowed = Enum.GetNames<EmergencyHazardType>()
+                    });
+            }
+            /*
+             * Basic geographic validation.
+             */
+            if (latitude is < -90 or > 90)
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "Latitude must be between -90 and 90."
+                    });
+            }
+
+
+            if (longitude is < -180 or > 180)
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "Longitude must be between -180 and 180."
+                    });
+            }
+
+            if (radiusMeters <= 0 || radiusMeters > 100_000)
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "RadiusMeters must be between " + "0 and 100000."
+                    });
+            }
+
+
+            var now = DateTimeOffset.UtcNow;
+
+            var runId = Guid.NewGuid().ToString("N");
+
+            var externalId = $"BE-ALERT-CRITICAL-SIM-{runId}";
+
+
+            static string ComputeHash(string value)
+            {
+                return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+            }
+
+            /*
+             * Keep compatibility with the current
+             * NTS / GeoAPI package mix.
+             */
+            var geometryFactory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+
+            GeoAPI.Geometries.IPoint centerPoint = geometryFactory.CreatePoint(new GeoAPI.Geometries.Coordinate(longitude, latitude));
+            NetTopologySuite.Geometries.Geometry center = (NetTopologySuite.Geometries.Geometry) centerPoint;
+
+
+            var alert = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                {
+                    Id = Guid.NewGuid(),
+                    SourceCode = "BE-ALERT-SIM",
+                    ExternalId = externalId,
+                    ExternalReferenceId = null,
+                    ReferencedExternalIds = Array.Empty<string>(),
+                    CorrelationKey = $"BE-ALERT-SIM:CRITICAL:{runId}",
+                    HazardType = parsedHazardType,
+                    Severity = EmergencySeverity.Severe,
+                    Urgency = EmergencyUrgency.Immediate,
+                    Certainty = EmergencyCertainty.Observed,
+                    Status = EmergencyAlertStatus.Active,
+                    InformationKind = SafetyInformationKind.ActiveEmergency,
+
+                    Headline = "SIMULATION BE-Alert — " + "Situation critique",
+
+                    Description =
+                        "SIMULATION — Une situation désastreuse " +
+                        "majeure est en cours dans la zone. " +
+                        "Cette alerte teste simultanément " +
+                        "le message public et le marqueur " +
+                        "Emergency OutZen.",
+
+                    Instructions =
+                        "SIMULATION — Évitez la zone, " +
+                        "respectez les périmètres établis " +
+                        "par les services de secours et " +
+                        "suivez uniquement les consignes " +
+                        "officielles.",
+
+                    Language = "fr-BE",
+
+                    SentAtUtc = now,
+                    EffectiveFromUtc = now,
+                    ExpiresAtUtc = now.AddMinutes(20),
+                    LastUpdatedAtUtc = now,
+
+                    Area = center,
+                    RadiusMeters = radiusMeters,
+                    ProvinceCode = null,
+                    MunicipalityCode = null,
+                    OfficialInformationUri = null,
+
+                    IsOfficial = true,
+                    IsMachineVerified = false,
+
+                    PayloadHash = ComputeHash($"BE-ALERT-CRITICAL-SIM|" + $"{externalId}|" + $"{parsedHazardType}|" + $"{latitude:R}|" + $"{longitude:R}|" + $"{radiusMeters:R}"),
+
+                    RawPayloadStorageKey = null,
+                    IsActive = true,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now
+                };
+
+
+            var result = await repository.ApplyAsync(alert, cancellationToken);
+
+            if (result.Changed && result.IsActive)
+            {
+                await publisher.PublishUpsertedAsync(result.StoredAlert, cancellationToken);
+            }
+
+
+            return Results.Ok(
+                new
+                {
+                    success = true,
+
+                    result.StoredAlert.Id,
+                    result.StoredAlert.ExternalId,
+                    result.StoredAlert.SourceCode,
+
+                    HazardType = result.StoredAlert.HazardType.ToString(),
+                    HazardValue = (int)result.StoredAlert.HazardType,
+
+                    latitude,
+                    longitude,
+                    radiusMeters,
+
+                    result.StoredAlert.Severity,
+                    result.StoredAlert.Urgency,
+                    result.StoredAlert.ExpiresAtUtc
+                });
+        })
+        .RequireAuthorization();
+
+        app.MapPost("/_diag/emergency/be-alert-cancel-sim", async (string externalId, IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(externalId))
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "externalId is required."
+                    });
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var runId = Guid.NewGuid().ToString("N");
+            var cancelExternalId = $"BE-ALERT-CANCEL-SIM-{runId}";
+
+            static string ComputeHash(string value)
+            {
+                return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+            }
+
+
+            var cancelAlert = new CitizenHackathon2025.EmergencyIntelligence.Models.EmergencyAlert
+                {
+                    Id = Guid.NewGuid(),
+
+                    /*
+                     * CRITICAL:
+                     *
+                     * Same source as the alert
+                     * being cancelled.
+                     */
+                    SourceCode = "BE-ALERT-SIM",
+                    ExternalId = cancelExternalId,
+                    ExternalReferenceId = externalId,
+                    ReferencedExternalIds = new[] {externalId},
+                    CorrelationKey = $"BE-ALERT-SIM:CANCEL:{externalId}",
+                    HazardType = default,
+                    Severity = default,
+                    Urgency = default,
+                    Certainty = default,
+                    Status = EmergencyAlertStatus.Cancelled,
+                    InformationKind = SafetyInformationKind.ActiveEmergency,
+
+                    Headline = "SIMULATION BE-Alert — " + "Fin d'alerte",
+                    Description = "Message de simulation " + "annulant une alerte BE-Alert.",
+                    Instructions = null,
+                    Language = "fr-BE",
+
+                    SentAtUtc = now,
+                    EffectiveFromUtc = now,
+                    ExpiresAtUtc = now,
+                    LastUpdatedAtUtc = now,
+                    Area = null,
+                    RadiusMeters = null,
+                    ProvinceCode = null,
+                    MunicipalityCode = null,
+                    OfficialInformationUri = null,
+                    IsOfficial = true,
+                    IsMachineVerified = false,
+                    PayloadHash = ComputeHash($"BE-ALERT-CANCEL-SIM|" + $"{cancelExternalId}|" + $"{externalId}"),
+                    RawPayloadStorageKey = null,
+                    IsActive = false,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now
+                };
+
+
+            var result = await repository.ApplyAsync(cancelAlert, cancellationToken);
+
+            /*
+             * Publish cancellation of every alert
+             * actually removed by the lifecycle.
+             */
+            foreach (var removal in result.RemovedAlerts)
+            {
+                if (
+                    removal.Reason != EmergencyAlertRemovalReason.Cancelled)
+                {
+                    continue;
+                }
+
+                await publisher.PublishCancelledAsync(removal.Alert, cancellationToken);
+            }
+
+            return Results.Ok(
+                new
+                {
+                    success = true,
+
+                    cancelMessageId = result.StoredAlert.Id,
+
+                    cancelExternalId,
+
+                    referencedExternalId = externalId,
+
+                    removedCount = result.RemovedAlerts.Count,
+
+                    removed = result.RemovedAlerts
+                        .Select(
+                            x => new
+                            {
+                                x.Alert.Id,
+                                x.Alert.SourceCode,
+                                x.Alert.ExternalId,
+
+                                reason = x.Reason.ToString()
+                            })
+                        .ToArray()
+                });
+        })
+        .RequireAuthorization();
+
+        app.MapGet("/_diag/emergency/hazard-types", () =>
+        {
+            return Results.Ok(Enum.GetNames<EmergencyHazardType>());
         })
         .RequireAuthorization();
 
