@@ -92,7 +92,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                                   AND p.Latitude IS NOT NULL
                                   AND p.Longitude IS NOT NULL
                             )
-                            SELECT TOP (12)
+                            SELECT TOP (24)
                                 Id,
                                 Name,
                                 Type,

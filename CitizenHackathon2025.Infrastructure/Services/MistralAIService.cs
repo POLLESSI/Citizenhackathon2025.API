@@ -59,8 +59,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     temperature: temperature,
                     stream: false,
                     responseLanguage: responseLanguage,
-                    languagePromptBuilder:
-                        _languagePromptBuilder,
+                    languagePromptBuilder: _languagePromptBuilder,
                     numPredict: numPredict,
                     numContext: numContext);
 
@@ -431,7 +430,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                             {languageInstruction}
 
                             For tourism questions:
-                            - return at most 5 recommendations in total
+                            - return between 5 and 8 recommendations when enough verified candidates are available
+                            - never exceed 8 recommendations in total
+                            - if fewer than 5 valid candidates exist, return only the available verified candidates
+                            - never invent a recommendation merely to reach the requested number
                             - write one numbered recommendation per line
                             - use exactly this format: "1. Name — distance — short factual description."
                             - use exactly one ordinary space after each list number
@@ -450,13 +452,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
                             If the supplied context is insufficient, state it clearly.
 
                             Strict factual candidate rules:
+
                             - Recommend only places and events explicitly present in the supplied context.
                             - Never add a place from general model knowledge.
                             - Copy every place and event name exactly as supplied.
                             - Copy every distance exactly as supplied.
-                            - If only two valid candidates exist, return only two.
                             - Never complete the list with unsupported candidates.
-                            - Do not mention any town, museum, abbey, park or attraction absent from the context.
                             """;
 
 

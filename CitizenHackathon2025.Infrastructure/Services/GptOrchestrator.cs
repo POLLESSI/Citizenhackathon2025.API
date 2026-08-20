@@ -29,6 +29,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 {
     public sealed class GptOrchestrator : IGptOrchestrator, IGptQueuedRequestProcessor
     {
+        private const int MaxTourismRecommendations = 8;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHubContext<GPTHub, IGptClient> _hubContext;
         private readonly IGptRequestRegistry _gptRequestRegistry;
@@ -709,7 +710,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     .OrderByDescending(x => x.InterestScore)
                     .ThenBy(x => x.DistanceKm)
                     .ThenBy(x => x.Name)
-                    .Take(5)
+                    .Take(OutZenRecommendationPolicy.MaxTourismRecommendations)
 
                     // Final presentation by distance in the prompt.
                     .OrderBy(x => x.DistanceKm)
@@ -785,9 +786,11 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 - Do not repeat generic safety phrases.
                                 - Do not say "safer fallback zone" unless a confirmed critical alert exists.
                                 - Do not detail capacities unless the user requests it.
-                                - When at least three actual attractions are available, mention at least three.
+                                - When at least three actual attractions are available, mention at least five.
                                 - Group attractions by their nearby locality when this is useful.
-                                - Mention a maximum of five actual attractions.
+                                - Mention up to eight actual attractions when available.
+                                - If fewer than five verified attractions are available, return only the verified attractions.
+                                - Never invent an attraction merely to reach the target count.
                                 - Do not use all response slots for generic cities or villages.
                                 - Do not detail capacities unless the user requests them.
                                 - Answer concisely, but provide enough information to identify the attractions.
@@ -871,9 +874,12 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             groundedPrompt += """
                             FINAL TOURISM SELECTION RULES:
-                            - These rules override any earlier generic limit of 1 to 3 alternatives.
-                            - For a general tourism request, mention 3 to 5 actual attractions when available.
-                            - Do not select only the three nearest database records.
+                            - These rules override any earlier generic recommendation count.
+                            - For a general tourism request, mention 5 to 8 actual attractions when available.
+                            - Never exceed 8 recommendations in total.
+                            - If fewer than 5 verified attractions are available, return only those verified attractions.
+                            - Never invent a recommendation to reach 5 or 8 items.
+                            - Do not select only the nearest database records.
                             - Prioritize tourist attractions over cities and villages.
                             - Include relevant attractions up to 25 km from the resolved origin.
                             - Do not discuss children unless the user explicitly mentioned children or family.
@@ -891,14 +897,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 if (pushChunksToHub)
                 {
                     groundedPrompt += """
-                            FINAL RESPONSE LIMITS:
-                            - Mention at most 5 places in the entire answer.
-                            - Five places means five places total.
-                            - Produce one list only.
-                            - Prefer actual attractions over generic towns or villages.
-                            - Every numbered item must be complete.
-                            - Never stop after an unfinished word or sentence.
-                            """;
+                                FINAL RESPONSE LIMITS:
+                                - Mention at most 8 places in the entire answer.
+                                - Eight places means eight places total.
+                                - When at least 5 verified candidates are available, provide between 5 and 8 recommendations.
+                                - If fewer candidates are available, return fewer recommendations rather than inventing any.
+                                - Produce one numbered list only.
+                                - Prefer actual attractions over generic towns or villages.
+                                - Every numbered item must be complete.
+                                - Never stop after an unfinished word or sentence.
+                                """;
 
                     finalResponse = await mistralAiService.StreamFromPromptAsync(
                         groundedPrompt, async chunkText =>
@@ -1790,7 +1798,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             var selected = candidates
-                .Take(5)
+                .Take(OutZenRecommendationPolicy.MaxTourismRecommendations)
                 .ToList();
 
             var result = new StringBuilder();
