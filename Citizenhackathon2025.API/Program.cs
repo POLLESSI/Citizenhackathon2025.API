@@ -211,45 +211,54 @@ internal class Program
         AzureEventHub.ConfigureSerilog(builder.Configuration);
 
         Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information()
             .Destructure.ByTransforming<LogsDTO>(x => new
             {
                 x.Id,
                 Sensitive = "***"
             })
+            .Enrich.FromLogContext()
+            .WriteTo.Console()
             .CreateLogger();
 
         builder.Host.UseSerilog((ctx, lc) =>
         {
             lc.ReadFrom.Configuration(ctx.Configuration)
+              .MinimumLevel.Information()
               .Enrich.FromLogContext()
-              .Enrich.WithProperty("App", "CitizenHackathon2025.API");
+              .Enrich.WithProperty(
+                  "App",
+                  "CitizenHackathon2025.API")
+              .WriteTo.Console();
 
-            var cs = ctx.Configuration["EventHubs:ConnectionString"];
+            var cs =
+                ctx.Configuration[
+                    "EventHubs:ConnectionString"];
 
             if (IsUsableEventHubConnectionString(cs))
             {
-                var opt = new AzureEventHubOptions
-                {
-                    ConnectionString = cs!,
-                    EventHubName = ctx.Configuration["EventHubs:EventHubName"],
-                    BatchSizeLimit = ctx.Configuration.GetValue("EventHubs:BatchSizeLimit", 100),
-                    Period = TimeSpan.FromSeconds(ctx.Configuration.GetValue("EventHubs:PeriodSeconds", 2)),
-                    PartitionKeyResolver = e =>
-                        e.Properties.TryGetValue("CorrelationId", out var cid)
-                            ? $"{e.Level}-{cid}"
-                            : e.Level.ToString()
-                };
+                var opt =
+                    new AzureEventHubOptions
+                    {
+                        ConnectionString = cs!,
+                        EventHubName = ctx.Configuration["EventHubs:EventHubName"],
+                        BatchSizeLimit = ctx.Configuration.GetValue("EventHubs:BatchSizeLimit", 100),
+                        Period = TimeSpan.FromSeconds(ctx.Configuration.GetValue("EventHubs:PeriodSeconds", 2)),
+                        PartitionKeyResolver = e => e.Properties.TryGetValue("CorrelationId", out var cid) ? $"{e.Level}-{cid}" : e.Level.ToString()
+                    };
 
-                lc.WriteTo.AzureEventHub(opt, new CompactJsonFormatter());
+                lc.WriteTo.AzureEventHub(
+                    opt,
+                    new CompactJsonFormatter());
             }
             else
             {
-                Console.WriteLine("Azure EventHub logging disabled: missing or invalid EventHubs:ConnectionString.");
+                Console.WriteLine(
+                    "Azure EventHub logging disabled: " +
+                    "missing or invalid " +
+                    "EventHubs:ConnectionString.");
             }
         });
-
-        builder.Logging.ClearProviders();
-        builder.Logging.AddConsole();
     }
 
     private static void ConfigureNoSql(IServiceCollection services, IConfiguration configuration)

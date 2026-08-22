@@ -258,9 +258,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             interaction.Prompt ??= string.Empty;
             interaction.Response ??= string.Empty;
             interaction.Active = true;
-            interaction.CreatedAt = interaction.CreatedAt == default
-                ? DateTime.UtcNow
-                : interaction.CreatedAt;
+            interaction.CreatedAt = interaction.CreatedAt == default ? DateTime.UtcNow : interaction.CreatedAt;
 
             interaction.Model ??= "mistral";
             interaction.Temperature ??= 0.3f;
@@ -270,9 +268,14 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
             const string sql = """
                             INSERT INTO dbo.GptInteractions
-                                (Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount, Latitude, Longitude)
+                            (
+                                Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount, EventId, CrowdInfoId, PlaceId, TrafficConditionId, WeatherForecastId, Latitude, Longitude, SourceType
+                            )
                             OUTPUT INSERTED.*
-                            VALUES(@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount, @Latitude, @Longitude);
+                            VALUES
+                            (
+                                @Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount, @EventId, @CrowdInfoId, @PlaceId, @TrafficConditionId, @WeatherForecastId, @Latitude, @Longitude, @SourceType
+                            );
                             """;
 
             return await _connection.QuerySingleAsync<GPTInteraction>(
@@ -286,38 +289,44 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         {
             ArgumentNullException.ThrowIfNull(interaction);
 
-            var promptHash = ComputePromptHash(interaction.Prompt);
-
-            const string sql = @"
-                            MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
-                            USING (SELECT @PromptHash AS PromptHash) AS s
-                            ON (t.PromptHash = s.PromptHash)
-                            WHEN MATCHED THEN
-                                UPDATE SET
-                                    Response = @Response,
-                                    CreatedAt = SYSUTCDATETIME(),
-                                    Active = 1,
-                                    Model = @Model,
-                                    Temperature = @Temperature,
-                                    TokenCount = @TokenCount,
-                                    Latitude = COALESCE(@Latitude, Latitude),
-                                    Longitude = COALESCE(@Longitude, Longitude)
-                            WHEN NOT MATCHED THEN
-                                INSERT(Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount, Latitude, Longitude)
-                                VALUES(@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount, @Latitude, @Longitude);";
-
-            var parameters = new DynamicParameters();
-            parameters.Add("@Prompt", interaction.Prompt, DbType.String);
-            parameters.Add("@PromptHash", promptHash, DbType.String);
-            parameters.Add("@Response", interaction.Response, DbType.String);
-            parameters.Add("@Model", interaction.Model ?? "mistral-small-latest", DbType.String);
-            parameters.Add("@Temperature", interaction.Temperature ?? 0.7f, DbType.Single);
-            parameters.Add("@TokenCount", interaction.TokenCount, DbType.Int32);
-            parameters.Add("@Latitude", interaction.Latitude, DbType.Double);
-            parameters.Add("@Longitude", interaction.Longitude, DbType.Double);
-
-            await _connection.ExecuteAsync(sql, parameters);
+            await UpsertInteractionAsync(interaction);
         }
+        //public async Task SaveInteractionAsync(GPTInteraction interaction)
+        //{
+        //    ArgumentNullException.ThrowIfNull(interaction);
+
+        //    var promptHash = ComputePromptHash(interaction.Prompt);
+
+        //    const string sql = @"
+        //                    MERGE [dbo].[GptInteractions] WITH (HOLDLOCK) AS t
+        //                    USING (SELECT @PromptHash AS PromptHash) AS s
+        //                    ON (t.PromptHash = s.PromptHash)
+        //                    WHEN MATCHED THEN
+        //                        UPDATE SET
+        //                            Response = @Response,
+        //                            CreatedAt = SYSUTCDATETIME(),
+        //                            Active = 1,
+        //                            Model = @Model,
+        //                            Temperature = @Temperature,
+        //                            TokenCount = @TokenCount,
+        //                            Latitude = COALESCE(@Latitude, Latitude),
+        //                            Longitude = COALESCE(@Longitude, Longitude)
+        //                    WHEN NOT MATCHED THEN
+        //                        INSERT(Prompt, PromptHash, Response, CreatedAt, Active, Model, Temperature, TokenCount, Latitude, Longitude)
+        //                        VALUES(@Prompt, @PromptHash, @Response, SYSUTCDATETIME(), 1, @Model, @Temperature, @TokenCount, @Latitude, @Longitude);";
+
+        //    var parameters = new DynamicParameters();
+        //    parameters.Add("@Prompt", interaction.Prompt, DbType.String);
+        //    parameters.Add("@PromptHash", promptHash, DbType.String);
+        //    parameters.Add("@Response", interaction.Response, DbType.String);
+        //    parameters.Add("@Model", interaction.Model ?? "mistral-small-latest", DbType.String);
+        //    parameters.Add("@Temperature", interaction.Temperature ?? 0.7f, DbType.Single);
+        //    parameters.Add("@TokenCount", interaction.TokenCount, DbType.Int32);
+        //    parameters.Add("@Latitude", interaction.Latitude, DbType.Double);
+        //    parameters.Add("@Longitude", interaction.Longitude, DbType.Double);
+
+        //    await _connection.ExecuteAsync(sql, parameters);
+        //}
 
         public async Task<IEnumerable<GPTInteraction>> GetAllInteractionsAsync()
         {
@@ -397,18 +406,21 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             parameters.Add("@Model", interaction.Model, DbType.String);
             parameters.Add("@Temperature", interaction.Temperature, DbType.Single);
             parameters.Add("@TokenCount", interaction.TokenCount, DbType.Int32);
+            parameters.Add("@EventId", interaction.EventId, DbType.Int32);
+            parameters.Add("@CrowdInfoId", interaction.CrowdInfoId, DbType.Int32);
+            parameters.Add("@PlaceId", interaction.PlaceId, DbType.Int32);
+            parameters.Add("@TrafficConditionId", interaction.TrafficConditionId, DbType.Int32);
+            parameters.Add("@WeatherForecastId", interaction.WeatherForecastId, DbType.Int32);
+            parameters.Add("@Latitude", interaction.Latitude, DbType.Double);
+            parameters.Add("@Longitude", interaction.Longitude, DbType.Double);
+            parameters.Add("@SourceType", interaction.SourceType, DbType.String);
 
             try
             {
-                _logger.LogInformation(
-                    "Calling sp_GptInteraction_Upsert. PromptHash={PromptHash}, ResponseLength={ResponseLength}",
-                    promptHash,
-                    interaction.Response?.Length ?? 0);
+                _logger.LogInformation("Calling sp_GptInteraction_Upsert. PromptHash={PromptHash}, ResponseLength={ResponseLength}", promptHash, interaction.Response?.Length ?? 0);
 
                 var result = await _connection.QuerySingleOrDefaultAsync<GPTInteraction>(
-                    "dbo.sp_GptInteraction_Upsert",
-                    parameters,
-                    commandType: CommandType.StoredProcedure);
+                    "dbo.sp_GptInteraction_Upsert", parameters, commandType: CommandType.StoredProcedure);
 
                 _logger.LogInformation(
                     "sp_GptInteraction_Upsert completed. PromptHash={PromptHash}, ReturnedId={ReturnedId}, ReturnedResponseLength={ReturnedResponseLength}",
@@ -418,9 +430,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
                 if (result is null)
                 {
-                    _logger.LogError(
-                        "sp_GptInteraction_Upsert returned null for prompt: {Prompt}",
-                        interaction.Prompt);
+                    _logger.LogError("sp_GptInteraction_Upsert returned null for prompt: {Prompt}", interaction.Prompt);
 
                     throw new InvalidOperationException("Failed to upsert GPT interaction.");
                 }
@@ -429,10 +439,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(
-                    ex,
-                    "Error executing sp_GptInteraction_Upsert for prompt: {Prompt}",
-                    interaction.Prompt);
+                _logger.LogError(ex, "Error executing sp_GptInteraction_Upsert for prompt: {Prompt}", interaction.Prompt);
 
                 throw;
             }
@@ -554,6 +561,48 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
             var affectedRows = await _connection.ExecuteAsync(command);
 
             return affectedRows > 0;
+        }
+
+        public async Task<bool> CompleteAsync(int interactionId, string response, string sourceType, CancellationToken ct = default)
+        {
+            if (interactionId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(interactionId));
+            }
+
+            const string sql = """
+                            UPDATE dbo.GptInteractions
+                            SET
+                                Response = @Response,
+                                SourceType = @SourceType,
+                                Active = 1
+                            WHERE Id = @InteractionId;
+                            """;
+
+            var command = new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        InteractionId = interactionId,
+                        Response = response ?? string.Empty,
+                        SourceType = sourceType
+                    },
+                    cancellationToken: ct);
+
+            var affected = await _connection.ExecuteAsync(command);
+
+            _logger.LogInformation(
+                "CompleteAsync executed. " +
+                "InteractionId={InteractionId}, " +
+                "SourceType={SourceType}, " +
+                "ResponseLength={ResponseLength}, " +
+                "Updated={Updated}",
+                interactionId,
+                sourceType,
+                response?.Length ?? 0,
+                affected > 0);
+
+            return affected > 0;
         }
     }
 }

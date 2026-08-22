@@ -16,6 +16,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<bool> UpdateLocationAsync(int interactionId, double latitude, double longitude, CancellationToken ct = default);
         Task<bool> MarkFailedAsync(int interactionId, string? errorMessage, CancellationToken ct = default);
         Task<bool> MarkCancelledAsync(int interactionId, string? message = null, CancellationToken ct = default);
+        Task<bool> CompleteAsync(int interactionId, string response, string sourceType, CancellationToken ct = default);
     }
 }
 

@@ -315,7 +315,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         private async Task<GptInteractionDTO> CompleteWithGuardMessageAsync(IGptInteractionRepository gptRepository, int interactionId, string requestId, string message, bool pushChunksToHub, CancellationToken ct)
         {
-            var updated = await gptRepository.UpdateResponseAsync(interactionId, message, ct).ConfigureAwait(false);
+            var updated = await gptRepository.CompleteAsync(interactionId, message, "DomainGuard", ct).ConfigureAwait(false);
 
             if (!updated)
                 throw new InvalidOperationException($"Failed to persist guarded GPT response for interaction {interactionId}.");
@@ -655,6 +655,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 request.LanguageCode,
                 responseLanguage);
 
+            IReadOnlyList<VerifiedTourismCandidate>geographicVerifiedCandidates = Array.Empty<VerifiedTourismCandidate>();
+
             if (effectiveLatitude.HasValue && effectiveLongitude.HasValue)
             {
                 var geographicallyUniquePlaces = DeduplicatePlacesByCoordinates(places, duplicateRadiusKm: 0.1);
@@ -718,6 +720,15 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     .ThenBy(x => x.Name)
 
                     .ToList();
+
+                geographicVerifiedCandidates =
+                    nearest
+                        .Select(x =>
+                            new VerifiedTourismCandidate(
+                                x.Name,
+                                x.DistanceKm,
+                                x.Type))
+                        .ToList();
 
                 _logger.LogInformation(
                     "[NEARBY PIPELINE] Origin={Origin}; Latitude={Latitude}; Longitude={Longitude}; " +
@@ -786,7 +797,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 - Do not repeat generic safety phrases.
                                 - Do not say "safer fallback zone" unless a confirmed critical alert exists.
                                 - Do not detail capacities unless the user requests it.
-                                - When at least three actual attractions are available, mention at least five.
+                                - When between five and eight verified attractions are available, include all relevant candidates up to the configured maximum.
                                 - Group attractions by their nearby locality when this is useful.
                                 - Mention up to eight actual attractions when available.
                                 - If fewer than five verified attractions are available, return only the verified attractions.
@@ -886,11 +897,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
                             - Do not add safety recommendations unless a confirmed alert exists.
                             """;
 
-            var approximatePromptTokens = (int)Math.Ceiling(groundedPrompt.Length / 4d);
-
-            _logger.LogWarning("[GPT FINAL PROMPT SIZE] " + "InteractionId={InteractionId}; " + "Characters={Characters}; " + "ApproximateTokens={ApproximateTokens}", interactionId, groundedPrompt.Length, approximatePromptTokens);
-
             string finalResponse;
+
+            var finalSourceType = "MistralLocal";
 
             try
             {
@@ -907,6 +916,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 - Every numbered item must be complete.
                                 - Never stop after an unfinished word or sentence.
                                 """;
+
+                    var approximatePromptTokens = (int)Math.Ceiling(groundedPrompt.Length / 4d);
+
+                    _logger.LogWarning("[GPT FINAL PROMPT SIZE] " + "InteractionId={InteractionId}; " + "Characters={Characters}; " + "ApproximateTokens={ApproximateTokens}", interactionId, groundedPrompt.Length, approximatePromptTokens);
 
                     finalResponse = await mistralAiService.StreamFromPromptAsync(
                         groundedPrompt, async chunkText =>
@@ -941,7 +954,9 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
             catch (TimeoutException ex)
             {
-                var verifiedCandidates = GetVerifiedTourismCandidates(localContext);
+                finalSourceType = "TourismFallbackTimeout";
+
+                var verifiedCandidates = GetVerifiedTourismCandidates(localContext, geographicVerifiedCandidates);
 
                 finalResponse = BuildVerifiedTourismResponse(verifiedCandidates, responseLanguage);
 
@@ -1004,18 +1019,16 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             finalResponse = SanitizeUnsupportedSafetyClaims(finalResponse, hasConfirmedCriticalAlert: localContext.CriticalAlerts.Count > 0);
 
-            finalResponse = FilterUnsupportedTourismItems(finalResponse, localContext, responseLanguage);
+            finalResponse = FilterUnsupportedTourismItems(finalResponse, localContext, responseLanguage, geographicVerifiedCandidates);
 
             var outputGuard = _domainGuard.CheckOutput(finalResponse);
 
             if (!outputGuard.Allowed)
             {
-                finalResponse =
-                    outputGuard.Message ??
-                    "La réponse générée a été bloquée car elle sort du domaine autorisé d’OutZen.";
+                finalResponse = outputGuard.Message ?? "The generated response was blocked because it falls outside OutZen's authorized scope.";
             }
 
-            var updated = await gptRepository.UpdateResponseAsync(interactionId, finalResponse, ct).ConfigureAwait(false);
+            var updated = await gptRepository.CompleteAsync(interactionId, finalResponse, finalSourceType, ct).ConfigureAwait(false);
 
             if (!updated)
             {
@@ -1224,82 +1237,128 @@ namespace CitizenHackathon2025.Infrastructure.Services
             return latitude is >= -90 and <= 90 && longitude is >= -180 and <= 180;
         }
 
-        private string FilterUnsupportedTourismItems(string response, LocalAiContextDTO context, string responseLanguage)
+        private string FilterUnsupportedTourismItems(string response, LocalAiContextDTO context, string responseLanguage, IEnumerable<VerifiedTourismCandidate>? additionalCandidates = null)
         {
             if (string.IsNullOrWhiteSpace(response))
                 return response;
 
-            var verifiedCandidates = GetVerifiedTourismCandidates(context);
+            var verifiedCandidates = GetVerifiedTourismCandidates(context, additionalCandidates);
 
-            var allowedNames =
-                verifiedCandidates
-                    .Select(candidate =>
-                        NormalizeFactKey(
-                            candidate.Name))
-                    .Where(name =>
-                        !string.IsNullOrWhiteSpace(name))
-                    .Distinct(
-                        StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-            if (allowedNames.Count == 0)
+            if (verifiedCandidates.Count == 0)
             {
                 return BuildNoLocalResultMessage(responseLanguage);
             }
 
-            var normalizedResponse = response
-                .Replace("\r\n", "\n")
-                .Replace('\r', '\n');
+            var normalizedResponse = response.Replace("\r\n", "\n").Replace('\r', '\n');
 
-            var lines = normalizedResponse
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var lines = normalizedResponse.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            var result = new List<string>();
-
-            var acceptedItems = 0;
+            var selected = new List<VerifiedTourismCandidate>();
 
             foreach (var line in lines)
             {
                 var numberedItem = Regex.Match(line, @"^\s*(?:\d{1,2}[.)]|[-•])\s*(.+)$", RegexOptions.CultureInvariant);
 
                 if (!numberedItem.Success)
-                {
-                    result.Add(line);
                     continue;
-                }
 
                 var content = numberedItem.Groups[1].Value.Trim();
 
+                /*
+                 * Ollama adds an ellipsis when
+                 * the generation has reached num_predict.
+                 * Therefore, we do not keep a proposition
+                 * that is obviously unfinished.
+                 */
+                if (content.EndsWith("…", StringComparison.Ordinal) || content.EndsWith("...", StringComparison.Ordinal))
+                {
+                    _logger.LogWarning(
+                        "[GPT FACT FILTER REJECTED] " +
+                        "Reason=Truncated; " +
+                        "Content={Content}",
+                        content);
+
+                    continue;
+                }
+
                 var normalizedContent = NormalizeFactKey(content);
 
-                var supported = allowedNames.Any(allowedName =>
-                    normalizedContent.Contains(allowedName, StringComparison.OrdinalIgnoreCase));
+                var matchedCandidate = verifiedCandidates
+                        .Select(candidate => new
+                        {
+                            Candidate = candidate,
+                            Key = NormalizeFactKey(candidate.Name)
+                        })
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+                        .Where(x => normalizedContent.Equals(x.Key, StringComparison.OrdinalIgnoreCase)
+                            || normalizedContent.StartsWith(x.Key + " ", StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(x => x.Key.Length)
+                        .Select(x => x.Candidate)
+                        .FirstOrDefault();
 
-                if (!supported)
+                if (matchedCandidate is null)
+                {
+                    _logger.LogWarning(
+                        "[GPT FACT FILTER REJECTED] " +
+                        "Reason=UnknownCandidate; " +
+                        "Content={Content}; " +
+                        "NormalizedContent={NormalizedContent}",
+                        content,
+                        normalizedContent);
+
                     continue;
+                }
 
-                acceptedItems++;
+                if (selected.Any(candidate =>
+                        string.Equals(
+                            NormalizeFactKey(candidate.Name),
+                            NormalizeFactKey(matchedCandidate.Name),
+                            StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
 
-                result.Add($"{acceptedItems}. {content}");
+                selected.Add(matchedCandidate);
+
+                _logger.LogInformation(
+                    "[GPT FACT FILTER ACCEPTED] " +
+                    "Name={Name}; " +
+                    "DistanceKm={DistanceKm}; " +
+                    "Type={Type}",
+                    matchedCandidate.Name,
+                    matchedCandidate.DistanceKm,
+                    matchedCandidate.Type);
+
+                if (selected.Count >= OutZenRecommendationPolicy.MaxTourismRecommendations)
+                {
+                    break;
+                }
             }
 
             _logger.LogWarning(
                 "[GPT FACT FILTER] " +
                 "VerifiedCandidates={VerifiedCandidates}; " +
-                "AllowedNames={AllowedNames}; " +
                 "AcceptedItems={AcceptedItems}; " +
                 "OriginalResponseLength={OriginalResponseLength}",
                 verifiedCandidates.Count,
-                allowedNames.Count,
-                acceptedItems,
+                selected.Count,
                 response.Length);
 
-            if (acceptedItems == 0)
+            if (selected.Count == 0)
             {
                 return BuildVerifiedTourismResponse(verifiedCandidates, responseLanguage);
             }
 
-            return string.Join(Environment.NewLine, result);
+            /*
+             * Very important :
+             * we do NOT reuse the prose invented
+             * by Mistral.
+             *
+             * Mistral chooses the candidates.
+             * OutZen generates the final response from
+             * the actually verified data.
+             */
+            return BuildVerifiedTourismResponse(selected, responseLanguage);
         }
 
         private static string NormalizeFactKey(string value)
@@ -1762,29 +1821,51 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
         private sealed record VerifiedTourismCandidate(string Name, double? DistanceKm, string? Type);
 
-        private static IReadOnlyList<VerifiedTourismCandidate>GetVerifiedTourismCandidates(LocalAiContextDTO context)
+        private static IReadOnlyList<VerifiedTourismCandidate>GetVerifiedTourismCandidates(LocalAiContextDTO context, IEnumerable<VerifiedTourismCandidate>? additionalCandidates = null)
         {
             ArgumentNullException.ThrowIfNull(context);
 
-            var placeCandidates = context.Places
-                .Where(place => !string.IsNullOrWhiteSpace(place.Name))
-                .Select(place => new VerifiedTourismCandidate(place.Name!.Trim(), place.DistanceKm, place.Type));
-
-            var keywordCandidates = context.KeywordMatchedPlaces
-                .Where(place => !string.IsNullOrWhiteSpace(place.Name))
-                .Select(place => new VerifiedTourismCandidate(place.Name!.Trim(), place.DistanceKm, place.Type));
-
             var eventCandidates = context.Events
-                .Where(currentEvent => !string.IsNullOrWhiteSpace(currentEvent.Title))
-                .Select(currentEvent => new VerifiedTourismCandidate(currentEvent.Title!.Trim(), currentEvent.DistanceKm, "Event"));
+                    .Where(currentEvent => !string.IsNullOrWhiteSpace(currentEvent.Title))
+                    .Select(currentEvent =>
+                        new VerifiedTourismCandidate(currentEvent.Title!.Trim(), currentEvent.DistanceKm, "Event"))
+                    .ToList();
 
-            return placeCandidates
-                .Concat(keywordCandidates)
-                .Concat(eventCandidates)
-                .GroupBy(candidate => NormalizeFactKey(candidate.Name), StringComparer.OrdinalIgnoreCase)
-                .Select(group => group
-                    .OrderBy(candidate => candidate.DistanceKm ?? double.MaxValue)
-                    .First())
+            var additional = (additionalCandidates ?? Enumerable.Empty<VerifiedTourismCandidate>())
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name))
+                .ToList();
+
+            IEnumerable<VerifiedTourismCandidate>source;
+
+            /*
+             * When the geographic pipeline has
+             * actually selected the candidates
+             * sent to Mistral, this list becomes
+             * the reference for places.
+             *
+             * However, we still keep the verified events
+             * from the OutZen context.
+             */
+            if (additional.Count > 0)
+            {
+                source = additional.Concat(eventCandidates);
+            }
+            else
+            {
+                var placeCandidates = context.Places
+                    .Where(place => !string.IsNullOrWhiteSpace(place.Name))
+                    .Select(place => new VerifiedTourismCandidate(place.Name!.Trim(), place.DistanceKm, place.Type));
+
+                var keywordCandidates = context.KeywordMatchedPlaces
+                    .Where(place => !string.IsNullOrWhiteSpace(place.Name))
+                    .Select(place => new VerifiedTourismCandidate(place.Name!.Trim(), place.DistanceKm, place.Type));
+
+                source = placeCandidates.Concat(keywordCandidates).Concat(eventCandidates);
+            }
+
+            return source
+                .GroupBy(candidate =>NormalizeFactKey(candidate.Name), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.OrderBy(candidate => candidate.DistanceKm ?? double.MaxValue).First())
                 .OrderBy(candidate => candidate.DistanceKm ?? double.MaxValue)
                 .ThenBy(candidate => candidate.Name)
                 .ToList();
