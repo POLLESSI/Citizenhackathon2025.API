@@ -1,26 +1,20 @@
-﻿using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
-using CitizenHackathon2025.Contracts.Enums; 
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace CitizenHackathon2025.DTOs.DTOs
 {
-    public class RegisterDTO
+    public sealed class RegisterDTO
     {
-        [Required(ErrorMessage = "First email is required.")]
-        [EmailAddress(ErrorMessage = "Invalid email format.")]
-        [DisplayName("Email")]
-        public string Email { get; set; } = string.Empty;
+        [Required]
+        [EmailAddress]
+        [MaxLength(64)]
+        public string Email { get; set; } =
+            string.Empty;
 
-        [Required(ErrorMessage = "Password is required.")]
-        [MinLength(8, ErrorMessage = "Password must contain at least 8 characters.")]
-        [DisplayName("Password")]
-        public string Password { get; set; } = string.Empty;
-
-        /// <summary>"Admin" / "Modo" / "User" / "Guest" ...</summary>
-        [Required(ErrorMessage = "Role is required.")]
-        [EnumDataType(typeof(UserRole))]
-        [DisplayName("Role")]
-        public UserRole Role { get; set; } = UserRole.User;
+        [Required]
+        [MinLength(12)]
+        [MaxLength(128)]
+        public string Password { get; set; } =
+            string.Empty;
     }
 }
 

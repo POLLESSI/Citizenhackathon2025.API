@@ -31,6 +31,27 @@ namespace CitizenHackathon2025.API.Controllers
             _userSessionService = userSessionService;               
         }
 
+        [Authorize]
+        [HttpGet("me")]
+        public IActionResult Me()
+        {
+            var email = User.FindFirstValue(ClaimTypes.Email) ?? User.Identity?.Name;
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return Unauthorized();
+            }
+
+            var roles = User.FindAll(ClaimTypes.Role).Select(x => x.Value).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+            return Ok(new
+            {
+                IsAuthenticated = true,
+                Email = email,
+                Roles = roles
+            });
+        }
+
         // -----------------------------
         // LOGIN
         // -----------------------------
@@ -95,34 +116,38 @@ namespace CitizenHackathon2025.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
         {
-            var existing = await _userService.GetUserByEmailAsync(dto.Email.Trim());
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var email = dto.Email.Trim();
+
+            var existing = await _userService.GetUserByEmailAsync(email);
 
             if (existing is not null)
             {
                 return Conflict(new
                 {
-                    Message = "A user with this email already exists.",
-                    Email = dto.Email
+                    Message = "If registration is possible for this address,\r\nthe appropriate instructions have been processed."
                 });
             }
 
-            var userDto = await _userService.RegisterUserAsync(
-                dto.Email.Trim(),
-                dto.Password,
-                dto.Role);
+            /*
+             * SECURITY:
+             *
+             * A public registration can NEVER decide
+             * its own role.
+             */
+            var userDto = await _userService.RegisterUserAsync(email, dto.Password, UserRole.User);
 
-            _logger.LogInformation("New registered user : {Email}", dto.Email);
+            _logger.LogInformation("New user registered.");
 
-            return CreatedAtAction(
-                nameof(Register),
-                new { email = userDto.Email },
-                userDto);
+            return StatusCode(StatusCodes.Status201Created, userDto);
         }
 
         // -----------------------------
         // REFRESH
         // -----------------------------
-        [Authorize(Policy = "AdminOrModo")]
+        [AllowAnonymous]
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshDTO request)
         {

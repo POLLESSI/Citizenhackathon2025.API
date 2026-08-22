@@ -38,6 +38,9 @@ namespace CitizenHackathon2025.Application.Interfaces
         // 🔐 (hash/salt)
         //Task<IEnumerable<RefreshToken>> GetActiveByEmailAsync(string email);
         //Task AddHashedAsync(string email, DateTime expiryDate, byte[] tokenHash, byte[] tokenSalt);
+
+        //public sealed record RefreshTokenValidationResult(bool IsValid, string? Email, int? UserId);
+        //Task<RefreshTokenValidationResult>ValidateAsync(string token);
     }
 }
 

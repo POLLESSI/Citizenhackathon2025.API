@@ -20,7 +20,7 @@ BEGIN
         WHERE Email = @Email 
         AND PasswordHash = @PasswordHash 
         AND Active = 1
-        AND Status = 1
+        AND Status = 0
     )
     BEGIN
         SELECT Id, Email, Role, Active 

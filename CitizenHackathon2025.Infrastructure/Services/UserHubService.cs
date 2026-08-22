@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using CitizenHackathon2025.Hubs.Hubs;
+﻿using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Domain.Entities;
+using CitizenHackathon2025.Hubs.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
-    public class UserHubService : CitizenHackathon2025.Application.Interfaces.IUserHubService
+    public class UserHubService : IUserHubService
     {
         private readonly IHubContext<UserHub> _hubContext;
 
@@ -20,26 +22,23 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public Task NotifyUserDeactivated(int id)
         {
-            throw new NotImplementedException();
+            return _hubContext.Clients.All.SendAsync("UserDeactivated", id);
         }
 
-        public async Task NotifyUserRegistered(string email)
+        public Task NotifyUserRegistered(string email)
         {
-            await _hubContext.Clients.All.SendAsync("UserRegistered", email);
+            return _hubContext.Clients.All.SendAsync("UserRegistered", email);
         }
 
         public async Task NotifyUserUpdated(Users user)
         {
-            await _hubContext.Clients.All.SendAsync("UserUpdated", new
-            {
-                user.Id,
-                user.Email,
-                user.PasswordHash,
-                user.Role,
-                user.Status
-            });
+            ArgumentNullException.ThrowIfNull(user);
+
+            var dto = user.ToPublicDTO();
+
+            await _hubContext.Clients.All.SendAsync("UserUpdated", dto);
         }
-    } 
+    }
 }
 
 

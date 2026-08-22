@@ -75,10 +75,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
             return false;
         }
-        public Task InvalidateAsync(string token)
-        {
-            throw new NotImplementedException();
-        }
         public async Task InvalidateAsync(string token, string email)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(token);
@@ -107,10 +103,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
         {
             if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id));
             return _repo.DeactivateTokenAsync(id);
-        }
-        public Task<RefreshTokenStatus> GetStatusAsync(string token)
-        {
-            throw new NotImplementedException();
         }
         public async Task<RefreshTokenStatus> GetStatusAsync(string token, string email)
         {
@@ -154,7 +146,8 @@ namespace CitizenHackathon2025.Infrastructure.Services
         }
 
         private static string Base64Url(byte[] bytes) =>
-            Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');      
+            Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+
     }
 }
 

@@ -1,119 +1,108 @@
-﻿using CitizenHackathon2025.API.Tools;
+﻿using CitizenHackathon2025.Application.Extensions;
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.Enums;
-using CitizenHackathon2025.Domain.Entities;
-using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.SignalR;
 
 namespace CitizenHackathon2025.API.Controllers
 {
-    [EnableRateLimiting("per-user")]
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
+    [EnableRateLimiting("per-user")]
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
-        private readonly IHubContext<UserHub> _hubContext;
-        private readonly TokenGenerator _tokenGenerator;
+        private readonly IUserHubService _userHubService;
         private readonly ILogger<UserController> _logger;
 
-        public UserController(IUserService userService, IHubContext<UserHub> hubContext, TokenGenerator tokenGenerator, ILogger<UserController> logger)
+        public UserController(IUserService userService, IUserHubService userHubService, ILogger<UserController> logger)
         {
             _userService = userService;
-            _hubContext = hubContext;
-            _tokenGenerator = tokenGenerator;
+            _userHubService = userHubService;
             _logger = logger;
         }
 
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
-        {
-            var userDto = await _userService.RegisterUserAsync(dto.Email, dto.Password, dto.Role);
-            await _hubContext.Clients.All.SendAsync("UserRegistered", userDto.Email);
-            return Ok(userDto);
-        }
-
-        [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginDTO dto)
-        {
-            if (!await _userService.LoginAsync(dto.Email, dto.Password))
-                return Unauthorized("Invalid credentials");
-
-            var user = await _userService.GetUserByEmailAsync(dto.Email);
-
-            // ⚠️ Make sure you know the user's UserRoleS
-            var token = _tokenGenerator.GenerateToken(user.Email, user.Role);
-
-            await _hubContext.Clients.All.SendAsync("UserLogged", user.Email);
-            return Ok(new { token });
-        }
+        // =========================================================
+        // ADMIN / MODERATOR
+        // =========================================================
 
         [Authorize(Policy = "AdminOrModo")]
         [HttpGet("active")]
         public async Task<IActionResult> GetAllActive()
         {
             var users = await _userService.GetAllActiveUsersAsync();
-            return Ok(users);
+
+            var result = users.Select(x => x.ToPublicDTO()).ToList();
+
+            return Ok(result);
         }
 
         [Authorize(Policy = "AdminOrModo")]
         [HttpGet("getbyemail/{email}")]
         public async Task<IActionResult> GetByEmail(string email)
         {
-            var user = await _userService.GetUserByEmailAsync(email);
-            return user == null ? NotFound() : Ok(user);
+            if (string.IsNullOrWhiteSpace(email))
+                return BadRequest();
+
+            var user = await _userService.GetUserByEmailAsync(email.Trim());
+
+            if (user is null)
+                return NotFound();
+
+            return Ok(user.ToPublicDTO());
         }
 
         [Authorize(Policy = "AdminOrModo")]
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> GetById(int id)
         {
+            if (id <= 0)
+                return BadRequest();
+
             var user = await _userService.GetUserByIdAsync(id);
-            return user == null ? NotFound() : Ok(user);
+
+            if (user is null)
+                return NotFound();
+
+            return Ok(user.ToPublicDTO());
         }
 
         [Authorize(Policy = "AdminOrModo")]
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
+            if (id <= 0)
+                return BadRequest();
+
             await _userService.DeactivateUserAsync(id);
+
             return NoContent();
         }
 
-        [Authorize(Policy = "AdminOrModo")]
-        [HttpPut("update")]
-        public IActionResult Update([FromBody] UpdateUserDTO dto)
-        {
-            if (dto.Id <= 0) return BadRequest("Id is required.");
-
-            var entity = new Users
-            {
-                Email = dto.Email,
-                Role = (UserRole)dto.Role,
-                Status = (UserStatus)dto.Status,
-            };
-            if (dto.Active) entity.Activate(); else entity.Deactivate();
-
-            var updated = _userService.UpdateUser(new Users
-            {
-                // ⚠️ If you keep the setter private, change the repo signature instead.
-                // to take (id, email, role, status, active) as parameters.
-            });
-
-            return updated != null ? Ok(updated) : NotFound($"User #{dto.Id} not found.");
-        }
+        // =========================================================
+        // ROLE
+        // =========================================================
 
         [Authorize(Policy = Policies.AdminPolicy)]
-        [HttpPatch("role/{id}")]
+        [HttpPatch("role/{id:int}")]
         public IActionResult SetRole(int id, [FromQuery] string newRole)
         {
+            if (id <= 0)
+                return BadRequest();
+
+            if (string.IsNullOrWhiteSpace(newRole))
+                return BadRequest("Role is required.");
+
+            if (!Enum.TryParse<UserRole>(newRole, ignoreCase: true, out _))
+            {
+                return BadRequest($"Invalid role '{newRole}'.");
+            }
+
             _userService.SetRole(id, newRole);
-            return Ok();
+
+            return NoContent();
         }
     }
 }
