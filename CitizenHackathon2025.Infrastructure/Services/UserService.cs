@@ -1,13 +1,10 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
-using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Shared.Utils;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
-using System.Collections;
-using System.Data;
-using System.Security.Cryptography;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -16,34 +13,59 @@ namespace CitizenHackathon2025.Infrastructure.Services
     #nullable disable
         private readonly IUserRepository _userRepository;
         private readonly IUserHubService _hubService;
-        private readonly ILogger<UserService> _logger;
-        private readonly IDbConnection _connection;
+        private readonly IPasswordHasher<Users> _passwordHasher;
 
-        public UserService(IUserRepository userRepository, IUserHubService hubService, ILogger<UserService> logger, IDbConnection connection)
+        public UserService(IUserRepository userRepository, IUserHubService hubService, IPasswordHasher<Users> passwordHasher)
         {
-            _userRepository = userRepository;
-            _hubService = hubService;
-            _logger = logger;
-            _connection = connection;
+            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+            _hubService = hubService ?? throw new ArgumentNullException(nameof(hubService));
+            _passwordHasher = passwordHasher ?? throw new ArgumentNullException(nameof(passwordHasher));
         }
 
-        public async Task<Users?> AuthenticateAsync(string email, string password)
+        public async Task<Users?> AuthenticateAsync(string email,string password)
         {
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+            {
+                return null;
+            }
+
             var user = await _userRepository.GetUserByEmailAsync(email.Trim());
 
-            if (user is null)
+            if (user is null || !user.Active || user.Status != UserStatus.Active)
+            {
                 return null;
+            }
 
-            if (!user.Active || user.Status != UserStatus.Active)
+            /*
+             * All supported accounts must now use
+             * ASP.NET Core PasswordHasher.
+             */
+            if (string.IsNullOrWhiteSpace(user.PasswordHashV2))
+            {
                 return null;
+            }
 
-            var expected = Sql512Hasher.Compute(password, user.SecurityStamp);
+            var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHashV2, password);
 
-            var ok = user.PasswordHash is not null
-                     && user.PasswordHash.Length == expected.Length
-                     && CryptographicOperations.FixedTimeEquals(user.PasswordHash, expected);
+            if (result == PasswordVerificationResult.Failed)
+            {
+                return null;
+            }
 
-            return ok ? user : null;
+            /*
+             * ASP.NET Core can request a rehash when
+             * password hashing parameters evolve.
+             */
+            if (result == PasswordVerificationResult.SuccessRehashNeeded)
+            {
+                var rehashed = _passwordHasher.HashPassword(user, password);
+
+                await _userRepository.UpdatePasswordHashV2Async(user.Id, rehashed);
+
+                user.PasswordHashV2 = rehashed;
+            }
+
+            return user;
         }
 
         public async Task DeactivateUserAsync(int id)
@@ -63,43 +85,50 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
         public async Task<bool> LoginAsync(string email, string password)
         {
-            var user = await _userRepository.GetUserByEmailAsync(email.Trim());
+            var user = await AuthenticateAsync(email, password);
 
-            if (user is null)
-                return false;
-
-            if (!user.Active || user.Status != UserStatus.Active)
-                return false;
-
-            var expected = Sql512Hasher.Compute(password, user.SecurityStamp);
-
-            return user.PasswordHash is not null
-                   && user.PasswordHash.Length == expected.Length
-                   && CryptographicOperations.FixedTimeEquals(user.PasswordHash, expected);
+            return user is not null;
         }
         public async Task<UserDTO> RegisterUserAsync(string email, string password, UserRole role)
         {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new ArgumentException("Email cannot be empty.", nameof(email));
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw new ArgumentException("Password cannot be empty.", nameof(password));
+            }
+
             email = email.Trim();
 
             var existing = await _userRepository.GetUserByEmailAsync(email);
+
             if (existing is not null)
-                throw new InvalidOperationException($"User '{email}' already exists.");
-
-            var stamp = Guid.NewGuid();
-            var passwordHash = Sql512Hasher.Compute(password, stamp);
-
-            var newUser = new Users
             {
-                Email = email,
-                Role = role,
-                SecurityStamp = stamp,
-                PasswordHash = passwordHash,
-                Status = UserStatus.Active
-            };
+                throw new InvalidOperationException($"User '{email}' already exists.");
+            }
+
+            var newUser =
+                new Users
+                {
+                    Email = email,
+                    Role = role,
+                    SecurityStamp = Guid.NewGuid(),
+                    Status = UserStatus.Active,
+
+                    /*
+                     * No legacy hash for new accounts.
+                     */
+                    PasswordHash = null
+                };
 
             newUser.Activate();
 
-            var created = await _userRepository.RegisterUserAsync(email, passwordHash, newUser);
+            newUser.PasswordHashV2 = _passwordHasher.HashPassword(newUser, password);
+
+            var created = await _userRepository.RegisterUserAsync(newUser);
 
             await _hubService.NotifyUserRegistered(created.Email);
 
@@ -118,7 +147,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             _userRepository.SetRole(id, parsedRole.ToString());
         }
-
         public Users UpdateUser(Users user)
            => _userRepository.UpdateUser(user);
     }

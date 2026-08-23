@@ -13,9 +13,9 @@ namespace CitizenHackathon2025.API.Controllers
     public class TestController : ControllerBase
     {
         private readonly CitizenSuggestionService _service;
-        private readonly IPasswordHasher _hasher;
+        private readonly ILegacyPasswordHasher _hasher;
 
-        public TestController(CitizenSuggestionService service, IPasswordHasher hasher)
+        public TestController(CitizenSuggestionService service, ILegacyPasswordHasher hasher)
         {
             _service = service;
             _hasher = hasher;

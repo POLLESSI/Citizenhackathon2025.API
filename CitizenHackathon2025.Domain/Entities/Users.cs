@@ -6,14 +6,24 @@ namespace CitizenHackathon2025.Domain.Entities
     {
         public int Id { get; private set; }
         public string Email { get; set; } = string.Empty;
+
+        /*
+         * LEGACY SHA512 ONLY.
+         *
+         * Remove after migration.
+         */
+        public byte[]? PasswordHash { get; set; }
+
+        /*
+         * Current ASP.NET Core Identity hash.
+         */
+        public string? PasswordHashV2 { get; set; }
         public Guid SecurityStamp { get; set; } = Guid.Empty;
-        public byte[] PasswordHash { get; set; } = Array.Empty<byte>();
-        public UserRole Role { get; set; } = UserRole.User; // ✅ enum instead of string
-        public UserStatus Status { get; set; } // Dapper automatically maps the DB int
+        public UserRole Role { get; set; } = UserRole.User;
+        public UserStatus Status { get; set; }
         public bool Active { get; private set; } = true;
         public void Activate() => Active = true;
         public void Deactivate() => Active = false;
-
     }
 }
 

@@ -33,10 +33,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
             // revokes existing assets
             var now = DateTime.UtcNow;
-            var existing = await _repo.GetByEmailAsync(email);
-            foreach (var t in existing.Where(t => t.Status == RefreshTokenStatus.Active && t.ExpiryDate > now))
-                await _repo.UpdateStatusAsync(t.Id, RefreshTokenStatus.Revoked);
-
+            
             // generate token + (salt, hash) for the DB
             var (token, salt, hash) = Create();
 

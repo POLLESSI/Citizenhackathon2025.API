@@ -4,7 +4,7 @@ using System.Text;
 
 namespace CitizenHackathon2025.Shared.Services
 {
-    public class Sha512PasswordHasher : IPasswordHasher
+    public class Sha512PasswordHasher : ILegacyPasswordHasher
     {
         public byte[] HashPassword(string password, string securityStamp)
         {

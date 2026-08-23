@@ -7,13 +7,16 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<Users?> GetUserByEmailAsync(string email);
         Task<Users?> GetUserByIdAsync(int id);
         Task<IEnumerable<Users>> GetAllActiveUsersAsync();
-        Task<Users> RegisterUserAsync(string email, byte[] passwordHash, Users user);
-        Task<bool> LoginAsync(string email, string password);
-        Task<Users?> LoginUsingProcedureAsync(string email, string password);
+        Task<Users> RegisterUserAsync(Users user);
         Task DeactivateUserAsync(int id);
         Task AnonymizeUserAsync(int userId, CancellationToken ct = default);
         void SetRole(int id, string? role);
         Users? UpdateUser(Users user);
+
+        // =====================================================
+        // PASSWORD HASH V2
+        // =====================================================
+        Task UpdatePasswordHashV2Async(int userId, string passwordHashV2);
     }
 }
 

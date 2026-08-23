@@ -1,6 +1,7 @@
 ﻿using CitizenHackathon2025.API.Tools; 
 using CitizenHackathon2025.Application.Interfaces;
 using CitizenHackathon2025.Contracts.Enums;
+using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.DTOs.DTOs;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -97,16 +98,39 @@ namespace CitizenHackathon2025.API.Controllers
         // -----------------------------
         public sealed class LogoutDTO { public string RefreshToken { get; init; } = ""; }
 
-        [Authorize]
+        [AllowAnonymous]
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout([FromBody] LogoutDTO dto)
+        public async Task<IActionResult> Logout([FromBody] LogoutSessionRequest request)
         {
-            if (string.IsNullOrWhiteSpace(dto.RefreshToken)) return BadRequest("Missing token");
-            var email = User.FindFirstValue(ClaimTypes.Email) ?? User.Identity?.Name;
-            if (string.IsNullOrWhiteSpace(email)) return Unauthorized(new { Message = "No email in principal" });
+            if (request is not null && !string.IsNullOrWhiteSpace(request.Email) && !string.IsNullOrWhiteSpace(request.RefreshToken))
+            {
+                try
+                {
+                    await _refreshTokenService.InvalidateAsync(request.RefreshToken.Trim(), request.Email.Trim());
+                }
+                catch (Exception ex)
+                {
+                    /*
+                     * Don't expose whether a refresh token
+                     * exists.
+                     */
+                    _logger.LogWarning(ex, "Refresh-token revocation failed during logout.");
+                }
+            }
 
-            await _refreshTokenService.InvalidateAsync(dto.RefreshToken, email);
-            return Ok(new { message = "Logged out successfully" });
+            Response.Cookies.Delete( Cookies.JwtTokenName,
+                new CookieOptions
+                {
+                    Secure = true,
+                    SameSite = SameSiteMode.None,
+                    Path = "/"
+                });
+
+            return Ok(
+                new
+                {
+                    Message = "Logged out."
+                });
         }
 
         // -----------------------------
@@ -149,30 +173,104 @@ namespace CitizenHackathon2025.API.Controllers
         // -----------------------------
         [AllowAnonymous]
         [HttpPost("refresh")]
-        public async Task<IActionResult> Refresh([FromBody] RefreshDTO request)
+        public async Task<IActionResult> Refresh([FromBody] RefreshSessionRequest request)
         {
-            var user = await _userService.GetUserByIdAsync(request.UserId);
-            if (user is null) return Unauthorized(new { Message = "User not found" });
+            if (request is null ||
+                string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.RefreshToken))
+            {
+                return Unauthorized(
+                    new
+                    {
+                        Message = "Invalid or expired session."
+                    });
+            }
 
-            if (!await _refreshTokenService.ValidateAsync(request.RefreshToken, user.Email))
-                return Unauthorized(new { Message = "Invalid or expired refresh token" });
+            var email = request.Email.Trim();
 
-            var newAccess = _tokenGenerator.GenerateToken(user.Email, user.Role);
-            var newRefresh = await _refreshTokenService.GenerateAsync(user.Email);
-            await _refreshTokenService.InvalidateAsync(request.RefreshToken, user.Email);
+            var refreshToken = request.RefreshToken.Trim();
 
-            // ---- SESSION TRACKING (new JWT session) ----
+            // ---------------------------------------------------------
+            // 1. Validate current refresh token
+            // ---------------------------------------------------------
+
+            var valid = await _refreshTokenService.ValidateAsync(refreshToken, email);
+
+            if (!valid)
+            {
+                _logger.LogWarning("Refresh token rejected for {Email}", email);
+
+                return Unauthorized(
+                    new
+                    {
+                        Message = "Invalid or expired session."
+                    });
+            }
+
+            // ---------------------------------------------------------
+            // 2. User must still be authorized to use OutZen
+            // ---------------------------------------------------------
+
+            var user = await _userService.GetUserByEmailAsync(email);
+
+            if (user is null || !user.Active || user.Status != UserStatus.Active)
+            {
+                /*
+                 * Revoke the token if the account
+                 * became unavailable.
+                 */
+                await _refreshTokenService.InvalidateAsync(refreshToken, email);
+
+                return Unauthorized(
+                    new
+                    {
+                        Message = "Invalid or expired session."
+                    });
+            }
+
+            // ---------------------------------------------------------
+            // 3. Consume previous refresh token
+            // ---------------------------------------------------------
+
+            await _refreshTokenService.InvalidateAsync(refreshToken, email);
+                    
+            // ---------------------------------------------------------
+            // 4. Generate a new pair
+            // ---------------------------------------------------------
+
+            var newAccessToken = _tokenGenerator.GenerateToken(user.Email, user.Role);
+
+            var newRefreshToken = await _refreshTokenService.GenerateAsync(user.Email);
+
+            // ---------------------------------------------------------
+            // 5. Session tracking
+            // ---------------------------------------------------------
+
             try
             {
-                await _userSessionService.TrackAccessTokenAsync(
-                    newAccess, user.Email, SessionSource.Api, HttpContext);
+                await _userSessionService.TrackAccessTokenAsync(newAccessToken, user.Email, SessionSource.Api, HttpContext);
             }
             catch (Exception ex)
             {
+                /*
+                 * Tracking failure does NOT invalidate
+                 * an otherwise successful refresh.
+                 */
                 _logger.LogError(ex, "Session tracking failed at refresh for {Email}", user.Email);
             }
 
-            return Ok(new{ AccessToken = newAccess, RefreshToken = newRefresh.Token});
+            _logger.LogInformation("Access token refreshed for {Email}", user.Email);
+
+            // ---------------------------------------------------------
+            // 6. Return rotated pair
+            // ---------------------------------------------------------
+
+            return Ok(
+                new TokenPairResponse
+                {
+                    AccessToken = newAccessToken,
+
+                    RefreshToken = newRefreshToken.Token
+                });
         }
     }
 }
