@@ -70,7 +70,6 @@ using CitizenHackathon2025.Infrastructure.UseCases;
 using CitizenHackathon2025.Shared.Interfaces;
 using CitizenHackathon2025.Shared.Notifications;
 using CitizenHackathon2025.Shared.Options;
-using CitizenHackathon2025.Shared.Services;
 using CitizenHackathon2025.Shared.StaticConfig.Constants;
 using CitizenHackathon2025.Worker.Gpt;
 using Dapper;
@@ -1049,7 +1048,9 @@ internal class Program
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
         services.AddScoped<ILocalAiDataRepository, LocalAiDataRepository>();
-        services.AddScoped<IPasswordHasher<Users>,PasswordHasher<Users>>();
+        //services.AddScoped<IPasswordHasher<Users>,PasswordHasher<Users>>();
+        services.AddScoped<PasswordHasher<Users>>();
+        services.AddScoped<IPasswordHasher<Users>,OutZenPasswordHasher>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
         services.AddScoped<IProfanityRepository, ProfanityRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
@@ -1111,7 +1112,6 @@ internal class Program
         services.AddScoped<IPlaceNameResolver, PlaceNameResolver>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
         services.AddScoped<INotificationService, NotificationService>();
-        services.AddScoped<ILegacyPasswordHasher, Sha512PasswordHasher>();
         services.AddScoped<IPlaceService, PlaceService>();
         services.AddScoped<IPredictionEngine, PredictionEngine>();
         services.AddScoped<IProfanityService, ProfanityService>();

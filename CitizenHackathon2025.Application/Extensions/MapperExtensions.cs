@@ -505,21 +505,31 @@ namespace CitizenHackathon2025.Application.Extensions
         /// <summary>
         /// Maps a UserDTO to a User entity (PasswordHash to be managed separately).
         /// </summary>
-        public static Domain.Entities.Users MapToUserEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
+        public static Domain.Entities.Users MapToUserEntity(this UserDTO dto, Guid securityStamp)
         {
-            if (!Guid.TryParse(securityStamp, out var parsedStamp))
-                throw new ArgumentException("Invalid GUID format for security stamp", nameof(securityStamp));
+            ArgumentNullException.ThrowIfNull(dto);
 
-            var user = new Domain.Entities.Users
+            if (string.IsNullOrWhiteSpace(dto.Email))
             {
-                Email = dto.Email,
-                PasswordHash = hashPasswordFunc(dto.Pwd, securityStamp),
-                SecurityStamp = parsedStamp,
-                Role = Enum.Parse<UserRole>(dto.Role, ignoreCase: true),
-                Status = Status.Pending.ToUserStatus()
-            };
+                throw new ArgumentException("Email cannot be empty.", nameof(dto));
+            }
+
+            if (!Enum.TryParse<UserRole>(dto.Role, ignoreCase: true, out var role))
+            {
+                throw new ArgumentException($"Invalid user role '{dto.Role}'.", nameof(dto));
+            }
+
+            var user =
+                new Domain.Entities.Users
+                {
+                    Email = dto.Email.Trim(),
+                    SecurityStamp = securityStamp,
+                    Role = role,
+                    Status = Status.Pending.ToUserStatus()
+                };
 
             user.Activate();
+
             return user;
         }
         // ============================

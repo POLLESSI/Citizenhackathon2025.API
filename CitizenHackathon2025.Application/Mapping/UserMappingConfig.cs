@@ -20,7 +20,8 @@ namespace CitizenHackathon2025.Application.Mapping
                 .Map(dest => dest.Email, src => src.Email)
                 .Map(dest => dest.Role, src => Enum.Parse<UserRole>(src.Role ?? "", true))
                 .Ignore(dest => dest.Id)
-                .Ignore(dest => dest.PasswordHash)
+                .Ignore(dest => dest.PasswordHashV2)
+                .Ignore(dest => dest.SecurityStamp)
                 .Ignore(dest => dest.Status) // to be defined later
                 .Ignore(dest => dest.Active);
         }

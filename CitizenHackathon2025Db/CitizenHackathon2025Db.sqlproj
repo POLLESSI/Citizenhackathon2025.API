@@ -80,8 +80,6 @@
     <Build Include="Tables\Users.sql" />
     <Build Include="Tables\WeatherForecast.sql" />
     <Build Include="Programmability\Functions\fHasher.sql" />
-    <Build Include="Programmability\Procedures\spAuth\sqlUserLogin.sql" />
-    <Build Include="Programmability\Procedures\spAuth\sqlUserRegister.sql" />
     <Build Include="Tables\RefreshTokens.sql" />
     <Build Include="Tables\Logs.sql" />
     <Build Include="Tables\CrowdCalendar.sql" />

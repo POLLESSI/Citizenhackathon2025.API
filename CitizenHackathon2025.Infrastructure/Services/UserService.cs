@@ -4,7 +4,6 @@ using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -117,11 +116,6 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     Role = role,
                     SecurityStamp = Guid.NewGuid(),
                     Status = UserStatus.Active,
-
-                    /*
-                     * No legacy hash for new accounts.
-                     */
-                    PasswordHash = null
                 };
 
             newUser.Activate();

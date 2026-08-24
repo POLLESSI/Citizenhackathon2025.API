@@ -21,50 +21,57 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         // =========================================
         public Task<Users?> GetUserByEmailAsync(string email)
         {
-            const string sql = @"
-                        SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash,  PasswordHashV2, Role, Status, Active
-                        FROM [Users]
-                        WHERE Email = @Email;";
-            DynamicParameters parameters = new DynamicParameters();
-            parameters.Add("@Email", email, DbType.String, size: 64);
+            const string sql = """
+                            SELECT TOP(1)
+                                Id,
+                                Email,
+                                SecurityStamp,
+                                PasswordHashV2,
+                                Role,
+                                Status,
+                                Active
+                            FROM dbo.Users
+                            WHERE Email = @Email;
+                            """;
 
-            return _connection.QueryFirstOrDefaultAsync<Users>(sql, parameters);
+            return _connection.QueryFirstOrDefaultAsync<Users>(sql, new { Email = email.Trim() });
         }
 
         public Task<Users?> GetUserByIdAsync(int id)
         {
-            const string sql = @"
-                        SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash,  PasswordHashV2, Role, Status, Active
-                        FROM [Users]
-                        WHERE Id = @Id;";
-            DynamicParameters parameters = new DynamicParameters();
-            parameters.Add("@Id", id, DbType.Int32);
-            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
-            parameters.Add("@PasswordHashV2", dbType: DbType.String, size: 128);
-            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
-            parameters.Add("@Role", dbType: DbType.Int32);
-            parameters.Add("@Status", dbType: DbType.Int32);
+            const string sql = """
+                            SELECT TOP(1)
+                                Id,
+                                Email,
+                                SecurityStamp,
+                                PasswordHashV2,
+                                Role,
+                                Status,
+                                Active
+                            FROM dbo.Users
+                            WHERE Id = @Id;
+                            """;
 
-            return _connection.QueryFirstOrDefaultAsync<Users>(sql, parameters);
+            return _connection.QueryFirstOrDefaultAsync<Users>( sql, new { Id = id });
         }
 
         public Task<IEnumerable<Users>> GetAllActiveUsersAsync()
         {
-            const string sql = @"
-                        SELECT Id, Email, SecurityStamp, PasswordHash,  PasswordHashV2, Role, Status, Active
-                        FROM [Users]
-                        WHERE Active = 1
-                        ORDER BY Id DESC;";
-            DynamicParameters parameters = new DynamicParameters();
-            parameters.Add("@Id", dbType: DbType.Int32);
-            parameters.Add("@Email", dbType: DbType.String, size: 64);
-            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
-            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
-            parameters.Add("@PasswordHashV2", dbType: DbType.String, size: 128);
-            parameters.Add("@Role", dbType: DbType.Int32);
-            parameters.Add("@Status", dbType: DbType.Int32);
+            const string sql = """
+                            SELECT
+                                Id,
+                                Email,
+                                SecurityStamp,
+                                PasswordHashV2,
+                                Role,
+                                Status,
+                                Active
+                            FROM dbo.Users
+                            WHERE Active = 1
+                            ORDER BY Id DESC;
+                            """;
 
-            return _connection.QueryAsync<Users>(sql, parameters);
+            return _connection.QueryAsync<Users>(sql);
         }
 
         // =========================================
@@ -90,7 +97,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             INSERT INTO dbo.Users
                             (
                                 Email,
-                                PasswordHash,
                                 PasswordHashV2,
                                 SecurityStamp,
                                 Role,
@@ -100,7 +106,6 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                             VALUES
                             (
                                 @Email,
-                                NULL,
                                 @PasswordHashV2,
                                 @SecurityStamp,
                                 @Role,
@@ -126,23 +131,23 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public async Task AnonymizeUserAsync(int userId, CancellationToken ct = default)
         {
-            const string sql = @"
+            const string sql = """
                             UPDATE dbo.Users
-                            SET Email = CONCAT('deleted-', Id, '@example.com'),
-                                PasswordHash = NULL,
+                            SET
+                                Email = CONCAT('deleted-', Id,'@example.com'),
                                 PasswordHashV2 = NULL,
                                 SecurityStamp = NEWID()
-                            WHERE Id = @UserId";
-            dynamic parameters = new DynamicParameters();
-            parameters.Add("@UserId", userId, DbType.Int32);
-            parameters.Add("@Email", DbType.String, size: 64);
-            parameters.Add("@PasswordHash", dbType: DbType.Binary, size: 64);
-            parameters.Add("@PasswordHashV2", dbType: DbType.String, size: 128);
-            parameters.Add("@SecurityStamp", dbType: DbType.Guid);
-            parameters.Add("@Role", dbType: DbType.Int32);
-            parameters.Add("@Status", dbType: DbType.Int32);
+                            WHERE Id = @UserId;
+                            """;
 
-            await _connection.ExecuteAsync(sql, new { UserId = userId }, commandType: CommandType.Text);
+            await _connection.ExecuteAsync(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        UserId = userId
+                    },
+                    cancellationToken: ct));
         }
 
         // =========================================
@@ -172,18 +177,34 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
 
         public Users? UpdateUser(Users user)
         {
-            const string sql = @"
-                            UPDATE [Users]
-                            SET Email=@Email, Role=@Role, Status=@Status, Active=@Active
-                            WHERE Id=@Id;
+            ArgumentNullException.ThrowIfNull(user);
+
+            const string sql = """
+                            UPDATE dbo.Users
+                            SET
+                                Email = @Email,
+                                Role = @Role,
+                                Status = @Status,
+                                Active = @Active
+                            WHERE Id = @Id;
 
                             IF @@ROWCOUNT = 0
                                 RETURN;
 
-                            SELECT TOP(1) Id, Email, SecurityStamp, PasswordHash, PasswordHashV2, Role, Status, Active
-                            FROM [Users]
-                            WHERE Id=@Id;";
-            DynamicParameters parameters = new DynamicParameters();
+                            SELECT TOP(1)
+                                Id,
+                                Email,
+                                SecurityStamp,
+                                PasswordHashV2,
+                                Role,
+                                Status,
+                                Active
+                            FROM dbo.Users
+                            WHERE Id = @Id;
+                            """;
+
+            var parameters = new DynamicParameters();
+
             parameters.Add("@Id", user.Id, DbType.Int32);
             parameters.Add("@Email", user.Email, DbType.String, size: 64);
             parameters.Add("@Role", (int)user.Role, DbType.Int32);
@@ -194,13 +215,9 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
         }
 
         // =========================================
-        // Helpers
+        // PASSWORD HASH
         // =========================================
 
-        /// <summary>
-        /// Reproduced HASHBYTES('SHA2_512', @Password + CONVERT(NVARCHAR(36), @SecurityStamp))
-        /// NVARCHAR -> UTF-16 THE (Encoding.Unicode).
-        /// </summary>
         public async Task UpdatePasswordHashV2Async(int userId, string passwordHashV2)
         {
             if (userId <= 0)
@@ -224,8 +241,7 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 new
                 {
                     UserId = userId,
-                    PasswordHashV2 =
-                        passwordHashV2
+                    PasswordHashV2 = passwordHashV2
                 });
 
             if (affected != 1)

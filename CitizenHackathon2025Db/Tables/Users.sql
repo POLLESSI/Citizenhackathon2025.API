@@ -1,11 +1,12 @@
 ﻿CREATE TABLE [dbo].[Users] (
     [Id] INT IDENTITY(1,1) NOT NULL,
     [Email] NVARCHAR(64) NOT NULL,
-    [PasswordHash] BINARY(64) NOT NULL,         -- SHA-512 = 64 octets
+    [PasswordHashV2] NVARCHAR(512) NOT NULL,        
     [SecurityStamp] UNIQUEIDENTIFIER NOT NULL,  -- used to invalidate tokens
-    [Role] INT DEFAULT 0,              -- UserRole (enum : 0=User, 1=Admin, 2=Modo, 4=Guest)
+    [Role] INT NOT NULL  CONSTRAINT DF_Users_Role DEFAULT 0,              -- UserRole (enum : 0=User, 1=Admin, 2=Modo, 4=Guest)
     [Status] INT NOT NULL,                      -- Status (ex: 0=Inactive, 1=Active, 2=Banned ?)
-    [Active] BIT NOT NULL DEFAULT 1,            -- Soft delete
+    [Active] BIT NOT NULL CONSTRAINT DF_Users_Active DEFAULT 1,  
+    -- Soft delete
     CONSTRAINT [PK_Users] PRIMARY KEY ([Id]),
     CONSTRAINT [UQ_Users_Email] UNIQUE ([Email]),
     CONSTRAINT [UQ_Users_SecurityStamp] UNIQUE ([SecurityStamp]),
@@ -18,6 +19,8 @@ ON [dbo].[Users]
 INSTEAD OF DELETE
 AS
 BEGIN
+    SET NOCOUNT ON;
+
     UPDATE [dbo].[Users]
     SET Active = 0
     WHERE Id IN (SELECT Id FROM deleted);

@@ -8,13 +8,6 @@ namespace CitizenHackathon2025.Domain.Entities
         public string Email { get; set; } = string.Empty;
 
         /*
-         * LEGACY SHA512 ONLY.
-         *
-         * Remove after migration.
-         */
-        public byte[]? PasswordHash { get; set; }
-
-        /*
          * Current ASP.NET Core Identity hash.
          */
         public string? PasswordHashV2 { get; set; }

@@ -1,15 +1,16 @@
-﻿using CitizenHackathon2025.Domain.Entities;
+﻿using CitizenHackathon2025.Application.Extensions;
+using CitizenHackathon2025.Domain.Entities;
 using CitizenHackathon2025.DTOs.DTOs;
-using CitizenHackathon2025.Application.Extensions;
 
 namespace CitizenHackathon2025.Application.Mappings
 {
     public static class UserMappingExtensions
     {
-        public static UserDTO ToDTO(this Users user) => user.UserToDTO();
+        public static UserDTO ToDTO(this Users user)
+            => user.UserToDTO();
 
-        public static Users ToEntity(this UserDTO dto, Func<string, string, byte[]> hashPasswordFunc, string securityStamp)
-            => dto.MapToUserEntity(hashPasswordFunc, securityStamp);
+        public static Users ToEntity(this UserDTO dto, Guid securityStamp)
+            => dto.MapToUserEntity(securityStamp);
     }
 }
 
