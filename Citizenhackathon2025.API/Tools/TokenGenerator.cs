@@ -78,13 +78,22 @@ namespace CitizenHackathon2025.API.Tools
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512);
 
-            // Email/Name (robust fallbacks)
-            var email =
-                   principal.FindFirstValue(ClaimTypes.Email)
+            if (principal.Identity?.IsAuthenticated != true)
+            {
+                throw new SecurityTokenException(
+                    "Cannot issue a hub token " +
+                    "for an unauthenticated principal.");
+            }
+
+            var email = principal.FindFirstValue(ClaimTypes.Email)
                 ?? principal.FindFirstValue(JwtRegisteredClaimNames.Email)
                 ?? principal.FindFirstValue(ClaimTypes.Name)
-                ?? principal.Identity?.Name
-                ?? "unknown@local";
+                ?? principal.Identity?.Name;
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new SecurityTokenException("Cannot issue a hub token " + "without a valid user identity.");
+            }
 
             // Roles: retrieve all existing roles
             var roles = principal.FindAll(ClaimTypes.Role).Select(c => c.Value).Distinct().ToList();

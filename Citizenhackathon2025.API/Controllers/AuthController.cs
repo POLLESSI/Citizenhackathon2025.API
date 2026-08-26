@@ -32,27 +32,6 @@ namespace CitizenHackathon2025.API.Controllers
             _userSessionService = userSessionService;               
         }
 
-        [Authorize]
-        [HttpGet("me")]
-        public IActionResult Me()
-        {
-            var email = User.FindFirstValue(ClaimTypes.Email) ?? User.Identity?.Name;
-
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                return Unauthorized();
-            }
-
-            var roles = User.FindAll(ClaimTypes.Role).Select(x => x.Value).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-
-            return Ok(new
-            {
-                IsAuthenticated = true,
-                Email = email,
-                Roles = roles
-            });
-        }
-
         // -----------------------------
         // LOGIN
         // -----------------------------

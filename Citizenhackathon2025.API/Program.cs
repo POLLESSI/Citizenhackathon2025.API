@@ -165,6 +165,12 @@ internal class Program
         services.AddInfrastructure();
         services.AddInfrastructureServices();
         services.AddOutZenServices();
+        services
+            .AddOptions<GeoPortalFeedOptions>()
+            .Bind(builder.Configuration.GetSection(GeoPortalFeedOptions.SectionName))
+            .Validate(options => options.Sources.Count > 0, "At least one GeoPortal RSS source must be configured.")
+            .Validate(options => options.MaxFeedBytes >= 32_768, "GeoPortal MaxFeedBytes is too small.")
+            .ValidateOnStart();
 
         var hasDbConnectionRegistration = services.Any(descriptor => descriptor.ServiceType == typeof(IDbConnection));
 
@@ -998,6 +1004,16 @@ internal class Program
             client.Timeout = TimeSpan.FromSeconds(60);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen-CrowdDecision/1.0");
             client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        });
+
+        services.AddHttpClient<IGeoPortalFeedService, GeoPortalFeedService>(
+        client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("OutZen-GeoPortal-Monitor/1.0");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/rss+xml");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
+            client.DefaultRequestHeaders.Accept.ParseAdd("text/xml");
         });
     }
 
