@@ -573,6 +573,7 @@ internal class Program
             o.AddPolicy(Policies.GuestPolicy, p => p.RequireRole(Roles.Guest));
             o.AddPolicy("AdminOrModo", p => p.RequireRole(Roles.Admin, Roles.Moderator));
             o.AddPolicy("CrowdSafetyPolicy", p => p.RequireRole(Roles.Admin, Roles.LawEnforcement));
+            o.AddPolicy("AdminOnly", p => { p.RequireAuthenticatedUser(); p.RequireRole("Admin"); });
         });
     }
 
@@ -1064,7 +1065,7 @@ internal class Program
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IGptInteractionRepository, GptInteractionsRepository>();
         services.AddScoped<ILocalAiDataRepository, LocalAiDataRepository>();
-        //services.AddScoped<IPasswordHasher<Users>,PasswordHasher<Users>>();
+        services.AddScoped<IUserMessageAdminQueueRepository, UserMessageAdminQueueRepository>();
         services.AddScoped<PasswordHasher<Users>>();
         services.AddScoped<IPasswordHasher<Users>,OutZenPasswordHasher>();
         services.AddScoped<IPlaceRepository, PlaceRepository>();
@@ -1125,9 +1126,10 @@ internal class Program
         services.AddScoped<IGptOrchestrator, GptOrchestrator>();
         services.AddScoped<ILanguagePromptBuilder, LanguagePromptBuilder>();
         services.AddScoped<ILocalAiContextService, LocalAiContextService>();
-        services.AddScoped<IPlaceNameResolver, PlaceNameResolver>();
         services.AddScoped<IMessageCorrelationService, MessageCorrelationService>();
+        services.AddScoped<IMessageTriageService, MessageTriageService>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IPlaceNameResolver, PlaceNameResolver>();
         services.AddScoped<IPlaceService, PlaceService>();
         services.AddScoped<IPredictionEngine, PredictionEngine>();
         services.AddScoped<IProfanityService, ProfanityService>();

@@ -1,4 +1,6 @@
-﻿namespace CitizenHackathon2025.Domain.DTOs
+﻿using CitizenHackathon2025.Contracts.DTOs;
+
+namespace CitizenHackathon2025.Domain.DTOs
 {
     public sealed class LocalAiContextDTO
     {
@@ -21,6 +23,7 @@
         public List<LocalAiTrafficContextDTO> Traffic { get; init; } = new();
         public List<LocalAiWeatherContextDTO> Weather { get; init; } = new();
         public List<LocalAiCriticalAlertContextDTO> CriticalAlerts { get; set; } = new();
+        public List<LocalAiUserReportContextDTO> UserReports { get; set; } = new();
 
         public bool HasChildren { get; set; }
         public bool PreferIndoorWhenRain { get; set; } = true;

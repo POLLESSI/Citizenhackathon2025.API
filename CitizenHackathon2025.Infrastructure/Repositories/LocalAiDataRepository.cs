@@ -1,4 +1,5 @@
 ﻿using CitizenHackathon2025.Application.Interfaces;
+using CitizenHackathon2025.Contracts.DTOs;
 using CitizenHackathon2025.Domain.DTOs;
 using CitizenHackathon2025.Domain.Interfaces;
 using CitizenHackathon2025.Infrastructure.Persistence;
@@ -1031,6 +1032,89 @@ namespace CitizenHackathon2025.Infrastructure.Repositories
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(8)
                 .ToList();
+        }
+
+        public async Task<IEnumerable<LocalAiUserReportContextDTO>> GetNearbyUserReportsAsync(double latitude, double longitude, double radiusKm, DateTime sinceUtc, int limit = 10, CancellationToken ct = default)
+        {
+            const string sql = """
+                            DECLARE @Origin geography = geography::Point(@Latitude, @Longitude, 4326);
+
+                            WITH UserReportBase AS
+                            (
+                                SELECT um.Id, 
+                                    um.Content, 
+                                    um.SourceType,
+                                    um.RelatedName,
+                                    Latitude = CAST(um.Latitude AS float),
+                                    Longitude = CAST(um.Longitude AS float),
+                                    um.CreatedAt,
+                                    DistanceKm = @Origin.STDistance(geography::Point(CAST(um.Latitude AS float), CAST(um.Longitude AS float), 4326)) / 1000.0
+
+                                FROM dbo.UserMessage um
+
+                                WHERE um.Active = 1
+
+                                  /*
+                                   * Only sufficiently recent comments
+                                   * can influence the real-time context.
+                                   */
+                                  AND um.CreatedAt >= @SinceUtc
+
+                                  /*
+                                   * For the local Mistral context,
+                                   * a geographical correlation is required.
+                                   */
+                                  AND um.Latitude IS NOT NULL
+                                  AND um.Longitude IS NOT NULL
+
+                                  AND um.Latitude BETWEEN -90 AND 90
+                                  AND um.Longitude BETWEEN -180 AND 180
+
+                                  AND NOT
+                                  (
+                                      um.Latitude = 0
+                                      AND um.Longitude = 0
+                                  )
+
+                                  /*
+                                   * The comment must contain something
+                                   * exploitable.
+                                   */
+                                  AND NULLIF(LTRIM(RTRIM(um.Content)), '') IS NOT NULL
+                            )
+
+                            SELECT TOP (@Limit)
+                                Id,
+                                Content,
+                                SourceType,
+                                RelatedName,
+                                Latitude,
+                                Longitude,
+                                CreatedAt,
+                                DistanceKm
+
+                            FROM UserReportBase
+
+                            WHERE DistanceKm <= @RadiusKm
+
+                            ORDER BY
+                                CreatedAt DESC,
+                                DistanceKm ASC;
+                            """;
+
+            var parameters = new DynamicParameters();
+
+            parameters.Add("@Latitude", latitude, DbType.Double);
+            parameters.Add("@Longitude", longitude, DbType.Double);
+            parameters.Add("@RadiusKm", radiusKm, DbType.Double);
+            parameters.Add("@SinceUtc", sinceUtc, DbType.DateTime2);
+            parameters.Add("@Limit", Math.Clamp(limit, 1, 20), DbType.Int32);
+
+            using var connection = await OpenConnectionAsync(ct);
+
+            return await connection
+                .QueryAsync<LocalAiUserReportContextDTO>(
+                    new CommandDefinition(sql, parameters, cancellationToken: ct));
         }
     }
 }

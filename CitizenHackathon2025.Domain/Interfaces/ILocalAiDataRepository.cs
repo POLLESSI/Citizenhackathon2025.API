@@ -1,4 +1,5 @@
-﻿using CitizenHackathon2025.Domain.DTOs;
+﻿using CitizenHackathon2025.Contracts.DTOs;
+using CitizenHackathon2025.Domain.DTOs;
 
 namespace CitizenHackathon2025.Domain.Interfaces
 {
@@ -43,6 +44,7 @@ namespace CitizenHackathon2025.Domain.Interfaces
         Task<IEnumerable<LocalAiWeatherContextDTO>>GetNearbyWeatherAsync(double latitude, double longitude, DateTime dateFrom, DateTime dateToExclusive, double radiusKm, CancellationToken ct = default);
         Task<IEnumerable<LocalAiSuggestionContextDTO>> GetNearbySuggestionsAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default);
         Task<IEnumerable<LocalAiCriticalAlertContextDTO>> GetNearbyCriticalAlertsAsync(double latitude, double longitude, double radiusKm, CancellationToken ct = default);
+        Task<IEnumerable<LocalAiUserReportContextDTO>> GetNearbyUserReportsAsync(double latitude, double longitude, double radiusKm, DateTime sinceUtc, int limit = 10, CancellationToken ct = default);
     }
 }
 

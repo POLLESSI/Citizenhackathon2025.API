@@ -5,8 +5,8 @@ using Microsoft.Extensions.Logging;
 
 namespace CitizenHackathon2025.Hubs.Hubs
 {
-    [Authorize(Policy = Policies.UserPolicy)]
-    public class MessageHub : Hub
+    [Authorize]
+    public sealed class MessageHub : Hub
     {
         private readonly ILogger<MessageHub> _logger;
 
@@ -15,10 +15,14 @@ namespace CitizenHackathon2025.Hubs.Hubs
             _logger = logger;
         }
 
-        public override Task OnConnectedAsync()
+        public override async Task OnConnectedAsync()
         {
-            _logger.LogInformation("[MessageHub] Connected: {Conn}", Context.ConnectionId);
-            return base.OnConnectedAsync();
+            if (Context.User?.Identity ?.IsAuthenticated == true && Context.User.IsInRole(Roles.Admin))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, "admins");
+            }
+
+            await base.OnConnectedAsync();
         }
 
         public override Task OnDisconnectedAsync(Exception? exception)
