@@ -1,9 +1,6 @@
 ﻿using CitizenHackathon2025.DTOs.DTOs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-//using OpenAI_API;
-//using OpenAI_API.Chat;
-//using OpenAI_API.Models;
 
 namespace CitizenHackathon2025.Infrastructure.Services
 {
@@ -39,23 +36,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                     return null;
                 }
             }, TimeSpan.FromMinutes(15));
-            //{
-            //    try
-            //    {
-            //        //var chat = _openAi.Chat.CreateConversation();
-            //        //chat.Model = Model.GPT4; // Or GPT4o if available
-            //        //chat.AppendSystemMessage("You are a tourist assistant who suggests activities depending on the weather.");
-            //        //chat.AppendUserInput($"Here is the current weather in {weather.Location} : {weather.WeatherDescription}, {weather.TemperatureCelsius} °C. Que recommandes-tu ?");
-
-            //        //var result = await chat.GetResponseFromChatbotAsync();
-            //        //return result;
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        _logger.LogError(ex, "Error with OpenAI.");
-            //        return null;
-            //    }
-            //}, TimeSpan.FromMinutes(15));
+            
         }
     }
 }
