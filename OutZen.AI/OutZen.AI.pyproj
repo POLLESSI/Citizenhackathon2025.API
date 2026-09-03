@@ -40,9 +40,46 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="app\" />
+    <Folder Include="app\api\" />
+    <Folder Include="app\core\" />
+    <Folder Include="app\models\" />
+    <Folder Include="app\services\" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="app\api\generation.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\api\health.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\api\__init__.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\core\config.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\core\security.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\core\__init__.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="app\main.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\models\requests.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\models\responses.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\models\__init__.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\services\ollama_service.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="app\services\__init__.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="app\__init__.py">
@@ -50,7 +87,17 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="requirements.txt" />
+    <Content Include=".env">
+      <SubType>Code</SubType>
+    </Content>
+    <Content Include=".env.example">
+      <SubType>Code</SubType>
+    </Content>
+    <Content Include="app\.gitignore" />
+    <Content Include="app\.venv">
+      <SubType>Code</SubType>
+    </Content>
+    <Content Include="app\requirements.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.Web.targets" />
   <!-- Specify pre- and post-build commands in the BeforeBuild and 

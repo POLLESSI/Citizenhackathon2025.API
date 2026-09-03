@@ -44,6 +44,7 @@ using CitizenHackathon2025.Hubs.Filters;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Hubs.Services;
 using CitizenHackathon2025.Infrastructure;
+using CitizenHackathon2025.Infrastructure.AI.FastApi;
 using CitizenHackathon2025.Infrastructure.Background;
 //using CitizenHackathon2025.Infrastructure.Dapper.TypeHandlers;
 using CitizenHackathon2025.Infrastructure.Extensions;
@@ -171,7 +172,7 @@ internal class Program
             .Validate(options => options.Sources.Count > 0, "At least one GeoPortal RSS source must be configured.")
             .Validate(options => options.MaxFeedBytes >= 32_768, "GeoPortal MaxFeedBytes is too small.")
             .ValidateOnStart();
-
+        
         var hasDbConnectionRegistration = services.Any(descriptor => descriptor.ServiceType == typeof(IDbConnection));
 
         Console.WriteLine($"IDbConnection registered: " + $"{hasDbConnectionRegistration}");
@@ -200,7 +201,6 @@ internal class Program
             Console.Error.WriteLine("========== FATAL STARTUP ERROR ==========");
 
             Console.Error.WriteLine(ex.ToString());
-
             Console.Error.WriteLine("=========================================");
 
             Log.Fatal(ex, "CitizenHackathon2025 API startup failed.");
@@ -394,6 +394,12 @@ internal class Program
         services.AddOptions<WeatherForecastArchiverOptions>("Weather")
             .Bind(configuration.GetSection("Archivers:Weather"))
             .ValidateOnStart();
+
+        services.AddOptions<FastApiAiOptions>().Bind(configuration.GetSection(FastApiAiOptions.SectionName))
+       .ValidateDataAnnotations()
+       .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _), "FastApiAI:BaseUrl must be " + "a valid absolute URL.")
+       .Validate(options => !string.IsNullOrWhiteSpace(options.InternalApiKey) && options.InternalApiKey.Length >= 32, "FastApiAI:InternalApiKey " + "is missing or invalid.")
+       .ValidateOnStart();
 
         services.AddSingleton(sp =>
         {
@@ -805,22 +811,14 @@ internal class Program
             client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025/1.0");
         });
 
-        services.AddHttpClient<IMistralAIService, MistralAIService>((sp, client) =>
+        services.AddHttpClient<IMistralAIService, FastApiMistralAIService>().ConfigureHttpClient((IServiceProvider sp, HttpClient client) =>
         {
-            var configuration = sp.GetRequiredService<IConfiguration>();
-            var logger = sp.GetRequiredService<ILogger<MistralAIService>>();
-            var baseUrl = configuration["MistralAI:ApiBaseUrl"] ?? "http://127.0.0.1:11434/";
-            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            var options = sp.GetRequiredService<IOptions<FastApiAiOptions>>().Value;
 
-            /*
-             * No HttpClient timeout.
-             * MistralAIService handles it itself
-             * maximum generation time.
-             */
+            client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute);
             client.Timeout = Timeout.InfiniteTimeSpan;
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-OutZen/1.0");
             client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-            logger.LogWarning("[MISTRAL HTTP CONFIG] " + "BaseAddress={BaseAddress}; " + "HttpClientTimeout={HttpClientTimeout}; " + "PollyHandler=False", client.BaseAddress, client.Timeout);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CitizenHackathon2025-" + "OutZen-FastAPI/1.0");
         });
 
         services.AddHttpClient<IBeAlertCapSource, BeAlertCapSource>((sp, client) =>
@@ -1924,6 +1922,19 @@ internal class Program
                     );
                 })
             .RequireAuthorization();
+
+            var fastApiOptions = app.Services.GetRequiredService<IOptions<FastApiAiOptions>>().Value;
+
+            app.Logger.LogInformation(
+                "[FASTAPI-AI CONFIG] BaseUrl={BaseUrl}, " +
+                "Endpoint={Endpoint}, " +
+                "TimeoutSeconds={TimeoutSeconds}, " +
+                "ApiKeyConfigured={ApiKeyConfigured}, " +
+                "ApiKeyLength={ApiKeyLength}",
+                fastApiOptions.BaseUrl,
+                fastApiOptions.GenerationEndpoint,
+                fastApiOptions.TimeoutSeconds, !string.IsNullOrWhiteSpace(fastApiOptions.InternalApiKey),
+                fastApiOptions.InternalApiKey?.Length ?? 0);
         }
 
         app.MapPost("/_diag/emergency/official-sim",async (double latitude, double longitude, double radiusMeters, IEmergencyAlertRepository repository, IEmergencyAlertPublisher publisher, CancellationToken cancellationToken) =>
@@ -2589,6 +2600,30 @@ internal class Program
                 });
         })
         .RequireAuthorization();
+
+        app.MapPost("/_diag/ai/fastapi",
+            async (GptPromptRequest request, IMistralAIService mistral, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(request.Prompt))
+                {
+                    return Results.BadRequest(
+                        new
+                        {
+                            error = "Prompt is required."
+                        });
+                }
+
+                var response = await mistral.GenerateFromPromptAsync(groundedPrompt: request.Prompt, responseLanguage: string.IsNullOrWhiteSpace(request.LanguageCode) ? "fr-FR" : request.LanguageCode, ct: ct);
+
+                return Results.Ok(
+                    new
+                    {
+                        implementation = mistral.GetType().FullName,
+
+                        response
+                    });
+    })
+    .RequireAuthorization(Policies.AdminPolicy);
 
         app.MapGet("/_diag/emergency/hazard-types", () =>
         {

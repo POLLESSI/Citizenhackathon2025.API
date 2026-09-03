@@ -1,0 +1,1 @@
+{"temperature":0.3,"response_language":"fr-FR","grounded_prompt":"VERIFIED OUTZEN CONTEXT:\n- OutZen est une plateforme touristique.\n- OutZen utilise Blazor, ASP.NET Core, FastAPI et Ollama/Mistral.\n\nQuestion:\nPrésente OutZen en cinq phrases en utilisant uniquement ces informations."}
