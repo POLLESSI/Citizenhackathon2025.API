@@ -16,8 +16,10 @@ namespace CitizenHackathon2025.Infrastructure.Services
             _profanityService = profanityService;
         }
 
-        public Task<PagedResultDto<ProfanityWord>> GetPagedAsync(int page, int pageSize, string? languageCode = null, string? search = null, CancellationToken ct = default)
-            => _repo.GetPagedAsync(page, pageSize, languageCode, search, ct);
+        public async Task<PagedResultDto<ProfanityWord>> GetPagedAsync(int page, int pageSize, string? languageCode = null, string? search = null, CancellationToken ct = default)
+        {
+            return await _repo.GetPagedAsync(page, pageSize, languageCode, search, ct);
+        }
 
         public Task<ProfanityWord?> GetByIdAsync(int id, CancellationToken ct = default)
             => _repo.GetByIdAsync(id, ct);

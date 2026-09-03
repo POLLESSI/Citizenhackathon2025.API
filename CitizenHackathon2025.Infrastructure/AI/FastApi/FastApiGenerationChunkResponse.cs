@@ -2,22 +2,23 @@
 
 namespace CitizenHackathon2025.Infrastructure.AI.FastApi
 {
+    /// <summary>
+    /// Represents a returned NDJSON line
+    /// by POST /api/v1/generate/stream.
+    /// </summary>
     public sealed class FastApiGenerationChunkResponse
     {
         [JsonPropertyName("chunk")]
-        public string Chunk { get; init; }
-            = string.Empty;
+        public string Chunk { get; init; } = string.Empty;
 
         [JsonPropertyName("done")]
         public bool Done { get; init; }
 
         [JsonPropertyName("model")]
-        public string Model { get; init; }
-            = string.Empty;
+        public string Model { get; init; } = string.Empty;
 
         [JsonPropertyName("provider")]
-        public string Provider { get; init; }
-            = string.Empty;
+        public string Provider { get; init; } = string.Empty;
 
         [JsonPropertyName("error")]
         public string? Error { get; init; }

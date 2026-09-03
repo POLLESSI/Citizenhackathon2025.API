@@ -246,6 +246,10 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
             EnsureConfiguration();
 
             var language = NormalizeLanguage(responseLanguage);
+
+            /*
+             * Keep the existing OutZen language rules.
+             */
             var languageInstruction = _languagePromptBuilder.BuildLanguageInstruction(language);
             var effectiveGroundedPrompt = BuildEffectiveGroundedPrompt(groundedPrompt, languageInstruction);
             var requestBody =
@@ -258,54 +262,118 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
 
             var timeoutSeconds = Math.Clamp(_options.TimeoutSeconds, 1, 1800);
 
-            using var generationCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            using var generationCts =
+                CancellationTokenSource
+                    .CreateLinkedTokenSource(ct);
 
-            generationCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            generationCts.CancelAfter(
+                TimeSpan.FromSeconds(
+                    timeoutSeconds));
 
             var generationToken = generationCts.Token;
-            var stopwatch = Stopwatch.StartNew();
-            var endpoint = GetStreamingEndpoint();
-            var accumulated = new StringBuilder(4096);
+
+            var stopwatch =
+                Stopwatch.StartNew();
+
+            var accumulatedResponse =
+                new StringBuilder(capacity: 4096);
+
+            var chunkCount = 0;
 
             _logger.LogInformation(
-                "[FASTAPI-AI][STREAM] Request starting. " +
+                "[FASTAPI-AI][STREAM] Starting. " +
+                "BaseAddress={BaseAddress}; " +
                 "Endpoint={Endpoint}; " +
-                "Language={Language}; " +
                 "PromptLength={PromptLength}; " +
+                "Language={Language}; " +
+                "Temperature={Temperature}; " +
                 "TimeoutSeconds={TimeoutSeconds}",
-                endpoint,
-                language,
+                _httpClient.BaseAddress?.ToString()
+                    ?? "<null>",
+                _options.StreamingEndpoint,
                 groundedPrompt.Length,
+                language,
+                _options.DefaultTemperature,
                 timeoutSeconds);
 
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+                using var request =
+                    new HttpRequestMessage(
+                        HttpMethod.Post,
+                        _options.StreamingEndpoint.TrimStart('/'));
 
-                var headerAdded = request.Headers.TryAddWithoutValidation(InternalApiKeyHeader, _options.InternalApiKey);
+                /*
+                 * Internal service-to-service authentication.
+                 *
+                 * Do NOT log this value.
+                 */
+                var headerAdded =
+                    request.Headers
+                        .TryAddWithoutValidation(
+                            InternalApiKeyHeader,
+                            _options.InternalApiKey);
 
                 if (!headerAdded)
                 {
-                    throw new InvalidOperationException($"Unable to add " + $"{InternalApiKeyHeader} header.");
+                    throw new InvalidOperationException(
+                        $"Unable to add " +
+                        $"{InternalApiKeyHeader} header.");
                 }
 
-                request.Content = JsonContent.Create(requestBody, options: JsonOptions);
+                request.Content =
+                    JsonContent.Create(
+                        requestBody,
+                        options: JsonOptions);
 
-                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, generationToken).ConfigureAwait(false);
+                /*
+                 * CRITICAL:
+                 *
+                 * ResponseHeadersRead prevents HttpClient from buffering
+                 * the complete response before returning control.
+                 *
+                 * Without it, we lose the real streaming behaviour.
+                 */
+                using var response =
+                    await _httpClient.SendAsync(
+                            request,
+                            HttpCompletionOption.ResponseHeadersRead,
+                            generationToken)
+                        .ConfigureAwait(false);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    var errorBody = await response.Content.ReadAsStringAsync(generationToken).ConfigureAwait(false);
+                    var errorBody =
+                        await response.Content
+                            .ReadAsStringAsync(generationToken)
+                            .ConfigureAwait(false);
 
-                    LogHttpFailure(response, errorBody, stopwatch.ElapsedMilliseconds);
+                    _logger.LogError(
+                        "[FASTAPI-AI][STREAM] " +
+                        "HTTP failure. " +
+                        "StatusCode={StatusCode}; " +
+                        "ReasonPhrase={ReasonPhrase}; " +
+                        "Body={Body}",
+                        (int)response.StatusCode,
+                        response.ReasonPhrase,
+                        Truncate(errorBody, 500));
+
                     response.EnsureSuccessStatusCode();
                 }
 
-                await using var responseStream = await response.Content.ReadAsStreamAsync(generationToken).ConfigureAwait(false);
+                await using var responseStream =
+                    await response.Content
+                        .ReadAsStreamAsync(
+                            generationToken)
+                        .ConfigureAwait(false);
 
-                using var reader = new StreamReader(responseStream);
-
-                var chunkCount = 0;
+                using var reader =
+                    new StreamReader(
+                        responseStream,
+                        Encoding.UTF8,
+                        detectEncodingFromByteOrderMarks: false,
+                        bufferSize: 1024,
+                        leaveOpen: false);
 
                 while (true)
                 {
@@ -313,11 +381,18 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
 
                     var line = await reader.ReadLineAsync(generationToken).ConfigureAwait(false);
 
+                    /*
+                     * End of HTTP stream.
+                     */
                     if (line is null)
+                    {
                         break;
+                    }
 
                     if (string.IsNullOrWhiteSpace(line))
+                    {
                         continue;
+                    }
 
                     FastApiGenerationChunkResponse? streamItem;
 
@@ -330,52 +405,84 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
                         _logger.LogError(
                             ex,
                             "[FASTAPI-AI][STREAM] " +
-                            "Invalid NDJSON line. " +
+                            "Invalid NDJSON received. " +
                             "LinePreview={LinePreview}",
-                            Truncate(
-                                line,
-                                500));
+                            Truncate(line, 500));
 
-                        throw;
+                        throw new InvalidOperationException("OutZen.AI returned invalid NDJSON.", ex);
                     }
 
                     if (streamItem is null)
+                    {
                         continue;
+                    }
 
+                    /*
+                     * FastAPI can report an Ollama error inside
+                     * the NDJSON stream after the HTTP 200 headers
+                     * have already been sent.
+                     */
                     if (!string.IsNullOrWhiteSpace(streamItem.Error))
                     {
                         throw new InvalidOperationException("OutZen.AI streaming error: " + streamItem.Error);
                     }
 
-                    if (!string.IsNullOrEmpty(streamItem.Chunk))
+                    /*
+                     * A real generated chunk.
+                     */
+                    if (!string.IsNullOrEmpty(
+                        streamItem.Chunk))
                     {
-                        accumulated.Append(streamItem.Chunk);
+                        accumulatedResponse.Append(
+                            streamItem.Chunk);
 
                         chunkCount++;
 
+                        _logger.LogDebug(
+                            "[FASTAPI-AI][STREAM] " +
+                            "Chunk received. " +
+                            "ChunkNumber={ChunkNumber}; " +
+                            "ChunkLength={ChunkLength}; " +
+                            "TotalLength={TotalLength}",
+                            chunkCount,
+                            streamItem.Chunk.Length,
+                            accumulatedResponse.Length);
+
                         /*
-                         * This callback already belongs to
-                         * IMistralAIService.
+                         * THIS is the key point.
                          *
-                         * GptOrchestrator forwards it
-                         * directly to SignalR.
+                         * Existing GptOrchestrator callback
+                         * forwards this chunk to SignalR.
                          */
                         await onChunk(streamItem.Chunk).ConfigureAwait(false);
                     }
 
+                    /*
+                     * FastAPI/Ollama says generation is complete.
+                     *
+                     * Do NOT call onChunk("") here.
+                     * GptOrchestrator already owns the SignalR
+                     * IsFinal=true message.
+                     */
                     if (streamItem.Done)
                     {
+                        _logger.LogDebug(
+                            "[FASTAPI-AI][STREAM] " +
+                            "Done marker received. " +
+                            "Provider={Provider}; " +
+                            "Model={Model}",
+                            streamItem.Provider,
+                            streamItem.Model);
+
                         break;
                     }
                 }
 
-                var finalText = NormalizeGeneratedText(accumulated.ToString());
+                var finalText = accumulatedResponse.ToString();
 
                 if (string.IsNullOrWhiteSpace(finalText))
                 {
-                    throw new InvalidOperationException(
-                        "OutZen.AI streaming endpoint " +
-                        "returned no generated content.");
+                    throw new InvalidOperationException("OutZen.AI streaming endpoint " + "returned no generated content.");
                 }
 
                 _logger.LogInformation(
@@ -387,15 +494,57 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
                     finalText.Length,
                     stopwatch.ElapsedMilliseconds);
 
+                /*
+                 * IMPORTANT:
+                 *
+                 * Return exactly the accumulated text.
+                 * Do not reformat every chunk independently,
+                 * otherwise spaces/newlines can be damaged.
+                 */
                 return finalText;
             }
-            catch (OperationCanceledException ex)
-                when (!ct.IsCancellationRequested && generationCts.IsCancellationRequested)
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested && generationCts.IsCancellationRequested)
             {
+                _logger.LogError(
+                    ex,
+                    "[FASTAPI-AI][STREAM] " +
+                    "Streaming timeout after " +
+                    "{TimeoutSeconds}s. " +
+                    "ChunksReceived={ChunkCount}; " +
+                    "CharactersReceived={CharactersReceived}",
+                    timeoutSeconds,
+                    chunkCount,
+                    accumulatedResponse.Length);
+
                 throw new TimeoutException(
                     $"OutZen.AI streaming exceeded " +
                     $"{timeoutSeconds} seconds.",
                     ex);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                _logger.LogInformation(
+                    "[FASTAPI-AI][STREAM] " +
+                    "Generation cancelled by caller. " +
+                    "ChunksReceived={ChunkCount}",
+                    chunkCount);
+
+                throw;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "[FASTAPI-AI][STREAM] " +
+                    "HTTP communication failure. " +
+                    "BaseAddress={BaseAddress}; " +
+                    "Endpoint={Endpoint}; " +
+                    "ElapsedMs={ElapsedMs}",
+                    _httpClient.BaseAddress?.ToString() ?? "<null>",
+                    _options.StreamingEndpoint,
+                    stopwatch.ElapsedMilliseconds);
+
+                throw;
             }
         }
 
@@ -489,6 +638,11 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
             if (string.IsNullOrWhiteSpace(_options.GenerationEndpoint))
             {
                 throw new InvalidOperationException("FastApiAI:GenerationEndpoint " + "is missing.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_options.StreamingEndpoint))
+            {
+                throw new InvalidOperationException("FastApiAI:StreamingEndpoint " + "is missing.");
             }
 
             if (string.IsNullOrWhiteSpace(_options.InternalApiKey))
