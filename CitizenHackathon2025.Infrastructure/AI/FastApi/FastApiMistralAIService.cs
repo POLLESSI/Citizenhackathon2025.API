@@ -262,22 +262,13 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
 
             var timeoutSeconds = Math.Clamp(_options.TimeoutSeconds, 1, 1800);
 
-            using var generationCts =
-                CancellationTokenSource
-                    .CreateLinkedTokenSource(ct);
+            using var generationCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-            generationCts.CancelAfter(
-                TimeSpan.FromSeconds(
-                    timeoutSeconds));
+            generationCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
             var generationToken = generationCts.Token;
-
-            var stopwatch =
-                Stopwatch.StartNew();
-
-            var accumulatedResponse =
-                new StringBuilder(capacity: 4096);
-
+            var stopwatch = Stopwatch.StartNew();
+            var accumulatedResponse = new StringBuilder(capacity: 4096);
             var chunkCount = 0;
 
             _logger.LogInformation(
@@ -288,8 +279,7 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
                 "Language={Language}; " +
                 "Temperature={Temperature}; " +
                 "TimeoutSeconds={TimeoutSeconds}",
-                _httpClient.BaseAddress?.ToString()
-                    ?? "<null>",
+                _httpClient.BaseAddress?.ToString() ?? "<null>",
                 _options.StreamingEndpoint,
                 groundedPrompt.Length,
                 language,
@@ -298,33 +288,21 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
 
             try
             {
-                using var request =
-                    new HttpRequestMessage(
-                        HttpMethod.Post,
-                        _options.StreamingEndpoint.TrimStart('/'));
+                using var request = new HttpRequestMessage(HttpMethod.Post, _options.StreamingEndpoint.TrimStart('/'));
 
                 /*
                  * Internal service-to-service authentication.
                  *
                  * Do NOT log this value.
                  */
-                var headerAdded =
-                    request.Headers
-                        .TryAddWithoutValidation(
-                            InternalApiKeyHeader,
-                            _options.InternalApiKey);
+                var headerAdded = request.Headers.TryAddWithoutValidation(InternalApiKeyHeader, _options.InternalApiKey);
 
                 if (!headerAdded)
                 {
-                    throw new InvalidOperationException(
-                        $"Unable to add " +
-                        $"{InternalApiKeyHeader} header.");
+                    throw new InvalidOperationException($"Unable to add " + $"{InternalApiKeyHeader} header.");
                 }
 
-                request.Content =
-                    JsonContent.Create(
-                        requestBody,
-                        options: JsonOptions);
+                request.Content = JsonContent.Create(requestBody, options: JsonOptions);
 
                 /*
                  * CRITICAL:
@@ -334,19 +312,11 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
                  *
                  * Without it, we lose the real streaming behaviour.
                  */
-                using var response =
-                    await _httpClient.SendAsync(
-                            request,
-                            HttpCompletionOption.ResponseHeadersRead,
-                            generationToken)
-                        .ConfigureAwait(false);
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, generationToken).ConfigureAwait(false);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    var errorBody =
-                        await response.Content
-                            .ReadAsStringAsync(generationToken)
-                            .ConfigureAwait(false);
+                    var errorBody = await response.Content.ReadAsStringAsync(generationToken).ConfigureAwait(false);
 
                     _logger.LogError(
                         "[FASTAPI-AI][STREAM] " +
@@ -361,19 +331,9 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
                     response.EnsureSuccessStatusCode();
                 }
 
-                await using var responseStream =
-                    await response.Content
-                        .ReadAsStreamAsync(
-                            generationToken)
-                        .ConfigureAwait(false);
+                await using var responseStream = await response.Content.ReadAsStreamAsync(generationToken).ConfigureAwait(false);
 
-                using var reader =
-                    new StreamReader(
-                        responseStream,
-                        Encoding.UTF8,
-                        detectEncodingFromByteOrderMarks: false,
-                        bufferSize: 1024,
-                        leaveOpen: false);
+                using var reader = new StreamReader(responseStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: false);
 
                 while (true)
                 {
@@ -430,11 +390,9 @@ namespace CitizenHackathon2025.Infrastructure.AI.FastApi
                     /*
                      * A real generated chunk.
                      */
-                    if (!string.IsNullOrEmpty(
-                        streamItem.Chunk))
+                    if (!string.IsNullOrEmpty(streamItem.Chunk))
                     {
-                        accumulatedResponse.Append(
-                            streamItem.Chunk);
+                        accumulatedResponse.Append(streamItem.Chunk);
 
                         chunkCount++;
 

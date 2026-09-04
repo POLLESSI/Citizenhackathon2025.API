@@ -77,10 +77,7 @@ class OllamaService:
     # Non-streaming generation
     # ============================================================
 
-    async def generate(
-        self,
-        request: GenerationRequest,
-    ) -> GenerationResponse:
+    async def generate(self, request: GenerationRequest,) -> GenerationResponse:
 
         payload = self._build_payload(
             request,
