@@ -13,6 +13,7 @@ using CitizenHackathon2025.Hubs.Extensions;
 using CitizenHackathon2025.Hubs.Hubs;
 using CitizenHackathon2025.Infrastructure.Repositories;
 using MediatR;
+using Microsoft.AspNetCore.Routing.Matching;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -883,19 +884,39 @@ namespace CitizenHackathon2025.Infrastructure.Services
                                 """;
             }
 
-            groundedPrompt += """
-                            FINAL TOURISM SELECTION RULES:
-                            - These rules override any earlier generic recommendation count.
-                            - For a general tourism request, mention 5 to 8 actual attractions when available.
-                            - Never exceed 8 recommendations in total.
-                            - If fewer than 5 verified attractions are available, return only those verified attractions.
-                            - Never invent a recommendation to reach 5 or 8 items.
-                            - Do not select only the nearest database records.
-                            - Prioritize tourist attractions over cities and villages.
-                            - Include relevant attractions up to 25 km from the resolved origin.
-                            - Do not discuss children unless the user explicitly mentioned children or family.
-                            - Do not add safety recommendations unless a confirmed alert exists.
-                            """;
+            var requestedRecommendationCount = ExtractRequestedRecommendationCount(request.Prompt);
+
+            if (requestedRecommendationCount.HasValue)
+            {
+                groundedPrompt +=
+                    $"""
+                        FINAL TOURISM SELECTION RULES:
+                        - The user explicitly requested exactly {requestedRecommendationCount.Value} recommendation(s).
+                        - Respect that explicit quantity.
+                        - Return at most {requestedRecommendationCount.Value} verified attraction(s).
+                        - If fewer verified attractions are available, return only those available.
+                        - Never invent an attraction to reach the requested count.
+                        - Prioritize actual tourist attractions over generic towns or villages.
+                        - Include only verified attractions from the supplied OutZen context.
+                        - Do not add safety recommendations unless a confirmed alert exists.
+                        """;
+            }
+            else
+            {
+                groundedPrompt +=
+                    """
+                        FINAL TOURISM SELECTION RULES:
+                        - The user did not specify an explicit recommendation count.
+                        - For a general tourism request, mention 5 to 8 actual attractions when available.
+                        - Never exceed 8 recommendations in total.
+                        - If fewer than 5 verified attractions are available, return only those verified attractions.
+                        - Never invent a recommendation to reach 5 or 8 items.
+                        - Prioritize tourist attractions over cities and villages.
+                        - Include relevant attractions up to 25 km from the resolved origin.
+                        - Do not discuss children unless the user explicitly mentioned children or family.
+                        - Do not add safety recommendations unless a confirmed alert exists.
+                        """;
+            }
 
             string finalResponse;
 
@@ -905,17 +926,32 @@ namespace CitizenHackathon2025.Infrastructure.Services
             {
                 if (pushChunksToHub)
                 {
-                    groundedPrompt += """
+                    if (requestedRecommendationCount.HasValue)
+                    {
+                        groundedPrompt +=
+                            $"""
+                                FINAL RESPONSE LIMITS:
+                                - Return exactly {requestedRecommendationCount.Value} recommendation(s) when that many verified candidates exist.
+                                - Never exceed {requestedRecommendationCount.Value} numbered item(s).
+                                - If fewer verified candidates exist, return fewer rather than inventing any.
+                                - Produce one numbered list only.
+                                - Prefer actual attractions over generic towns or villages.
+                                - Every numbered item must be complete.
+                                """;
+                    }
+                    else
+                    {
+                        groundedPrompt +=
+                            """
                                 FINAL RESPONSE LIMITS:
                                 - Mention at most 8 places in the entire answer.
-                                - Eight places means eight places total.
                                 - When at least 5 verified candidates are available, provide between 5 and 8 recommendations.
                                 - If fewer candidates are available, return fewer recommendations rather than inventing any.
                                 - Produce one numbered list only.
                                 - Prefer actual attractions over generic towns or villages.
                                 - Every numbered item must be complete.
-                                - Never stop after an unfinished word or sentence.
                                 """;
+                    }
 
                     var approximatePromptTokens = (int)Math.Ceiling(groundedPrompt.Length / 4d);
 
@@ -944,6 +980,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 else
                 {
                     finalResponse = await mistralAiService.GenerateFromPromptAsync(
+                        
                         groundedPrompt: groundedPrompt,
 
                         responseLanguage: responseLanguage,
@@ -958,7 +995,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 var verifiedCandidates = GetVerifiedTourismCandidates(localContext, geographicVerifiedCandidates);
 
-                finalResponse = BuildVerifiedTourismResponse(verifiedCandidates, responseLanguage);
+                finalResponse = BuildVerifiedTourismResponse(verifiedCandidates, responseLanguage, requestedRecommendationCount);
 
                 _logger.LogWarning(
                     ex,
@@ -975,16 +1012,14 @@ namespace CitizenHackathon2025.Infrastructure.Services
 
                 if (pushChunksToHub && !string.IsNullOrWhiteSpace(finalResponse))
                 {
-                    await _hubContext.SendChunk(new GptResponseChunkDto
-                    {
-                        InteractionId = interactionId,
-
-                        RequestId = requestId,
-
-                        Chunk = finalResponse,
-
-                        IsFinal = false
-                    });
+                    await _hubContext.SendChunk(
+                        new GptResponseChunkDto
+                        {
+                            InteractionId = interactionId,
+                            RequestId = requestId,
+                            Chunk = finalResponse,
+                            IsFinal = false
+                        });
                 }
             }
 
@@ -1272,11 +1307,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
                  */
                 if (content.EndsWith("…", StringComparison.Ordinal) || content.EndsWith("...", StringComparison.Ordinal))
                 {
-                    _logger.LogWarning(
-                        "[GPT FACT FILTER REJECTED] " +
-                        "Reason=Truncated; " +
-                        "Content={Content}",
-                        content);
+                    _logger.LogWarning("[GPT FACT FILTER REJECTED] " + "Reason=Truncated; " + "Content={Content}", content);
 
                     continue;
                 }
@@ -1871,17 +1902,13 @@ namespace CitizenHackathon2025.Infrastructure.Services
                 .ToList();
         }
 
-        private static string BuildVerifiedTourismResponse(IReadOnlyList<VerifiedTourismCandidate> candidates, string responseLanguage)
+        private static string BuildVerifiedTourismResponse(IReadOnlyList<VerifiedTourismCandidate> candidates, string responseLanguage, int? requestedRecommendationCount = null)
         {
             if (candidates.Count == 0)
-            {
                 return BuildNoLocalResultMessage(responseLanguage);
-            }
 
-            var selected = candidates
-                .Take(OutZenRecommendationPolicy.MaxTourismRecommendations)
-                .ToList();
-
+            var maxCount = requestedRecommendationCount.HasValue ? Math.Clamp(requestedRecommendationCount.Value, 1, OutZenRecommendationPolicy.MaxTourismRecommendations) : OutZenRecommendationPolicy.MaxTourismRecommendations;
+            var selected = candidates.Take(maxCount).ToList();
             var result = new StringBuilder();
 
             if (responseLanguage.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
@@ -1902,9 +1929,7 @@ namespace CitizenHackathon2025.Infrastructure.Services
             for (var index = 0; index < selected.Count; index++)
             {
                 var candidate = selected[index];
-
-                var distance = candidate.DistanceKm.HasValue ? candidate.DistanceKm.Value.ToString(
-                          "0.##", CultureInfo.InvariantCulture) + " km" : responseLanguage.StartsWith("ru", StringComparison.OrdinalIgnoreCase) ? "расстояние недоступно" : "distance non disponible";
+                var distance = candidate.DistanceKm.HasValue ? candidate.DistanceKm.Value.ToString("0.##", CultureInfo.InvariantCulture) + " km" : responseLanguage.StartsWith("ru", StringComparison.OrdinalIgnoreCase) ? "расстояние недоступно" : "distance non disponible";
 
                 result.Append($"{index + 1}. " + $"{candidate.Name} — " + $"{distance}");
 
@@ -1926,6 +1951,79 @@ namespace CitizenHackathon2025.Infrastructure.Services
             }
 
             return result.ToString().Trim();
+        }
+
+        private static int? ExtractRequestedRecommendationCount(string? prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt))
+                return null;
+
+            var normalized = prompt.Trim().ToLowerInvariant();
+
+            // Numbers written as numerals.
+            var digitMatch = Regex.Match(normalized, @"\b(?<count>[1-9]|10)\b");
+
+            if (digitMatch.Success && int.TryParse(digitMatch.Groups["count"].Value, out var numericCount))
+            {
+                return Math.Clamp(numericCount, 1, OutZenRecommendationPolicy.MaxTourismRecommendations);
+            }
+
+            var wordNumbers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    // French
+                    ["un"] = 1,
+                    ["une"] = 1,
+                    ["deux"] = 2,
+                    ["trois"] = 3,
+                    ["quatre"] = 4,
+                    ["cinq"] = 5,
+                    ["six"] = 6,
+                    ["sept"] = 7,
+                    ["huit"] = 8,
+
+                    // English
+                    ["one"] = 1,
+                    ["two"] = 2,
+                    ["three"] = 3,
+                    ["four"] = 4,
+                    ["five"] = 5,
+                    ["six"] = 6,
+                    ["seven"] = 7,
+                    ["eight"] = 8,
+
+                    // Dutch
+                    ["een"] = 1,
+                    ["twee"] = 2,
+                    ["drie"] = 3,
+                    ["vier"] = 4,
+                    ["vijf"] = 5,
+                    ["zes"] = 6,
+                    ["zeven"] = 7,
+                    ["acht"] = 8,
+
+                    // German
+                    ["eins"] = 1,
+                    ["einen"] = 1,
+                    ["eine"] = 1,
+                    ["zwei"] = 2,
+                    ["drei"] = 3,
+                    ["vier"] = 4,
+                    ["fünf"] = 5,
+                    ["funf"] = 5,
+                    ["sechs"] = 6,
+                    ["sieben"] = 7,
+                    ["acht"] = 8
+                };
+
+            foreach (var pair in wordNumbers)
+            {
+                if (Regex.IsMatch(normalized, $@"\b{Regex.Escape(pair.Key)}\b"))
+                {
+                    return pair.Value;
+                }
+            }
+
+            return null;
         }
     }
 }

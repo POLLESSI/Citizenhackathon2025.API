@@ -58,19 +58,19 @@ class OllamaService:
 
             "keep_alive": "30m",
 
-            "options": {
+           "options": {
                 "temperature": temperature,
-                "num_predict": 320,
-                "num_ctx": 4096,
+                "num_predict": 220,
+                "num_ctx": 3072,
             },
         }
 
     def _timeout(self) -> httpx.Timeout:
         return httpx.Timeout(
-            connect=10.0,
-            read=600.0,
-            write=30.0,
-            pool=10.0,
+            connect=15.0,
+            read=900.0,
+            write=60.0,
+            pool=15.0,
         )
 
     # ============================================================
