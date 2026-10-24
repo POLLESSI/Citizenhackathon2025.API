@@ -64,7 +64,7 @@ Security and defensive engineering were treated as core architecture principles 
 
 ### Prerequisites
 *   .NET SDK (v8.0+)
-*   Python 3.10+ (for FastAPI services)
+*   Python 3.14 (for FastAPI services)
 *   Local SQL Server or MongoDB instance
 
 ### Installation
