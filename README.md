@@ -17,10 +17,10 @@ Built during the 2025 Citizen of Wallonia hackathon, this project demonstrates h
 
 This project is built using a Clean Architecture / Domain-Driven Design (DDD) pattern to ensure scalability, maintainability, and clean separation of concerns.
 
-*   Backend: .NET 6 / 8 Web API (C#)
+*   Backend: .NET 6 / 8 Web API (C#) Asp.NET Core + FastAPI
 *   Database: Entity Framework Core with SQL Server / CosmosDB (MongoDB)
 *   Frontend: Blazor 
-*   Cloud / DevOps: Azure / Docker / GitHub Actions
+*   Cloud / DevOps: Azure (per-declaration) / Docker (pre-declaration) / GitHub Actions
 
 ---
 
