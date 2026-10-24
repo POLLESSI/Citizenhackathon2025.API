@@ -1,71 +1,79 @@
-# Citizenhackathon2025.API
-
-markdown
 # CitizenHackathon2025.API / OutZen
 
-🏆 Proud Winner of Two Technical Awards at the Citizen of Wallonia Hackathon (Charleroi, 2025)  
-An advanced, production-ready enterprise solution leveraging a secure .NET Core Architecture integrated with Artificial Intelligence (Mistral).
+🏆 **Proud Winner of Two Technical Awards at the Citizen of Wallonia Hackathon (Charleroi, 2025)**  
+*   **Data Award:** For Database Design and API Architecture.
+*   **WallonieEnPoche Award:** For Project Concept and Ecosystem Integration Capabilities.
+
+An advanced, production-ready enterprise solution leveraging a secure .NET Core Architecture integrated with Artificial Intelligence (Mistral AI).
 
 ---
 
 ## 🚀 Overview
 
-OutZen is a modern software solution designed to solve The challenge faced by an end user, who is planning to visit  a tourist site or activity, of receiving real-time (SignalR) suggestions for alternatives based on weather conditions (OneWeather Forecast), traffics disruptions (Perex/Waze/ODWB), natural disaster (BeAlert), and crowd density, utilizing data from the registry of telecommunications masts (Géoportail Wallonie). 
-Built during the 2025 Citizen of Wallonia hackathon, this project demonstrates how to combine rapid prototyping with enterprise-grade architecture, strict security standards, and practical AI capabilities.
+**OutZen** is a smart tourism assistant designed to optimize user experience during outdoor activities and site visits. It dynamically tracks environmental factors and delivers **real-time (SignalR) alternative suggestions** when disruptions occur. 
+
+The application contextualizes recommendations by cross-referencing multiple live data streams:
+*   **Weather Conditions:** OneWeather Forecast
+*   **Traffic & Mobility:** Perex / Waze / ODWB (Open Data Wallonie-Bruxelles)
+*   **Emergency Alerts:** BeAlert integration for natural disasters or safety hazards
+*   **Crowd Density:** Estimated via cell tower infrastructure metrics from the *Géoportail de la Wallonie* registry.
+
+---
 
 ## 🛠️ Tech Stack & Architecture
 
-This project is built using a Clean Architecture / Domain-Driven Design (DDD) pattern to ensure scalability, maintainability, and clean separation of concerns.
+This project is built using **Clean Architecture** and **Domain-Driven Design (DDD)** patterns to guarantee strict separation of concerns, high scalability, and clean testing boundaries.
 
-*   Backend: .NET 6 / 8 Web API (C#) Asp.NET Core + FastAPI
-*   Database: Entity Framework Core with SQL Server / CosmosDB (MongoDB)
-*   Frontend: Blazor 
-*   Cloud / DevOps: Azure (per-declaration) / Docker (pre-declaration) / GitHub Actions
+*   **Backend:** Ecosystem hybrid combining .NET 8 ASP.NET Core Web API (C#) & FastAPI (Python)
+*   **Database:** Entity Framework Core with SQL Server & CosmosDB / MongoDB
+*   **Frontend:** Blazor 
+*   **Cloud & DevOps:** Azure / Docker / GitHub Actions CI-CD pipelines
 
 ---
 
 ## 🧠 AI Integration
 
-Unlike simple API wrappers, the AI component is deeply integrated into the business logic to deliver autonomous value:
+Instead of acting as a simple API wrapper, the AI ecosystem is deeply woven into the platform's core workflows:
 
-*   Framework: Built using Semantic Kernel to orchestrate LLM orchestration.
-*   Features: Implemented automated predictive analytics.
-*   Efficiency: Designed with prompt caching and token optimization to control cloud operational costs.
+*   **Orchestration Framework:** Leverages **Semantic Kernel** to manage LLM agents and semantic routing.
+*   **Core Model:** Powered by **Mistral AI** for intelligent decision-making and predictive analytics.
+*   **Cost Efficiency:** Engineered with customized prompt caching and token optimization to manage cloud operational expenses.
 
 ---
 
 ## 🔒 Cybersecurity & Hardening
 
-Security was treated as a first-class citizen from day one, adhering to modern DevSecOps and OWASP guidelines:
+Security and defensive engineering were treated as core architecture principles from day one, aligning with DevSecOps practices and OWASP standards:
 
-*   Authentication & AuthZ: Secure token handling using JWT and Argon2id.
-*   Data Protection: Implementation of AES-256 encryption for sensitive database fields and strict HTTPS/TLS enforcement.
-*   Secret Management: Zero hardcoded credentials; utilizing secure environment variables Secrets.
-*   Defensive Coding: Protection against SQL Injection, XSS, and CSRF built directly into the .NET pipeline.
+*   **Authentication & AuthZ:** Secure token lifecycle management utilizing stateless **JWT** paired with **Argon2id** for cryptographic password hashing.
+*   **Data Protection:** At-rest AES-256 encryption for sensitive database fields and strict in-transit HTTPS/TLS configuration.
+*   **Secret Management:** Strict zero-hardcoded credential policy, leveraging secure OS Environment Variables and secure Secrets handlers.
+*   **Defensive Coding:** Custom .NET middleware pipeline hardened against SQL Injection, Cross-Site Scripting (XSS), and CSRF.
 
 ---
 
-## ⚡ Key Highlights Datas award for the database and the API architecture and the WallonieEnPoche award for the idea and the possibility of supplementing another application.
+## ⚡ Key Architectural Highlights
 
-1.  Production-Ready Blueprint: Despite the hackathon time constraints, the repository features clean code, unit tests, and structured logging.
-2.  Innovative AI UX: The AI integration focuses on user accessibility and reliable, non-hallucinatory outputs.
-3.  Secure by Design: Proven resistance to common vulnerability vectors during technical evaluation.
+1.  **Production-Ready Blueprint:** Engineered under hackathon constraints without sacrificing clean code, robust unit test coverage, or structured semantic logging.
+2.  **Modular Interoperability:** Designed from inception to seamlessly supplement or plug into existing regional smart-city applications (such as *Wallonie en Poche*).
+3.  **Secure by Design:** Audited and proven resilient against standard vulnerability vectors during the live hackathon technical evaluation.
 
 ---
 
 ## 📦 Getting Started
 
 ### Prerequisites
-*   .NET SDK 
-*   Local Database engine
+*   .NET SDK (v8.0+)
+*   Python 3.10+ (for FastAPI services)
+*   Local SQL Server or MongoDB instance
 
 ### Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com
+   git clone https://github.com/POLLESSI/Citizenhackathon2025.API.git
    ```
-2. Configure your environment variables in `appsettings.json` (do not commit secrets!).
-3. Run the migrations and start the project:
+2. Configure your environment variables and connection strings in `appsettings.json` (do not commit production secrets).
+3. Run migrations and spin up the backend:
    ```bash
    dotnet run
    ```
