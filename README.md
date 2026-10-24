@@ -10,7 +10,7 @@ An advanced, production-ready enterprise solution leveraging a secure .NET Core 
 
 ## 🚀 Overview
 
-OutZen is a modern software solution designed to solve [expliquer le problème en 1 phrase, ex: "streamline local administrative workflows"]. 
+OutZen is a modern software solution designed to solve The challenge faced by an end user, who is planning to visit  a tourist site or activity, of receiving real-time (SignalR) suggestions for alternatives based on weather conditions (OneWeather Forecast), traffics disruptions (Perex/Waze/ODWB), natural disaster (BeAlert), and crowd density, utilizing data from the registry of telecommunications masts (Géoportail Wallonie). 
 Built during the 2025 Citizen of Wallonia hackathon, this project demonstrates how to combine rapid prototyping with enterprise-grade architecture, strict security standards, and practical AI capabilities.
 
 ## 🛠️ Tech Stack & Architecture
@@ -18,7 +18,7 @@ Built during the 2025 Citizen of Wallonia hackathon, this project demonstrates h
 This project is built using a Clean Architecture / Domain-Driven Design (DDD) pattern to ensure scalability, maintainability, and clean separation of concerns.
 
 *   Backend: .NET 6 / 8 Web API (C#)
-*   Database: Entity Framework Core with SQL Server / CosmosDB
+*   Database: Entity Framework Core with SQL Server / CosmosDB (MongoDB)
 *   Frontend: Blazor 
 *   Cloud / DevOps: Azure / Docker / GitHub Actions
 
@@ -40,7 +40,7 @@ Security was treated as a first-class citizen from day one, adhering to modern D
 
 *   Authentication & AuthZ: Secure token handling using JWT and Argon2id.
 *   Data Protection: Implementation of AES-256 encryption for sensitive database fields and strict HTTPS/TLS enforcement.
-*   Secret Management: Zero hardcoded credentials; utilizing secure environment variables [or Azure Key Vault].
+*   Secret Management: Zero hardcoded credentials; utilizing secure environment variables Secrets.
 *   Defensive Coding: Protection against SQL Injection, XSS, and CSRF built directly into the .NET pipeline.
 
 ---
