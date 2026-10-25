@@ -285,7 +285,7 @@ The version-controlled `.pyproj` file references the Python 3.14 `.venv`,
 but does not currently define a complete Uvicorn command
 for the launch by F5.
 
-### 10. Dépannage
+### 10. Troubleshooting
 
 | Symptom | Verification or correction |
 |---|---|
