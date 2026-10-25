@@ -287,13 +287,13 @@ for the launch by F5.
 
 ### 10. Dépannage
 
-| Symptôme | Vérification ou correction |
+| Symptom | Verification or correction |
 |---|---|
-| Installation refusée sur la ligne `// Copyrigtht…` | Remplacer `//` par `#` dans `app/requirements.txt`. |
-| `No module named uvicorn` ou `fastapi` | Installer les dépendances avec l’interpréteur `.venv\Scripts\python.exe`. |
-| `Could not import module "app.main"` | Exécuter la commande depuis le dossier `OutZen.AI`. |
-| Erreur de validation sur `OUTZEN_INTERNAL_API_KEY` | Vérifier le chargement du `.env` et une longueur d’au moins 32 caractères. |
-| Réponse `401` sur une route de génération | Fournir la bonne clé dans `X-OutZen-Internal-Key`. |
-| `/health` retourne `degraded` | Vérifier Ollama et l’adresse `OLLAMA_BASE_URL`. |
-| Ollama répond, mais la génération échoue | Vérifier la présence du modèle exact avec `ollama list`. |
-| Le port `8000` est déjà utilisé | Arrêter l’ancienne instance ou choisir un autre port et adapter le client .NET. |
+| Installation failed at the line `// Copyright…` | Replace `//` with `#` in `app/requirements.txt`. |
+| `No module named uvicorn` ou `fastapi` | Install the dependencies using the interpreter `.venv\Scripts\python.exe`. |
+| `Could not import module "app.main"` | Execute the command from the `OutZen.AI` folder. |
+| Validation error for `OUTZEN_INTERNAL_API_KEY` | Check that the `.env` file is being loaded and that the value is at least 32 characters long. |
+| `401` response on a generation route | Provide the correct key in `X-OutZen-Internal-Key`. |
+| `/health` returns `degraded` | Check Ollama and the `OLLAMA_BASE_URL` address. |
+| Ollama responds, but generation fails | Check for the presence of the exact model using `ollama list`. |
+| Port `8000` is already in use | Stop the existing instance or choose a different port and update the .NET client. |
