@@ -66,11 +66,234 @@ pydantic-settings==2.15.0
 
 
 
+## 🐍 Launch of the OutZen.AI microservice — FastAPI / Python 3.14
 
+OutZen.AI is OutZen’s Python microservice for text generation.
+It exposes a FastAPI API and communicates with Ollama to use
+the local model `mistral:7b`.
 
+The ASP.NET Core backend, OutZen.AI, and Ollama are separate processes.
+The following commands relate to Windows and PowerShell.
 
+### 1. Prerequisites
 
+- Python 3.14, with the Windows launcher `py`.
+-Ollama installed.
+- The locally cloned repository.
 
+Check the tools :
 
+```powershell
+py -3.14 --version
+ollama --version
+```
 
-// Copyrigtht (c) 2025 Citizen Hackathon https://github.com/POLLESSI/Citizenhackathon2025.API. All rights reserved.
+### 2. Creating the virtual environment
+
+From the root of the repository :
+
+```powershell
+cd .\OutZen.AI
+py -3.14 -m venv .venv
+```
+
+The interpreter expected by the Visual Studio project is :
+
+```text
+OutZen.AI\.venv\Scripts\python.exe
+```
+
+If this environment already exists and is functional, keep it.
+
+> The `app/.venv` file present in the repository does not constitute
+> a virtual environment. The environment used here is the
+> `.venv` directory at the root of `OutZen.AI`.
+
+### 3. Install dependencies
+
+From the `OutZen.AI` folder :
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r .\app\requirements.txt
+.\.venv\Scripts\python.exe -m pip check
+```
+
+The `requirements.txt` file must contain specifications for
+valid dependencies. Comments must begin with `#`.
+
+The commands explicitly use the interpreter from the `.venv` :
+Activating the environment in PowerShell is not necessary.
+
+### 4. Configure the internal key
+
+If the `.env` file does not yet exist, copy the template :
+
+```powershell
+Copy-Item .\.env.example .\.env
+```
+
+Do not overwrite an already configured `.env` file.
+
+Generate a random key :
+
+```powershell
+.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Enter the generated value into `OutZen.AI/.env` :
+
+```dotenv
+OUTZEN_INTERNAL_API_KEY=REPLACE_WITH_THE_GENERATED_KEY
+
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=mistral:7b
+GENERATION_TEMPERATURE=0.3
+```
+
+The internal key must be at least **32 characters** long.
+The example value must be replaced before launch.
+
+The .NET client must use the same key to call the routes
+generation, in the header :
+
+```text
+X-OutZen-Internal-Key
+```
+
+Do not publish the actual key or commit the `.env` file to version control.
+
+### 5. Prepare Ollama and the model
+
+Download the configured template :
+
+```powershell
+ollama pull mistral:7b
+```
+
+Check available models :
+
+```powershell
+ollama list
+```
+
+Verify that the Ollama server is responding :
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags"
+```
+
+If Ollama is not already running, launch it in a separate terminal :
+
+```powershell
+ollama serve
+```
+
+Keep this terminal open while the server is running.
+
+### 6. Getting started with FastAPI
+
+From the `OutZen.AI` folder :
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+For development with automatic reloading :
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+The working directory must be `OutZen.AI` in order for the imports
+`app.*` and the loading of the `.env` file correspond to 
+the current configuration.
+
+Port `8000` is the one chosen in this procedure. If the client
+.NET uses a different port; adjust the command or its configuration accordingly
+so that the two correspond.
+
+The `--reload` option is reserved for development.
+
+### 7. Check the service
+
+| Address | Function |
+|---|---|
+| http://127.0.0.1:8000/ | Microservice state and version |
+| http://127.0.0.1:8000/docs | Swagger interactive documentation |
+| http://127.0.0.1:8000/health | Checking Ollama availability |
+
+From another terminal :
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/"
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
+```
+
+The `/health` endpoint can return :
+
+- `healthy` : Ollama responds to the control request.
+- `degraded` : FastAPI is running, but Ollama is unreachable
+  or does not respond correctly to the control.
+
+**Limitation of the current check:** `/health` verifies the response
+d’Ollama at `/api/tags`, but does not check that the model
+`mistral:7b` is not installed, nor has a generation been completed.
+
+To validate the entire chain, open `/docs` and use the button
+**Authorize** to enter the internal key, then test :
+
+- `POST /api/v1/generate`
+- `POST /api/v1/generate/stream`
+
+Use the query schema displayed in Swagger to build
+the body of the request.
+
+### 8. Subsequent start-ups
+
+When the environment, dependencies, and model are already
+installed :
+
+1. Verify that Ollama is running.
+2. Open a terminal in `OutZen.AI`.
+3. Launching FastAPI :
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+4. Start the ASP.NET Core backend and the Blazor client according to
+   their usual configurations.
+
+The backend `dotnet run` command does not replace the launch process
+of the Python microservice described here.
+
+### 9. Visual Studio warning with Python 3.14
+
+Visual Studio may display a warning indicating that
+Python 3.14 is not officially supported by its
+tooling.
+
+This warning concerns the integration of the interpreter into
+Visual Studio. It does not demonstrate an incompatibility with FastAPI
+with the environment used.
+
+The command launched in the terminal above allows you to run OutZen.AI
+independently of the Visual Studio Python launcher.
+
+The version-controlled `.pyproj` file references the Python 3.14 `.venv`,
+but does not currently define a complete Uvicorn command
+for the launch by F5.
+
+### 10. Dépannage
+
+| Symptôme | Vérification ou correction |
+|---|---|
+| Installation refusée sur la ligne `// Copyrigtht…` | Remplacer `//` par `#` dans `app/requirements.txt`. |
+| `No module named uvicorn` ou `fastapi` | Installer les dépendances avec l’interpréteur `.venv\Scripts\python.exe`. |
+| `Could not import module "app.main"` | Exécuter la commande depuis le dossier `OutZen.AI`. |
+| Erreur de validation sur `OUTZEN_INTERNAL_API_KEY` | Vérifier le chargement du `.env` et une longueur d’au moins 32 caractères. |
+| Réponse `401` sur une route de génération | Fournir la bonne clé dans `X-OutZen-Internal-Key`. |
+| `/health` retourne `degraded` | Vérifier Ollama et l’adresse `OLLAMA_BASE_URL`. |
+| Ollama répond, mais la génération échoue | Vérifier la présence du modèle exact avec `ollama list`. |
+| Le port `8000` est déjà utilisé | Arrêter l’ancienne instance ou choisir un autre port et adapter le client .NET. |
